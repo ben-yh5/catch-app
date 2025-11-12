@@ -1,11 +1,12 @@
 import { useAuth } from '@/src/context/AuthContext';
+import { usePost } from '@/src/context/PostContext';
 import { db } from '@/src/services/firebase';
 import { colors } from '@/src/theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, doc, DocumentData, documentId, getDoc, getDocs, limit, orderBy, query, QueryDocumentSnapshot, startAfter, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Dimensions, FlatList, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Post {
@@ -32,6 +33,7 @@ type ViewMode = 'posts' | 'bookmarks';
 
 export default function ProfileScreen() {
   const { user } = useAuth();
+  const { shouldRefresh } = usePost();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [username, setUsername] = useState<string>('');
@@ -44,10 +46,9 @@ export default function ProfileScreen() {
   const [hasMoreBookmarks, setHasMoreBookmarks] = useState(true);
   const [lastPostDoc, setLastPostDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('posts');
-
-  useEffect(() => {
-    fetchUserData();
-  }, []);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchUserData = async () => {
     if (!user) return;
@@ -128,6 +129,27 @@ export default function ProfileScreen() {
     }
   };
 
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
+  useEffect(() => {
+    // Refresh user data when a new post is created
+    if (shouldRefresh) {
+      setHasMorePosts(true);
+      setLastPostDoc(null);
+      fetchUserData();
+    }
+  }, [shouldRefresh]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setHasMorePosts(true);
+    setLastPostDoc(null);
+    await fetchUserData();
+    setRefreshing(false);
+  }, []);
+
   const loadMorePosts = async () => {
     if (!user || loadingMore || !hasMorePosts || !lastPostDoc) return;
 
@@ -173,7 +195,18 @@ export default function ProfileScreen() {
   };
 
   const handlePostPress = (post: Post) => {
-    console.log('Post tapped:', post.id);
+    setSelectedPost(post);
+    setModalVisible(true);
+  };
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'Unknown date';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
   };
 
   const renderPost = ({ item }: { item: Post }) => (
@@ -201,13 +234,22 @@ export default function ProfileScreen() {
   const displayedPosts = viewMode === 'posts' ? posts : bookmarkedPosts;
 
   return (
-    <View style={styles.container}>
-      <FlatList
+    <>
+      <View style={styles.container}>
+        <FlatList
         data={displayedPosts}
         renderItem={renderPost}
         keyExtractor={(item) => item.id}
         numColumns={2}
         contentContainerStyle={[styles.listContent, { paddingTop: insets.top + 56 }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            progressViewOffset={insets.top + 56}
+          />
+        }
         ListHeaderComponent={
           <View style={styles.profileInfo}>
             <View style={styles.statsContainer}>
@@ -277,19 +319,73 @@ export default function ProfileScreen() {
           ) : null
         }
         columnWrapperStyle={displayedPosts.length > 0 ? styles.row : undefined}
-      />
+        />
 
-      <View style={[styles.profileHeader, { paddingTop: insets.top }]}>
-        <View style={styles.placeholder} />
-        <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/settings' as any)}
-          style={styles.settingsButton}
-        >
-          <Ionicons name="settings-outline" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
+        <View style={[styles.profileHeader, { paddingTop: insets.top }]}>
+          <View style={styles.placeholder} />
+          <Text style={styles.headerTitle}>Profile</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/settings' as any)}
+            style={styles.settingsButton}
+          >
+            <Ionicons name="settings-outline" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+
+      <Modal
+        visible={modalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setModalVisible(false)}
+            >
+              <Ionicons name="close" size={32} color="#fff" />
+            </TouchableOpacity>
+
+            {selectedPost && (
+              <ScrollView
+                contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
+                <Image
+                  source={{ uri: selectedPost.photoURL }}
+                  style={styles.modalImage}
+                  resizeMode="contain"
+                />
+
+                <View style={styles.modalDetails}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalUsername}>@{selectedPost.authorUsername}</Text>
+                    <View style={styles.modalCatchBadge}>
+                      <Ionicons name="trophy" size={18} color={colors.secondary} />
+                      <Text style={styles.modalCatchCount}>{selectedPost.catchCount}</Text>
+                    </View>
+                  </View>
+
+                  {selectedPost.caption ? (
+                    <Text style={styles.modalCaption}>{selectedPost.caption}</Text>
+                  ) : null}
+
+                  <View style={styles.modalMetadata}>
+                    <View style={styles.metadataRow}>
+                      <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} />
+                      <Text style={styles.metadataText}>{formatDate(selectedPost.createdAt)}</Text>
+                    </View>
+                  </View>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -396,7 +492,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 100,
   },
   emptyText: {
     fontSize: 16,
@@ -418,5 +514,80 @@ const styles = StyleSheet.create({
   footerLoader: {
     paddingVertical: 20,
     alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.modalOverlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    flex: 1,
+    width: '100%',
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+  },
+  modalImage: {
+    width: width,
+    height: width,
+    backgroundColor: colors.imageBackground,
+  },
+  modalDetails: {
+    backgroundColor: colors.modalDark,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalUsername: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  modalCatchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardElevated,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 5,
+  },
+  modalCatchCount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.secondary,
+  },
+  modalCaption: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  modalMetadata: {
+    gap: 8,
+  },
+  metadataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metadataText: {
+    fontSize: 14,
+    color: colors.textTertiary,
   },
 });

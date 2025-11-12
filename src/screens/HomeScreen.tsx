@@ -1,4 +1,5 @@
 import { useAuth } from '@/src/context/AuthContext';
+import { usePost } from '@/src/context/PostContext';
 import { db, storage } from '@/src/services/firebase';
 import { colors } from '@/src/theme/colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,6 +49,7 @@ const POSTS_PER_PAGE = 20;
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { shouldRefresh } = usePost();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -145,6 +147,15 @@ export default function HomeScreen() {
   useEffect(() => {
     fetchPosts();
   }, []);
+
+  useEffect(() => {
+    // Refresh posts when a new post is created
+    if (shouldRefresh) {
+      setHasMore(true);
+      setLastDoc(null);
+      fetchPosts(false);
+    }
+  }, [shouldRefresh]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -473,27 +484,6 @@ export default function HomeScreen() {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading posts...</Text>
-      </View>
-    );
-  }
-
-  if (posts.length === 0) {
-    return (
-      <View style={styles.centerContainer}>
-        <Ionicons name="images-outline" size={80} color="#ccc" />
-        <Text style={styles.emptyTitle}>No Posts Yet</Text>
-        <Text style={styles.emptySubtitle}>
-          Be the first to share a photo!
-        </Text>
-      </View>
-    );
-  }
-
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'Unknown date';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -503,6 +493,15 @@ export default function HomeScreen() {
       year: 'numeric',
     });
   };
+
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading posts...</Text>
+      </View>
+    );
+  }
 
   return (
     <>
@@ -518,6 +517,15 @@ export default function HomeScreen() {
             onRefresh={onRefresh}
             tintColor={colors.primary}
           />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="images-outline" size={80} color="#ccc" />
+            <Text style={styles.emptyTitle}>No Posts Yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Be the first to share a photo!
+            </Text>
+          </View>
         }
         onEndReached={loadMorePosts}
         onEndReachedThreshold={0.5}
@@ -616,34 +624,35 @@ export default function HomeScreen() {
                     </View>
 
                     {selectedPost.authorId !== user?.uid && (
-                      <Text style={styles.catchSubtitle}>Recreate this photo at the same location!</Text>
+                      <>
+                        <Text style={styles.catchSubtitle}>Recreate this photo at the same location!</Text>
+                        <TouchableOpacity
+                          style={[
+                            styles.catchButton,
+                            (uploading || fetchingLocation) && styles.catchButtonDisabled
+                          ]}
+                          onPress={handleCatchPress}
+                          disabled={uploading || fetchingLocation}
+                        >
+                          {uploading ? (
+                            <>
+                              <ActivityIndicator size="small" color="#fff" />
+                              <Text style={styles.catchButtonText}>Uploading...</Text>
+                            </>
+                          ) : fetchingLocation ? (
+                            <>
+                              <ActivityIndicator size="small" color="#fff" />
+                              <Text style={styles.catchButtonText}>Getting location...</Text>
+                            </>
+                          ) : (
+                            <>
+                              <Ionicons name="camera" size={20} color="#fff" />
+                              <Text style={styles.catchButtonText}>Catch This Location</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </>
                     )}
-
-                    <TouchableOpacity
-                      style={[
-                        styles.catchButton,
-                        (uploading || fetchingLocation || selectedPost.authorId === user?.uid) && styles.catchButtonDisabled
-                      ]}
-                      onPress={handleCatchPress}
-                      disabled={uploading || fetchingLocation || selectedPost.authorId === user?.uid}
-                    >
-                      {uploading ? (
-                        <>
-                          <ActivityIndicator size="small" color="#fff" />
-                          <Text style={styles.catchButtonText}>Uploading...</Text>
-                        </>
-                      ) : fetchingLocation ? (
-                        <>
-                          <ActivityIndicator size="small" color="#fff" />
-                          <Text style={styles.catchButtonText}>Getting location...</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Ionicons name="camera" size={20} color="#fff" />
-                          <Text style={styles.catchButtonText}>Catch This Location</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
                   </View>
                 </ScrollView>
               )}
@@ -667,6 +676,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     color: colors.textTertiary,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 100,
+    paddingHorizontal: 20,
   },
   emptyTitle: {
     fontSize: 24,

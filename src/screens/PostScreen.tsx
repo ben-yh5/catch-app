@@ -23,6 +23,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { storage, db } from '@/src/services/firebase';
 import { useAuth } from '@/src/context/AuthContext';
+import { usePost } from '@/src/context/PostContext';
 import { colors } from '@/src/theme/colors';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -50,6 +51,7 @@ export default function PostScreen() {
   const cameraRef = useRef<CameraView>(null);
   const router = useRouter();
   const { user } = useAuth();
+  const { triggerRefresh } = usePost();
   const imagePositionRef = useRef({ x: 0, y: 0 });
   const panStartPosition = useRef({ x: 0, y: 0 });
 
@@ -373,8 +375,11 @@ export default function PostScreen() {
       setLocation(null);
       setUploading(false);
 
-      // Navigate to home
-      router.push('/(tabs)');
+      // Trigger refresh for home and profile pages
+      triggerRefresh();
+
+      // Navigate to profile
+      router.push('/(tabs)/profile');
 
     } catch (error: any) {
       console.error('❌ ERROR posting:', error);
