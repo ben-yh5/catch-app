@@ -1,0 +1,915 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Image,
+  ActivityIndicator,
+  RefreshControl,
+  Dimensions,
+  TouchableOpacity,
+  Modal,
+  ScrollView,
+  Platform,
+  Alert,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { collection, query, orderBy, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, increment, limit, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { db, storage } from '@/src/services/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/src/context/AuthContext';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+
+interface Post {
+  id: string;
+  authorId: string;
+  authorUsername: string;
+  photoURL: string;
+  caption: string;
+  location: {
+    latitude: number;
+    longitude: number;
+  } | null;
+  catchCount: number;
+  parentPostId: string | null;
+  isOriginal: boolean;
+  createdAt: any;
+}
+
+const { width } = Dimensions.get('window');
+
+const POSTS_PER_PAGE = 20;
+
+export default function HomeScreen() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([]);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  // Catch flow states
+  const [catchMode, setCatchMode] = useState(false);
+  const [catchPhoto, setCatchPhoto] = useState<string | null>(null);
+  const [catchLocation, setCatchLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [cameraRef, setCameraRef] = useState<any>(null);
+  const [uploading, setUploading] = useState(false);
+  const [fetchingLocation, setFetchingLocation] = useState(false);
+
+  const fetchBookmarks = async () => {
+    if (!user) return;
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) {
+        setBookmarkedPosts(userDoc.data().bookmarkedPosts || []);
+      }
+    } catch (error) {
+      console.error('Error fetching bookmarks:', error);
+    }
+  };
+
+  const fetchPosts = async (loadMore = false) => {
+    if (loadMore && (!hasMore || loadingMore)) return;
+
+    try {
+      console.log(loadMore ? 'Loading more posts...' : 'Fetching initial posts...');
+
+      if (loadMore) {
+        setLoadingMore(true);
+      }
+
+      let postsQuery;
+      if (loadMore && lastDoc) {
+        postsQuery = query(
+          collection(db, 'posts'),
+          orderBy('catchCount', 'desc'),
+          startAfter(lastDoc),
+          limit(POSTS_PER_PAGE)
+        );
+      } else {
+        postsQuery = query(
+          collection(db, 'posts'),
+          orderBy('catchCount', 'desc'),
+          limit(POSTS_PER_PAGE)
+        );
+      }
+
+      const querySnapshot = await getDocs(postsQuery);
+      const fetchedPosts: Post[] = [];
+
+      querySnapshot.forEach((doc) => {
+        fetchedPosts.push({
+          id: doc.id,
+          ...doc.data(),
+        } as Post);
+      });
+
+      console.log(`Fetched ${fetchedPosts.length} posts`);
+
+      // Update last document for pagination
+      const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
+      setLastDoc(lastVisible || null);
+
+      // Check if there are more posts
+      setHasMore(fetchedPosts.length === POSTS_PER_PAGE);
+
+      if (loadMore) {
+        setPosts(prev => [...prev, ...fetchedPosts]);
+      } else {
+        setPosts(fetchedPosts);
+        // Fetch bookmarks on initial load
+        await fetchBookmarks();
+      }
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setHasMore(true);
+    setLastDoc(null);
+    fetchPosts(false);
+  }, []);
+
+  const loadMorePosts = useCallback(() => {
+    if (!loading && !loadingMore && hasMore) {
+      fetchPosts(true);
+    }
+  }, [loading, loadingMore, hasMore, lastDoc]);
+
+  const toggleBookmark = async (postId: string) => {
+    if (!user) return;
+
+    const isBookmarked = bookmarkedPosts.includes(postId);
+
+    // Optimistic update
+    if (isBookmarked) {
+      setBookmarkedPosts(bookmarkedPosts.filter(id => id !== postId));
+    } else {
+      setBookmarkedPosts([...bookmarkedPosts, postId]);
+    }
+
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      if (isBookmarked) {
+        await updateDoc(userRef, {
+          bookmarkedPosts: arrayRemove(postId)
+        });
+      } else {
+        await updateDoc(userRef, {
+          bookmarkedPosts: arrayUnion(postId)
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+      // Revert optimistic update on error
+      if (isBookmarked) {
+        setBookmarkedPosts([...bookmarkedPosts, postId]);
+      } else {
+        setBookmarkedPosts(bookmarkedPosts.filter(id => id !== postId));
+      }
+    }
+  };
+
+  // Haversine formula to calculate distance between two GPS coordinates
+  const calculateDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number => {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+  };
+
+  const handleCatchPress = async () => {
+    // Request camera permissions
+    if (!cameraPermission?.granted) {
+      const { granted } = await requestCameraPermission();
+      if (!granted) {
+        if (Platform.OS === 'web') {
+          window.alert('Camera permission is required to catch this location.');
+        } else {
+          Alert.alert('Permission Required', 'Camera permission is required to catch this location.');
+        }
+        return;
+      }
+    }
+
+    // On web, use image picker as camera is not supported
+    if (Platform.OS === 'web') {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await handleCatchPhoto(result.assets[0].uri);
+      }
+    } else {
+      // On native, show camera
+      setCatchMode(true);
+    }
+  };
+
+  const handleCatchPhoto = async (photoUri: string) => {
+    setCatchPhoto(photoUri);
+
+    // Check if original post has location
+    if (!selectedPost?.location) {
+      if (Platform.OS === 'web') {
+        window.alert('This post does not have a location. Cannot validate catch.');
+      } else {
+        Alert.alert('No Location', 'This post does not have a location. Cannot validate catch.');
+      }
+      return;
+    }
+
+    // Get current GPS location
+    setFetchingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Location permission denied');
+        console.log('Photo URI:', photoUri);
+        console.log('Location: Not available (permission denied)');
+        setFetchingLocation(false);
+        if (Platform.OS === 'web') {
+          window.alert('Location permission is required to validate your catch.');
+        } else {
+          Alert.alert('Permission Required', 'Location permission is required to validate your catch.');
+        }
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({});
+      const coords = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+
+      setCatchLocation(coords);
+      console.log('Photo URI:', photoUri);
+      console.log('Location:', coords);
+
+      // Calculate distance between current location and original post location
+      const distance = calculateDistance(
+        coords.latitude,
+        coords.longitude,
+        selectedPost.location.latitude,
+        selectedPost.location.longitude
+      );
+
+      console.log(`Distance from original location: ${distance.toFixed(2)} meters`);
+
+      // Validate distance (50 meter threshold)
+      setFetchingLocation(false);
+      if (distance > 50) {
+        if (Platform.OS === 'web') {
+          window.alert(`You're too far away (${Math.round(distance)} meters)`);
+        } else {
+          Alert.alert(
+            'Too Far Away',
+            `You're too far away (${Math.round(distance)} meters)`
+          );
+        }
+      } else {
+        // Success! Create the catch post
+        await createCatchPost(photoUri, coords);
+      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+      console.log('Photo URI:', photoUri);
+      console.log('Location: Error getting location');
+      setFetchingLocation(false);
+      if (Platform.OS === 'web') {
+        window.alert('Error getting your location. Please try again.');
+      } else {
+        Alert.alert('Error', 'Error getting your location. Please try again.');
+      }
+    }
+  };
+
+  const takeCatchPicture = async () => {
+    if (cameraRef) {
+      const photo = await cameraRef.takePictureAsync();
+      setCatchMode(false);
+      setModalVisible(false);
+      await handleCatchPhoto(photo.uri);
+    }
+  };
+
+  const createCatchPost = async (
+    photoUri: string,
+    location: { latitude: number; longitude: number }
+  ) => {
+    if (!user || !selectedPost) return;
+
+    setUploading(true);
+
+    try {
+      // Convert photo URI to blob
+      const response = await fetch(photoUri);
+      const blob = await response.blob();
+
+      // Upload to Firebase Storage
+      const timestamp = Date.now();
+      const storageRef = ref(storage, `posts/${user.uid}/${timestamp}.jpg`);
+      await uploadBytes(storageRef, blob);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Get user data for username
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const username = userDoc.exists() ? userDoc.data().username : 'Unknown';
+
+      // Create catch post document
+      await addDoc(collection(db, 'posts'), {
+        authorId: user.uid,
+        authorUsername: username,
+        photoURL: downloadURL,
+        caption: `Caught @${selectedPost.authorUsername}'s location!`,
+        location: location,
+        catchCount: 0,
+        isOriginal: false,
+        parentPostId: selectedPost.id,
+        createdAt: new Date(),
+      });
+
+      // Increment parent post's catchCount
+      const parentPostRef = doc(db, 'posts', selectedPost.id);
+      await updateDoc(parentPostRef, {
+        catchCount: increment(1),
+      });
+
+      // Increment user's totalCatches
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        totalCatches: increment(1),
+      });
+
+      // Update local state
+      setPosts(posts.map(post =>
+        post.id === selectedPost.id
+          ? { ...post, catchCount: post.catchCount + 1 }
+          : post
+      ));
+
+      // Show success message
+      if (Platform.OS === 'web') {
+        window.alert('Great catch! Your post has been created.');
+      } else {
+        Alert.alert('Success', 'Great catch! Your post has been created.');
+      }
+
+      // Close modal and refresh feed
+      setModalVisible(false);
+      setCatchPhoto(null);
+      setCatchLocation(null);
+      await fetchPosts();
+    } catch (error) {
+      console.error('Error creating catch post:', error);
+      if (Platform.OS === 'web') {
+        window.alert('Error creating catch post. Please try again.');
+      } else {
+        Alert.alert('Error', 'Error creating catch post. Please try again.');
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const renderPost = ({ item }: { item: Post }) => {
+    const isBookmarked = bookmarkedPosts.includes(item.id);
+
+    return (
+      <View style={styles.postCard}>
+        <View style={styles.postHeader}>
+          <TouchableOpacity
+            onPress={() => router.push({
+              pathname: '/user-profile',
+              params: { userId: item.authorId }
+            })}
+          >
+            <Text style={styles.username}>@{item.authorUsername}</Text>
+          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <View style={styles.catchBadge}>
+              <Ionicons name="trophy" size={16} color="#FF9500" />
+              <Text style={styles.catchCount}>{item.catchCount}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => toggleBookmark(item.id)}
+              style={styles.bookmarkButton}
+            >
+              <Ionicons
+                name={isBookmarked ? "bookmark" : "bookmark-outline"}
+                size={22}
+                color={isBookmarked ? "#007AFF" : "#666"}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => {
+            setSelectedPost(item);
+            setModalVisible(true);
+          }}
+          activeOpacity={0.9}
+        >
+          <Image
+            source={{ uri: item.photoURL }}
+            style={styles.postImage}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
+
+        {item.caption ? (
+          <Text style={styles.caption}>{item.caption}</Text>
+        ) : null}
+
+        {item.location ? (
+          <View style={styles.locationContainer}>
+            <Ionicons name="location" size={14} color="#007AFF" />
+            <Text style={styles.locationText}>
+              {item.location.latitude.toFixed(4)}, {item.location.longitude.toFixed(4)}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading posts...</Text>
+      </View>
+    );
+  }
+
+  if (posts.length === 0) {
+    return (
+      <View style={styles.centerContainer}>
+        <Ionicons name="images-outline" size={80} color="#ccc" />
+        <Text style={styles.emptyTitle}>No Posts Yet</Text>
+        <Text style={styles.emptySubtitle}>
+          Be the first to share a photo!
+        </Text>
+      </View>
+    );
+  }
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'Unknown date';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  return (
+    <>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <Text style={styles.headerTitle}>Catch</Text>
+      </View>
+      <FlatList
+        data={posts}
+        renderItem={renderPost}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#007AFF"
+          />
+        }
+        onEndReached={loadMorePosts}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color="#007AFF" />
+              <Text style={styles.footerText}>Loading more posts...</Text>
+            </View>
+          ) : !hasMore && posts.length > 0 ? (
+            <View style={styles.footerLoader}>
+              <Text style={styles.footerText}>No more posts</Text>
+            </View>
+          ) : null
+        }
+      />
+
+      <Modal
+        visible={modalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setModalVisible(false);
+          setCatchMode(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          {catchMode ? (
+            // Camera view for catching
+            <View style={styles.cameraContainer}>
+              <CameraView
+                style={styles.camera}
+                facing="back"
+                ref={(ref) => setCameraRef(ref)}
+              >
+                <View style={styles.cameraControls}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => {
+                      setCatchMode(false);
+                      setModalVisible(false);
+                    }}
+                  >
+                    <Ionicons name="close" size={32} color="#fff" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.captureButton}
+                    onPress={takeCatchPicture}
+                  >
+                    <View style={styles.captureButtonInner} />
+                  </TouchableOpacity>
+                </View>
+              </CameraView>
+            </View>
+          ) : (
+            // Photo detail modal
+            <View style={styles.modalContent}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setModalVisible(false)}
+              >
+                <Ionicons name="close" size={32} color="#fff" />
+              </TouchableOpacity>
+
+              {selectedPost && (
+                <ScrollView
+                  contentContainerStyle={styles.modalScrollContent}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                >
+                  <Image
+                    source={{ uri: selectedPost.photoURL }}
+                    style={styles.modalImage}
+                    resizeMode="contain"
+                  />
+
+                  <View style={styles.modalDetails} pointerEvents="box-none">
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.modalUsername}>@{selectedPost.authorUsername}</Text>
+                      <View style={styles.modalCatchBadge}>
+                        <Ionicons name="trophy" size={18} color="#FF9500" />
+                        <Text style={styles.modalCatchCount}>{selectedPost.catchCount}</Text>
+                      </View>
+                    </View>
+
+                    {selectedPost.caption ? (
+                      <Text style={styles.modalCaption}>{selectedPost.caption}</Text>
+                    ) : null}
+
+                    <View style={styles.modalMetadata}>
+                      <View style={styles.metadataRow}>
+                        <Ionicons name="calendar-outline" size={16} color="#666" />
+                        <Text style={styles.metadataText}>{formatDate(selectedPost.createdAt)}</Text>
+                      </View>
+                    </View>
+
+                    {selectedPost.authorId !== user?.uid && (
+                      <Text style={styles.catchSubtitle}>Recreate this photo at the same location!</Text>
+                    )}
+
+                    <TouchableOpacity
+                      style={[
+                        styles.catchButton,
+                        (uploading || fetchingLocation || selectedPost.authorId === user?.uid) && styles.catchButtonDisabled
+                      ]}
+                      onPress={handleCatchPress}
+                      disabled={uploading || fetchingLocation || selectedPost.authorId === user?.uid}
+                    >
+                      {uploading ? (
+                        <>
+                          <ActivityIndicator size="small" color="#fff" />
+                          <Text style={styles.catchButtonText}>Uploading...</Text>
+                        </>
+                      ) : fetchingLocation ? (
+                        <>
+                          <ActivityIndicator size="small" color="#fff" />
+                          <Text style={styles.catchButtonText}>Getting location...</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Ionicons name="camera" size={20} color="#fff" />
+                          <Text style={styles.catchButtonText}>Catch This Location</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              )}
+            </View>
+          )}
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    backgroundColor: '#fff',
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    justifyContent: 'flex-end',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e5',
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 20,
+    color: '#333',
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  listContent: {
+    padding: 10,
+    backgroundColor: '#f8f8f8',
+  },
+  postCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 15,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  postHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  catchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 5,
+  },
+  catchCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF9500',
+  },
+  bookmarkButton: {
+    padding: 4,
+  },
+  postImage: {
+    width: '100%',
+    height: width - 20,
+    backgroundColor: '#f0f0f0',
+  },
+  caption: {
+    padding: 12,
+    paddingTop: 4,
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 20,
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    gap: 5,
+  },
+  locationText: {
+    fontSize: 13,
+    color: '#007AFF',
+    fontFamily: 'monospace',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    flex: 1,
+    width: '100%',
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+  },
+  modalImage: {
+    width: width,
+    height: width,
+    backgroundColor: '#000',
+  },
+  modalDetails: {
+    backgroundColor: '#1c1c1e',
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalUsername: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  modalCatchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2c2c2e',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 5,
+  },
+  modalCatchCount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF9500',
+  },
+  modalCaption: {
+    fontSize: 16,
+    color: '#e5e5e7',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  modalMetadata: {
+    gap: 8,
+  },
+  metadataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metadataText: {
+    fontSize: 14,
+    color: '#98989f',
+  },
+  catchSubtitle: {
+    fontSize: 14,
+    color: '#98989f',
+    marginTop: 12,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  catchButton: {
+    backgroundColor: '#007AFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 20,
+    gap: 8,
+  },
+  catchButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  catchButtonDisabled: {
+    opacity: 0.6,
+  },
+  cameraContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  camera: {
+    flex: 1,
+  },
+  cameraControls: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'space-between',
+    padding: 20,
+  },
+  cancelButton: {
+    alignSelf: 'flex-start',
+    padding: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+  },
+  captureButton: {
+    alignSelf: 'center',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#fff',
+  },
+  captureButtonInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#fff',
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#999',
+  },
+});
