@@ -7,7 +7,7 @@ export const colors = {
 
   // Accents
   primary: '#2457F5',         // Blue for primary actions
-  trophy: '#CF2CF6',          // Pink for catches/trophies
+  secondary: '#CF2CF6',       // Pink for catches/trophies
 
   // Text
   textPrimary: '#ffffff',     // White

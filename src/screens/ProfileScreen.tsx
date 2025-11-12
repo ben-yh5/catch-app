@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { useAuth } from '@/src/context/AuthContext';
-import { collection, query, where, getDocs, doc, getDoc, orderBy, documentId, limit, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db } from '@/src/services/firebase';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/src/theme/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { collection, doc, DocumentData, documentId, getDoc, getDocs, limit, orderBy, query, QueryDocumentSnapshot, startAfter, where } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Post {
   id: string;
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   logoutButton: {
-    backgroundColor: colors.trophy,
+    backgroundColor: colors.secondary,
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderRadius: 10,

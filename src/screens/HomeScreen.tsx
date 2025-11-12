@@ -1,30 +1,30 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/src/context/AuthContext';
+import { db, storage } from '@/src/services/firebase';
+import { colors } from '@/src/theme/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
+import { addDoc, arrayRemove, arrayUnion, collection, doc, DocumentData, getDoc, getDocs, increment, limit, orderBy, query, QueryDocumentSnapshot, startAfter, updateDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Image,
-  ActivityIndicator,
-  RefreshControl,
-  Dimensions,
-  TouchableOpacity,
-  Modal,
-  ScrollView,
-  Platform,
-  Alert,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    Modal,
+    Platform,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { collection, query, orderBy, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, addDoc, increment, limit, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
-import { db, storage } from '@/src/services/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '@/src/context/AuthContext';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Location from 'expo-location';
-import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
-import { colors } from '@/src/theme/colors';
 
 interface Post {
   id: string;
@@ -427,7 +427,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
           <View style={styles.headerRight}>
             <View style={styles.catchBadge}>
-              <Ionicons name="trophy" size={16} color={colors.trophy} />
+              <Ionicons name="trophy" size={16} color={colors.secondary} />
               <Text style={styles.catchCount}>{item.catchCount}</Text>
             </View>
             <TouchableOpacity
@@ -606,7 +606,7 @@ export default function HomeScreen() {
                     <View style={styles.modalHeader}>
                       <Text style={styles.modalUsername}>@{selectedPost.authorUsername}</Text>
                       <View style={styles.modalCatchBadge}>
-                        <Ionicons name="trophy" size={18} color={colors.trophy} />
+                        <Ionicons name="trophy" size={18} color={colors.secondary} />
                         <Text style={styles.modalCatchCount}>{selectedPost.catchCount}</Text>
                       </View>
                     </View>
@@ -743,7 +743,7 @@ const styles = StyleSheet.create({
   catchCount: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.trophy,
+    color: colors.secondary,
   },
   bookmarkButton: {
     padding: 4,
@@ -827,7 +827,7 @@ const styles = StyleSheet.create({
   modalCatchCount: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.trophy,
+    color: colors.secondary,
   },
   modalCaption: {
     fontSize: 16,
