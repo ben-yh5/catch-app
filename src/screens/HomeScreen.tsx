@@ -484,18 +484,13 @@ export default function HomeScreen() {
 
   if (posts.length === 0) {
     return (
-      <>
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <Text style={styles.headerTitle}>Catch</Text>
-        </View>
-        <View style={styles.centerContainer}>
-          <Ionicons name="images-outline" size={80} color="#ccc" />
-          <Text style={styles.emptyTitle}>No Posts Yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Be the first to share a photo!
-          </Text>
-        </View>
-      </>
+      <View style={styles.centerContainer}>
+        <Ionicons name="images-outline" size={80} color="#ccc" />
+        <Text style={styles.emptyTitle}>No Posts Yet</Text>
+        <Text style={styles.emptySubtitle}>
+          Be the first to share a photo!
+        </Text>
+      </View>
     );
   }
 
@@ -511,9 +506,7 @@ export default function HomeScreen() {
 
   return (
     <>
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Text style={styles.headerTitle}>Catch</Text>
-      </View>
+      <View style={{ paddingTop: insets.top, backgroundColor: colors.background }} />
       <FlatList
         data={posts}
         renderItem={renderPost}
@@ -663,19 +656,6 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    backgroundColor: colors.background,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    justifyContent: 'flex-end',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',

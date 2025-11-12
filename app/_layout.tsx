@@ -21,12 +21,13 @@ function RootLayoutNav() {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(tabs)';
+    const inProtectedRoute = segments[0] === 'settings' || segments[0] === 'user-profile';
 
-    if (!user && inAuthGroup) {
+    if (!user && (inAuthGroup || inProtectedRoute)) {
       // Redirect to login if user is not authenticated
       router.replace('/login');
-    } else if (user && !inAuthGroup) {
-      // Redirect to tabs if user is authenticated
+    } else if (user && !inAuthGroup && !inProtectedRoute && segments[0] !== 'modal') {
+      // Redirect to tabs if user is authenticated and not in a protected route
       router.replace('/(tabs)');
     }
   }, [user, loading, segments]);
@@ -38,6 +39,7 @@ function RootLayoutNav() {
         <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="user-profile" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />

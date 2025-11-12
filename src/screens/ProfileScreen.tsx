@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, doc, DocumentData, documentId, getDoc, getDocs, limit, orderBy, query, QueryDocumentSnapshot, startAfter, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Post {
@@ -31,7 +31,7 @@ const POSTS_PER_PAGE = 20;
 type ViewMode = 'posts' | 'bookmarks';
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [username, setUsername] = useState<string>('');
@@ -172,27 +172,6 @@ export default function ProfileScreen() {
     // Note: Bookmarks don't need pagination since we load all at once
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await logout();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const handlePostPress = (post: Post) => {
     console.log('Post tapped:', post.id);
   };
@@ -223,15 +202,12 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Text style={styles.headerTitle}>Profile</Text>
-      </View>
-
       <FlatList
         data={displayedPosts}
         renderItem={renderPost}
         keyExtractor={(item) => item.id}
         numColumns={2}
+        contentContainerStyle={[styles.listContent, { paddingTop: insets.top + 56 }]}
         ListHeaderComponent={
           <View style={styles.profileInfo}>
             <View style={styles.statsContainer}>
@@ -246,12 +222,6 @@ export default function ProfileScreen() {
                   <Text style={styles.statLabel}>Catches</Text>
                 </View>
               </View>
-            </View>
-
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <Text style={styles.logoutButtonText}>Logout</Text>
-              </TouchableOpacity>
             </View>
 
             <View style={styles.toggleContainer}>
@@ -306,9 +276,19 @@ export default function ProfileScreen() {
             </View>
           ) : null
         }
-        contentContainerStyle={styles.listContent}
         columnWrapperStyle={displayedPosts.length > 0 ? styles.row : undefined}
       />
+
+      <View style={[styles.profileHeader, { paddingTop: insets.top }]}>
+        <View style={styles.placeholder} />
+        <Text style={styles.headerTitle}>Profile</Text>
+        <TouchableOpacity
+          onPress={() => router.push('/settings' as any)}
+          style={styles.settingsButton}
+        >
+          <Ionicons name="settings-outline" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -324,18 +304,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.background,
   },
-  header: {
-    backgroundColor: colors.background,
-    paddingBottom: 16,
+  profileHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    justifyContent: 'flex-end',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingBottom: 16,
+    zIndex: 10,
   },
   headerTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '600',
     color: colors.textPrimary,
+  },
+  settingsButton: {
+    padding: 4,
+  },
+  placeholder: {
+    width: 32,
   },
   listContent: {
     paddingBottom: 20,
@@ -373,21 +363,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textTertiary,
     marginTop: 4,
-  },
-  buttonContainer: {
-    width: '100%',
-  },
-  logoutButton: {
-    backgroundColor: colors.secondary,
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignSelf: 'center',
-  },
-  logoutButtonText: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '600',
   },
   toggleContainer: {
     flexDirection: 'row',
