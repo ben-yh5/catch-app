@@ -24,6 +24,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import { colors } from '@/src/theme/colors';
 
 interface Post {
   id: string;
@@ -426,7 +427,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
           <View style={styles.headerRight}>
             <View style={styles.catchBadge}>
-              <Ionicons name="trophy" size={16} color="#FF9500" />
+              <Ionicons name="trophy" size={16} color={colors.trophy} />
               <Text style={styles.catchCount}>{item.catchCount}</Text>
             </View>
             <TouchableOpacity
@@ -436,7 +437,7 @@ export default function HomeScreen() {
               <Ionicons
                 name={isBookmarked ? "bookmark" : "bookmark-outline"}
                 size={22}
-                color={isBookmarked ? "#007AFF" : "#666"}
+                color={isBookmarked ? colors.iconActive : colors.iconInactive}
               />
             </TouchableOpacity>
           </View>
@@ -462,7 +463,7 @@ export default function HomeScreen() {
 
         {item.location ? (
           <View style={styles.locationContainer}>
-            <Ionicons name="location" size={14} color="#007AFF" />
+            <Ionicons name="location" size={14} color={colors.primary} />
             <Text style={styles.locationText}>
               {item.location.latitude.toFixed(4)}, {item.location.longitude.toFixed(4)}
             </Text>
@@ -475,7 +476,7 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading posts...</Text>
       </View>
     );
@@ -483,13 +484,18 @@ export default function HomeScreen() {
 
   if (posts.length === 0) {
     return (
-      <View style={styles.centerContainer}>
-        <Ionicons name="images-outline" size={80} color="#ccc" />
-        <Text style={styles.emptyTitle}>No Posts Yet</Text>
-        <Text style={styles.emptySubtitle}>
-          Be the first to share a photo!
-        </Text>
-      </View>
+      <>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <Text style={styles.headerTitle}>Catch</Text>
+        </View>
+        <View style={styles.centerContainer}>
+          <Ionicons name="images-outline" size={80} color="#ccc" />
+          <Text style={styles.emptyTitle}>No Posts Yet</Text>
+          <Text style={styles.emptySubtitle}>
+            Be the first to share a photo!
+          </Text>
+        </View>
+      </>
     );
   }
 
@@ -517,7 +523,7 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#007AFF"
+            tintColor={colors.primary}
           />
         }
         onEndReached={loadMorePosts}
@@ -525,7 +531,7 @@ export default function HomeScreen() {
         ListFooterComponent={
           loadingMore ? (
             <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color="#007AFF" />
+              <ActivityIndicator size="small" color={colors.primary} />
               <Text style={styles.footerText}>Loading more posts...</Text>
             </View>
           ) : !hasMore && posts.length > 0 ? (
@@ -600,7 +606,7 @@ export default function HomeScreen() {
                     <View style={styles.modalHeader}>
                       <Text style={styles.modalUsername}>@{selectedPost.authorUsername}</Text>
                       <View style={styles.modalCatchBadge}>
-                        <Ionicons name="trophy" size={18} color="#FF9500" />
+                        <Ionicons name="trophy" size={18} color={colors.trophy} />
                         <Text style={styles.modalCatchCount}>{selectedPost.catchCount}</Text>
                       </View>
                     </View>
@@ -611,7 +617,7 @@ export default function HomeScreen() {
 
                     <View style={styles.modalMetadata}>
                       <View style={styles.metadataRow}>
-                        <Ionicons name="calendar-outline" size={16} color="#666" />
+                        <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} />
                         <Text style={styles.metadataText}>{formatDate(selectedPost.createdAt)}</Text>
                       </View>
                     </View>
@@ -658,54 +664,54 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
     paddingBottom: 16,
     paddingHorizontal: 20,
     justifyContent: 'flex-end',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#000',
+    color: colors.textPrimary,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
     padding: 20,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: colors.textTertiary,
   },
   emptyTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     marginTop: 20,
-    color: '#333',
+    color: colors.textPrimary,
   },
   emptySubtitle: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textTertiary,
     marginTop: 10,
     textAlign: 'center',
   },
   listContent: {
     padding: 10,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.background,
   },
   postCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     marginBottom: 15,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -718,7 +724,7 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#007AFF',
+    color: colors.textPrimary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -728,7 +734,7 @@ const styles = StyleSheet.create({
   catchBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF3E0',
+    backgroundColor: colors.cardElevated,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
@@ -737,7 +743,7 @@ const styles = StyleSheet.create({
   catchCount: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FF9500',
+    color: colors.trophy,
   },
   bookmarkButton: {
     padding: 4,
@@ -745,13 +751,13 @@ const styles = StyleSheet.create({
   postImage: {
     width: '100%',
     height: width - 20,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.imageBackground,
   },
   caption: {
     padding: 12,
     paddingTop: 4,
     fontSize: 15,
-    color: '#333',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   locationContainer: {
@@ -763,12 +769,12 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 13,
-    color: '#007AFF',
+    color: colors.primary,
     fontFamily: 'monospace',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    backgroundColor: colors.modalOverlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -792,10 +798,10 @@ const styles = StyleSheet.create({
   modalImage: {
     width: width,
     height: width,
-    backgroundColor: '#000',
+    backgroundColor: colors.imageBackground,
   },
   modalDetails: {
-    backgroundColor: '#1c1c1e',
+    backgroundColor: colors.modalDark,
     padding: 20,
   },
   modalHeader: {
@@ -807,12 +813,12 @@ const styles = StyleSheet.create({
   modalUsername: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.textPrimary,
   },
   modalCatchBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2c2c2e',
+    backgroundColor: colors.cardElevated,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
@@ -821,11 +827,11 @@ const styles = StyleSheet.create({
   modalCatchCount: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FF9500',
+    color: colors.trophy,
   },
   modalCaption: {
     fontSize: 16,
-    color: '#e5e5e7',
+    color: colors.textSecondary,
     lineHeight: 22,
     marginBottom: 16,
   },
@@ -839,17 +845,17 @@ const styles = StyleSheet.create({
   },
   metadataText: {
     fontSize: 14,
-    color: '#98989f',
+    color: colors.textTertiary,
   },
   catchSubtitle: {
     fontSize: 14,
-    color: '#98989f',
+    color: colors.textTertiary,
     marginTop: 12,
     textAlign: 'center',
     fontStyle: 'italic',
   },
   catchButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -862,7 +868,7 @@ const styles = StyleSheet.create({
   catchButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.textPrimary,
   },
   catchButtonDisabled: {
     opacity: 0.6,
@@ -910,6 +916,6 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textTertiary,
   },
 });

@@ -6,6 +6,7 @@ import { db } from '@/src/services/firebase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '@/src/theme/colors';
 
 interface Post {
   id: string;
@@ -213,7 +214,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -261,7 +262,7 @@ export default function ProfileScreen() {
                 <Ionicons
                   name="grid"
                   size={20}
-                  color={viewMode === 'posts' ? '#007AFF' : '#666'}
+                  color={viewMode === 'posts' ? colors.primary : colors.textTertiary}
                 />
                 <Text style={[styles.toggleText, viewMode === 'posts' && styles.toggleTextActive]}>
                   Posts
@@ -275,7 +276,7 @@ export default function ProfileScreen() {
                 <Ionicons
                   name="bookmark"
                   size={20}
-                  color={viewMode === 'bookmarks' ? '#007AFF' : '#666'}
+                  color={viewMode === 'bookmarks' ? colors.primary : colors.textTertiary}
                 />
                 <Text style={[styles.toggleText, viewMode === 'bookmarks' && styles.toggleTextActive]}>
                   Bookmarks
@@ -301,7 +302,7 @@ export default function ProfileScreen() {
         ListFooterComponent={
           loadingMore && viewMode === 'posts' ? (
             <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color="#007AFF" />
+              <ActivityIndicator size="small" color={colors.primary} />
             </View>
           ) : null
         }
@@ -315,26 +316,26 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
     paddingBottom: 16,
     paddingHorizontal: 20,
     justifyContent: 'flex-end',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#000',
+    color: colors.textPrimary,
   },
   listContent: {
     paddingBottom: 20,
@@ -343,7 +344,7 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: colors.border,
     marginBottom: 1,
   },
   statsContainer: {
@@ -354,7 +355,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#000',
+    color: colors.textPrimary,
   },
   statRow: {
     flexDirection: 'row',
@@ -366,25 +367,25 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#000',
+    color: colors.textPrimary,
   },
   statLabel: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textTertiary,
     marginTop: 4,
   },
   buttonContainer: {
     width: '100%',
   },
   logoutButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: colors.trophy,
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderRadius: 10,
     alignSelf: 'center',
   },
   logoutButtonText: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -402,19 +403,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 10,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.card,
     gap: 8,
   },
   toggleButtonActive: {
-    backgroundColor: '#E6F4FE',
+    backgroundColor: colors.cardElevated,
   },
   toggleText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: colors.textTertiary,
   },
   toggleTextActive: {
-    color: '#007AFF',
+    color: colors.primary,
   },
   emptyContainer: {
     flex: 1,
@@ -424,7 +425,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#999',
+    color: colors.textTertiary,
     marginTop: 12,
   },
   row: {
@@ -433,7 +434,7 @@ const styles = StyleSheet.create({
   postItem: {
     width: ITEM_SIZE,
     height: ITEM_SIZE,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.imageBackground,
   },
   postImage: {
     width: '100%',

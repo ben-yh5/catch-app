@@ -22,6 +22,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { storage, db } from '@/src/services/firebase';
 import { useAuth } from '@/src/context/AuthContext';
+import { colors } from '@/src/theme/colors';
 
 interface LocationData {
   latitude: number;
@@ -350,19 +351,19 @@ export default function PostScreen() {
           <View style={styles.locationContainer}>
             {loadingLocation ? (
               <View style={styles.locationLoading}>
-                <ActivityIndicator size="small" color="#007AFF" />
+                <ActivityIndicator size="small" color={colors.primary} />
                 <Text style={styles.locationLoadingText}>Getting location...</Text>
               </View>
             ) : location ? (
               <View style={styles.locationInfo}>
-                <Ionicons name="location" size={18} color="#007AFF" />
+                <Ionicons name="location" size={18} color={colors.primary} />
                 <Text style={styles.locationText}>
                   {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
                 </Text>
               </View>
             ) : (
               <View style={styles.locationInfo}>
-                <Ionicons name="location-outline" size={18} color="#999" />
+                <Ionicons name="location-outline" size={18} color={colors.textTertiary} />
                 <Text style={styles.noLocationText}>No location available</Text>
               </View>
             )}
@@ -371,6 +372,7 @@ export default function PostScreen() {
           <TextInput
             style={styles.captionInput}
             placeholder="Add a caption or hint..."
+            placeholderTextColor={colors.textTertiary}
             value={caption}
             onChangeText={setCaption}
             multiline
@@ -444,7 +446,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
     padding: 20,
   },
   icon: {
@@ -454,15 +456,16 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 10,
+    color: colors.textPrimary,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textTertiary,
     marginBottom: 30,
     textAlign: 'center',
   },
   openCameraButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 30,
@@ -472,12 +475,12 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   openCameraButtonText: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 18,
     fontWeight: '600',
   },
   pickImageButton: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.card,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 30,
@@ -485,10 +488,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     gap: 10,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.border,
   },
   pickImageButtonText: {
-    color: '#007AFF',
+    color: colors.primary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -537,6 +540,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 20,
     marginTop: 20,
+    color: colors.textPrimary,
   },
   previewImage: {
     width: '100%',
@@ -552,35 +556,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.card,
     borderRadius: 8,
     gap: 10,
   },
   locationLoadingText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textTertiary,
   },
   locationInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.card,
     borderRadius: 8,
     gap: 8,
   },
   locationText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: colors.primary,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   noLocationText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textTertiary,
     fontStyle: 'italic',
   },
   captionInput: {
     width: '100%',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.card,
     padding: 15,
     borderRadius: 10,
     fontSize: 16,
@@ -588,7 +592,8 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.border,
+    color: colors.textPrimary,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -602,24 +607,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.border,
   },
   cancelButtonText: {
-    color: '#333',
+    color: colors.textPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
   postButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.primary,
   },
   postButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: colors.cardElevated,
     opacity: 0.6,
   },
   postButtonText: {
-    color: '#fff',
+    color: colors.textPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
