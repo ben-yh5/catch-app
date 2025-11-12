@@ -1,7 +1,7 @@
-import { useAuth } from '@/src/context/AuthContext';
-import { usePost } from '@/src/context/PostContext';
-import { db } from '@/src/services/firebase';
-import { colors } from '@/src/theme/colors';
+import { useAuth } from '@/context/AuthContext';
+import { usePost } from '@/context/PostContext';
+import { db } from '@/services/firebase';
+import { colors } from '@/theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, doc, DocumentData, documentId, getDoc, getDocs, limit, orderBy, query, QueryDocumentSnapshot, startAfter, where } from 'firebase/firestore';

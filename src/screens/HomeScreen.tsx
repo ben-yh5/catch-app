@@ -1,7 +1,7 @@
-import { useAuth } from '@/src/context/AuthContext';
-import { usePost } from '@/src/context/PostContext';
-import { db, storage } from '@/src/services/firebase';
-import { colors } from '@/src/theme/colors';
+import { useAuth } from '@/context/AuthContext';
+import { usePost } from '@/context/PostContext';
+import { db, storage } from '@/services/firebase';
+import { colors } from '@/theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';

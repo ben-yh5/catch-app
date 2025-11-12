@@ -1,5 +1,5 @@
-import { useAuth } from '@/src/context/AuthContext';
-import { colors } from '@/src/theme/colors';
+import { useAuth } from '@/context/AuthContext';
+import { colors } from '@/theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';

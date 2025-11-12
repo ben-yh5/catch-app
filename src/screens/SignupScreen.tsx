@@ -10,9 +10,9 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useAuth } from '@/src/context/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'expo-router';
-import { colors } from '@/src/theme/colors';
+import { colors } from '@/theme/colors';
 
 export default function SignupScreen() {
   const [email, setEmail] = useState('');

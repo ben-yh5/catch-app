@@ -21,10 +21,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
-import { storage, db } from '@/src/services/firebase';
-import { useAuth } from '@/src/context/AuthContext';
-import { usePost } from '@/src/context/PostContext';
-import { colors } from '@/src/theme/colors';
+import { storage, db } from '@/services/firebase';
+import { useAuth } from '@/context/AuthContext';
+import { usePost } from '@/context/PostContext';
+import { colors } from '@/theme/colors';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CONTAINER_SIZE = screenWidth - 40; // Account for padding

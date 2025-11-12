@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User } from 'firebase/auth';
-import { auth, db } from '@/src/services/firebase';
+import { auth, db } from '@/services/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
 interface AuthContextType {
