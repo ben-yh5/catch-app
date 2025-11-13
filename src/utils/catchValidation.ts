@@ -1,0 +1,42 @@
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../services/firebase';
+
+interface ValidateCatchRequest {
+  postId: string;
+  userLat: number;
+  userLng: number;
+}
+
+interface ValidateCatchResponse {
+  isValid: boolean;
+  distance: number;
+  requiredDistance: number;
+}
+
+/**
+ * Validates if the user is within the acceptable radius to catch a post.
+ * The actual post coordinates are never sent to the client - validation happens server-side.
+ *
+ * @param postId - The ID of the post to catch
+ * @param userLat - User's current latitude
+ * @param userLng - User's current longitude
+ * @returns Promise with validation result including isValid, distance, and requiredDistance
+ */
+export const validateCatch = async (
+  postId: string,
+  userLat: number,
+  userLng: number
+): Promise<ValidateCatchResponse> => {
+  const validateCatchFunction = httpsCallable<ValidateCatchRequest, ValidateCatchResponse>(
+    functions,
+    'validateCatch'
+  );
+
+  const result = await validateCatchFunction({
+    postId,
+    userLat,
+    userLng,
+  });
+
+  return result.data;
+};

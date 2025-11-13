@@ -2,6 +2,7 @@ import { useAuth } from '@/context/AuthContext';
 import { usePost } from '@/context/PostContext';
 import { db, storage } from '@/services/firebase';
 import { colors } from '@/theme/colors';
+import { validateCatch } from '@/utils/catchValidation';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -33,10 +34,7 @@ interface Post {
   authorUsername: string;
   photoURL: string;
   caption: string;
-  location: {
-    latitude: number;
-    longitude: number;
-  } | null;
+  hasLocation: boolean; // Changed from location object to boolean flag
   catchCount: number;
   parentPostId: string | null;
   isOriginal: boolean;
@@ -204,27 +202,6 @@ export default function HomeScreen() {
     }
   };
 
-  // Haversine formula to calculate distance between two GPS coordinates
-  const calculateDistance = (
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number
-  ): number => {
-    const R = 6371e3; // Earth's radius in meters
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-    const a =
-      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance in meters
-  };
-
   const handleCatchPress = async () => {
     // Request camera permissions
     if (!cameraPermission?.granted) {
@@ -259,12 +236,12 @@ export default function HomeScreen() {
   const handleCatchPhoto = async (photoUri: string) => {
     setCatchPhoto(photoUri);
 
-    // Check if original post has location
-    if (!selectedPost?.location) {
+    // Check if original post exists
+    if (!selectedPost) {
       if (Platform.OS === 'web') {
-        window.alert('This post does not have a location. Cannot validate catch.');
+        window.alert('Post not found. Please try again.');
       } else {
-        Alert.alert('No Location', 'This post does not have a location. Cannot validate catch.');
+        Alert.alert('Error', 'Post not found. Please try again.');
       }
       return;
     }
@@ -275,8 +252,6 @@ export default function HomeScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         console.log('Location permission denied');
-        console.log('Photo URI:', photoUri);
-        console.log('Location: Not available (permission denied)');
         setFetchingLocation(false);
         if (Platform.OS === 'web') {
           window.alert('Location permission is required to validate your catch.');
@@ -293,43 +268,57 @@ export default function HomeScreen() {
       };
 
       setCatchLocation(coords);
-      console.log('Photo URI:', photoUri);
-      console.log('Location:', coords);
+      console.log('Validating catch at:', coords);
 
-      // Calculate distance between current location and original post location
-      const distance = calculateDistance(
+      // Validate location server-side (coordinates of target post never sent to client)
+      const validation = await validateCatch(
+        selectedPost.id,
         coords.latitude,
-        coords.longitude,
-        selectedPost.location.latitude,
-        selectedPost.location.longitude
+        coords.longitude
       );
 
-      console.log(`Distance from original location: ${distance.toFixed(2)} meters`);
+      console.log(`Validation result: ${validation.isValid}, Distance: ${validation.distance}m`);
 
-      // Validate distance (50 meter threshold)
       setFetchingLocation(false);
-      if (distance > 50) {
+
+      if (!validation.isValid) {
         if (Platform.OS === 'web') {
-          window.alert(`You're too far away (${Math.round(distance)} meters)`);
+          window.alert(
+            `You're too far away!\n\nYou're ${validation.distance}m away.\nMust be within ${validation.requiredDistance}m.`
+          );
         } else {
           Alert.alert(
             'Too Far Away',
-            `You're too far away (${Math.round(distance)} meters)`
+            `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m to catch this location.`
           );
         }
       } else {
         // Success! Create the catch post
         await createCatchPost(photoUri, coords);
       }
-    } catch (error) {
-      console.error('Error getting location:', error);
-      console.log('Photo URI:', photoUri);
-      console.log('Location: Error getting location');
+    } catch (error: any) {
+      console.error('Error validating catch:', error);
       setFetchingLocation(false);
-      if (Platform.OS === 'web') {
-        window.alert('Error getting your location. Please try again.');
+
+      // Handle specific Firebase errors
+      if (error.code === 'functions/not-found') {
+        if (Platform.OS === 'web') {
+          window.alert('This post no longer exists or has no location data.');
+        } else {
+          Alert.alert('Error', 'This post no longer exists or has no location data.');
+        }
+      } else if (error.code === 'functions/unauthenticated') {
+        if (Platform.OS === 'web') {
+          window.alert('You must be logged in to catch posts.');
+        } else {
+          Alert.alert('Authentication Required', 'You must be logged in to catch posts.');
+        }
       } else {
-        Alert.alert('Error', 'Error getting your location. Please try again.');
+        if (Platform.OS === 'web') {
+          window.alert('Error validating your location. Please try again.');
+        } else {
+          Alert.alert('Error', 'Error validating your location. Please try again.');
+        }
       }
     }
   };
@@ -367,15 +356,23 @@ export default function HomeScreen() {
       const username = userDoc.exists() ? userDoc.data().username : 'Unknown';
 
       // Create catch post document
-      await addDoc(collection(db, 'posts'), {
+      const catchPostRef = await addDoc(collection(db, 'posts'), {
         authorId: user.uid,
         authorUsername: username,
         photoURL: downloadURL,
         caption: `Caught @${selectedPost.authorUsername}'s location!`,
-        location: location,
+        hasLocation: true,
         catchCount: 0,
         isOriginal: false,
         parentPostId: selectedPost.id,
+        createdAt: new Date(),
+      });
+
+      // Store location in private collection
+      await addDoc(collection(db, 'post_locations'), {
+        postId: catchPostRef.id,
+        latitude: location.latitude,
+        longitude: location.longitude,
         createdAt: new Date(),
       });
 
@@ -472,12 +469,10 @@ export default function HomeScreen() {
           <Text style={styles.caption}>{item.caption}</Text>
         ) : null}
 
-        {item.location ? (
+        {item.hasLocation ? (
           <View style={styles.locationContainer}>
             <Ionicons name="location" size={14} color={colors.primary} />
-            <Text style={styles.locationText}>
-              {item.location.latitude.toFixed(4)}, {item.location.longitude.toFixed(4)}
-            </Text>
+            <Text style={styles.locationText}>Location available</Text>
           </View>
         ) : null}
       </View>

@@ -335,16 +335,13 @@ export default function PostScreen() {
       const photoURL = await getDownloadURL(storageRef);
       console.log('Download URL:', photoURL);
 
-      // Create post document in Firestore
+      // Create post document in Firestore (without exposing exact coordinates)
       const postData = {
         authorId: user.uid,
         authorUsername: username,
         photoURL: photoURL,
         caption: caption || '',
-        location: location ? {
-          latitude: location.latitude,
-          longitude: location.longitude,
-        } : null,
+        hasLocation: !!location, // Only store boolean flag
         catchCount: 0,
         parentPostId: null,
         isOriginal: true,
@@ -355,9 +352,20 @@ export default function PostScreen() {
       const docRef = await addDoc(collection(db, 'posts'), postData);
       console.log('Post created with ID:', docRef.id);
 
+      // Store actual location in separate private collection (only accessible by Cloud Functions)
+      if (location) {
+        await addDoc(collection(db, 'post_locations'), {
+          postId: docRef.id,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          createdAt: new Date(),
+        });
+        console.log('Location stored in private collection');
+      }
+
       // Show success message
       const locationText = location
-        ? `Location: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`
+        ? 'Location: Captured'
         : 'No location';
 
       if (Platform.OS === 'web') {
@@ -494,7 +502,7 @@ export default function PostScreen() {
               <View style={styles.locationInfo}>
                 <Ionicons name="location" size={18} color={colors.primary} />
                 <Text style={styles.locationText}>
-                  {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                  Location captured
                 </Text>
               </View>
             ) : (
