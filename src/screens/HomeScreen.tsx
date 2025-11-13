@@ -8,7 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { addDoc, arrayRemove, arrayUnion, collection, doc, DocumentData, getDoc, getDocs, increment, limit, orderBy, query, QueryDocumentSnapshot, startAfter, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, DocumentData, getDoc, getDocs, increment, limit, orderBy, query, QueryDocumentSnapshot, startAfter, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -19,11 +19,13 @@ import {
     Image,
     Modal,
     Platform,
+    Pressable,
     RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,6 +61,7 @@ export default function HomeScreen() {
   const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([]);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState<string | null>(null); // Store post ID of open menu
 
   // Catch flow states
   const [catchMode, setCatchMode] = useState(false);
@@ -198,6 +201,65 @@ export default function HomeScreen() {
         setBookmarkedPosts([...bookmarkedPosts, postId]);
       } else {
         setBookmarkedPosts(bookmarkedPosts.filter(id => id !== postId));
+      }
+    }
+  };
+
+  const handleShare = async (postId: string) => {
+    setShowOptionsMenu(null);
+    // TODO: Implement share functionality
+    if (Platform.OS === 'web') {
+      window.alert('Share functionality coming soon!');
+    } else {
+      Alert.alert('Share', 'Share functionality coming soon!');
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    if (!user) return;
+
+    setShowOptionsMenu(null);
+
+    const postToDelete = posts.find(p => p.id === postId);
+
+    const confirmDelete = Platform.OS === 'web'
+      ? window.confirm('Are you sure you want to delete this post?')
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Delete Post',
+            'Are you sure you want to delete this post?',
+            [
+              { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
+              { text: 'Delete', onPress: () => resolve(true), style: 'destructive' }
+            ]
+          );
+        });
+
+    if (!confirmDelete) return;
+
+    try {
+      // Delete post from Firestore
+      await deleteDoc(doc(db, 'posts', postId));
+
+      // Update local state
+      setPosts(posts.filter(post => post.id !== postId));
+
+      // Close modal if this was the selected post
+      if (selectedPost?.id === postId) {
+        setModalVisible(false);
+      }
+
+      if (Platform.OS === 'web') {
+        window.alert('Post deleted successfully');
+      } else {
+        Alert.alert('Success', 'Post deleted successfully');
+      }
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      if (Platform.OS === 'web') {
+        window.alert('Error deleting post. Please try again.');
+      } else {
+        Alert.alert('Error', 'Error deleting post. Please try again.');
       }
     }
   };
@@ -423,13 +485,23 @@ export default function HomeScreen() {
     const isBookmarked = bookmarkedPosts.includes(item.id);
 
     return (
-      <View style={styles.postCard}>
+      <Pressable
+        style={styles.postCard}
+        onPress={() => {
+          if (showOptionsMenu === item.id) {
+            setShowOptionsMenu(null);
+          }
+        }}
+      >
         <View style={styles.postHeader}>
           <TouchableOpacity
-            onPress={() => router.push({
-              pathname: '/user-profile',
-              params: { userId: item.authorId }
-            })}
+            onPress={() => {
+              setShowOptionsMenu(null);
+              router.push({
+                pathname: '/user-profile',
+                params: { userId: item.authorId }
+              });
+            }}
           >
             <Text style={styles.username}>@{item.authorUsername}</Text>
           </TouchableOpacity>
@@ -448,11 +520,39 @@ export default function HomeScreen() {
                 color={isBookmarked ? colors.iconActive : colors.iconInactive}
               />
             </TouchableOpacity>
+            <View style={{ zIndex: 10 }}>
+              <TouchableOpacity
+                onPress={() => setShowOptionsMenu(showOptionsMenu === item.id ? null : item.id)}
+                style={styles.bookmarkButton}
+              >
+                <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
+              </TouchableOpacity>
+
+              {showOptionsMenu === item.id && (
+                <View style={styles.optionsMenu}>
+                  <TouchableOpacity
+                    style={styles.optionsMenuItem}
+                    onPress={() => handleShare(item.id)}
+                  >
+                    <Text style={styles.optionsMenuText}>Share</Text>
+                  </TouchableOpacity>
+                  {item.authorId === user?.uid && (
+                    <TouchableOpacity
+                      style={[styles.optionsMenuItem, styles.optionsMenuItemLast]}
+                      onPress={() => handleDeletePost(item.id)}
+                    >
+                      <Text style={[styles.optionsMenuText, styles.optionsMenuTextDanger]}>Delete</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
           </View>
         </View>
 
         <TouchableOpacity
           onPress={() => {
+            setShowOptionsMenu(null);
             setSelectedPost(item);
             setModalVisible(true);
           }}
@@ -475,7 +575,7 @@ export default function HomeScreen() {
             <Text style={styles.locationText}>Location available</Text>
           </View>
         ) : null}
-      </View>
+      </Pressable>
     );
   };
 
@@ -499,163 +599,241 @@ export default function HomeScreen() {
   }
 
   return (
-    <>
-      <View style={{ paddingTop: insets.top, backgroundColor: colors.background }} />
-      <FlatList
-        data={posts}
-        renderItem={renderPost}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="images-outline" size={80} color="#ccc" />
-            <Text style={styles.emptyTitle}>No Posts Yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Be the first to share a photo!
-            </Text>
-          </View>
-        }
-        onEndReached={loadMorePosts}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={
-          loadingMore ? (
-            <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={styles.footerText}>Loading more posts...</Text>
+    <TouchableWithoutFeedback onPress={() => showOptionsMenu && setShowOptionsMenu(null)}>
+      <View style={{ flex: 1 }}>
+        <View style={{ paddingTop: insets.top, backgroundColor: colors.background }} />
+        <FlatList
+          data={posts}
+          renderItem={renderPost}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="images-outline" size={80} color="#ccc" />
+              <Text style={styles.emptyTitle}>No Posts Yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Be the first to share a photo!
+              </Text>
             </View>
-          ) : !hasMore && posts.length > 0 ? (
-            <View style={styles.footerLoader}>
-              <Text style={styles.footerText}>No more posts</Text>
-            </View>
-          ) : null
-        }
-      />
+          }
+          onEndReached={loadMorePosts}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.footerLoader}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.footerText}>Loading more posts...</Text>
+              </View>
+            ) : !hasMore && posts.length > 0 ? (
+              <View style={styles.footerLoader}>
+                <Text style={styles.footerText}>No more posts</Text>
+              </View>
+            ) : null
+          }
+        />
 
-      <Modal
-        visible={modalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => {
-          setModalVisible(false);
-          setCatchMode(false);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          {catchMode ? (
-            // Camera view for catching
-            <View style={styles.cameraContainer}>
-              <CameraView
-                style={styles.camera}
-                facing="back"
-                ref={(ref) => setCameraRef(ref)}
-              >
-                <View style={styles.cameraControls}>
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={() => {
-                      setCatchMode(false);
-                      setModalVisible(false);
-                    }}
+        <Modal
+          visible={modalVisible}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => {
+            setModalVisible(false);
+            setCatchMode(false);
+            setShowOptionsMenu(null);
+          }}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => {
+              if (showOptionsMenu) {
+                setShowOptionsMenu(null);
+              }
+            }}
+          >
+            {catchMode ? (
+              // Camera view for catching
+              <TouchableWithoutFeedback>
+                <View style={styles.cameraContainer}>
+                  <CameraView
+                    style={styles.camera}
+                    facing="back"
+                    ref={(ref) => setCameraRef(ref)}
                   >
-                    <Ionicons name="close" size={32} color="#fff" />
-                  </TouchableOpacity>
+                    <View style={styles.cameraControls}>
+                      <TouchableOpacity
+                        style={styles.cancelButton}
+                        onPress={() => {
+                          setCatchMode(false);
+                          setModalVisible(false);
+                        }}
+                      >
+                        <Ionicons name="close" size={32} color="#fff" />
+                      </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.captureButton}
-                    onPress={takeCatchPicture}
-                  >
-                    <View style={styles.captureButtonInner} />
-                  </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.captureButton}
+                        onPress={takeCatchPicture}
+                      >
+                        <View style={styles.captureButtonInner} />
+                      </TouchableOpacity>
+                    </View>
+                  </CameraView>
                 </View>
-              </CameraView>
-            </View>
-          ) : (
-            // Photo detail modal
-            <View style={styles.modalContent}>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
+              </TouchableWithoutFeedback>
+            ) : (
+              // Photo detail modal
+              <Pressable
+                style={styles.modalContent}
+                onPress={() => {
+                  if (showOptionsMenu) {
+                    setShowOptionsMenu(null);
+                  }
+                }}
               >
-                <Ionicons name="close" size={32} color="#fff" />
-              </TouchableOpacity>
-
               {selectedPost && (
-                <ScrollView
-                  contentContainerStyle={styles.modalScrollContent}
-                  showsVerticalScrollIndicator={false}
-                  bounces={false}
-                >
-                  <Image
-                    source={{ uri: selectedPost.photoURL }}
-                    style={styles.modalImage}
-                    resizeMode="contain"
-                  />
+                <>
+                  {/* Header bar matching feed card style */}
+                  <View style={[styles.modalHeaderBar, { paddingTop: insets.top }]}>
+                    <View style={styles.modalHeaderLeft}>
+                      <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={() => {
+                          setShowOptionsMenu(null);
+                          setModalVisible(false);
+                        }}
+                      >
+                        <Ionicons name="arrow-back" size={28} color={colors.textPrimary} />
+                      </TouchableOpacity>
 
-                  <View style={styles.modalDetails} pointerEvents="box-none">
-                    <View style={styles.modalHeader}>
-                      <Text style={styles.modalUsername}>@{selectedPost.authorUsername}</Text>
-                      <View style={styles.modalCatchBadge}>
-                        <Ionicons name="trophy" size={18} color={colors.secondary} />
-                        <Text style={styles.modalCatchCount}>{selectedPost.catchCount}</Text>
-                      </View>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setShowOptionsMenu(null);
+                          router.push({
+                            pathname: '/user-profile',
+                            params: { userId: selectedPost.authorId }
+                          });
+                        }}
+                      >
+                        <Text style={styles.modalHeaderUsername}>@{selectedPost.authorUsername}</Text>
+                      </TouchableOpacity>
                     </View>
 
-                    {selectedPost.caption ? (
-                      <Text style={styles.modalCaption}>{selectedPost.caption}</Text>
-                    ) : null}
-
-                    <View style={styles.modalMetadata}>
-                      <View style={styles.metadataRow}>
-                        <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} />
-                        <Text style={styles.metadataText}>{formatDate(selectedPost.createdAt)}</Text>
+                    <View style={styles.modalHeaderRight}>
+                      <View style={styles.modalHeaderBadge}>
+                        <Ionicons name="trophy" size={16} color={colors.secondary} />
+                        <Text style={styles.modalHeaderCatchCount}>{selectedPost.catchCount}</Text>
                       </View>
-                    </View>
-
-                    {selectedPost.authorId !== user?.uid && (
-                      <>
-                        <Text style={styles.catchSubtitle}>Recreate this photo at the same location!</Text>
+                      <TouchableOpacity
+                        onPress={() => toggleBookmark(selectedPost.id)}
+                        style={styles.modalHeaderButton}
+                      >
+                        <Ionicons
+                          name={bookmarkedPosts.includes(selectedPost.id) ? "bookmark" : "bookmark-outline"}
+                          size={24}
+                          color={bookmarkedPosts.includes(selectedPost.id) ? colors.iconActive : colors.iconInactive}
+                        />
+                      </TouchableOpacity>
+                      <View style={{ zIndex: 10 }}>
                         <TouchableOpacity
-                          style={[
-                            styles.catchButton,
-                            (uploading || fetchingLocation) && styles.catchButtonDisabled
-                          ]}
-                          onPress={handleCatchPress}
-                          disabled={uploading || fetchingLocation}
+                          onPress={() => setShowOptionsMenu(showOptionsMenu === selectedPost.id ? null : selectedPost.id)}
+                          style={styles.modalHeaderButton}
                         >
-                          {uploading ? (
-                            <>
-                              <ActivityIndicator size="small" color="#fff" />
-                              <Text style={styles.catchButtonText}>Uploading...</Text>
-                            </>
-                          ) : fetchingLocation ? (
-                            <>
-                              <ActivityIndicator size="small" color="#fff" />
-                              <Text style={styles.catchButtonText}>Getting location...</Text>
-                            </>
-                          ) : (
-                            <>
-                              <Ionicons name="camera" size={20} color="#fff" />
-                              <Text style={styles.catchButtonText}>Catch This Location</Text>
-                            </>
-                          )}
+                          <Ionicons name="ellipsis-horizontal" size={24} color={colors.textPrimary} />
                         </TouchableOpacity>
-                      </>
-                    )}
+
+                        {showOptionsMenu === selectedPost.id && (
+                          <View style={styles.optionsMenu}>
+                            <TouchableOpacity
+                              style={styles.optionsMenuItem}
+                              onPress={() => handleShare(selectedPost.id)}
+                            >
+                              <Text style={styles.optionsMenuText}>Share</Text>
+                            </TouchableOpacity>
+                            {selectedPost.authorId === user?.uid && (
+                              <TouchableOpacity
+                                style={[styles.optionsMenuItem, styles.optionsMenuItemLast]}
+                                onPress={() => handleDeletePost(selectedPost.id)}
+                              >
+                                <Text style={[styles.optionsMenuText, styles.optionsMenuTextDanger]}>Delete</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    </View>
                   </View>
-                </ScrollView>
+
+                  <ScrollView
+                    contentContainerStyle={styles.modalScrollContent}
+                    showsVerticalScrollIndicator={false}
+                    bounces={false}
+                  >
+                    <Image
+                      source={{ uri: selectedPost.photoURL }}
+                      style={styles.modalImage}
+                      resizeMode="contain"
+                    />
+
+                    <View style={styles.modalDetails} pointerEvents="box-none">
+                      {selectedPost.caption ? (
+                        <Text style={styles.modalCaption}>{selectedPost.caption}</Text>
+                      ) : null}
+
+                      <View style={styles.modalMetadata}>
+                        <View style={styles.metadataRow}>
+                          <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} />
+                          <Text style={styles.metadataText}>{formatDate(selectedPost.createdAt)}</Text>
+                        </View>
+                      </View>
+
+                      {selectedPost.authorId !== user?.uid && (
+                        <>
+                          <Text style={styles.catchSubtitle}>Recreate this photo at the same location!</Text>
+                          <TouchableOpacity
+                            style={[
+                              styles.catchButton,
+                              (uploading || fetchingLocation) && styles.catchButtonDisabled
+                            ]}
+                            onPress={handleCatchPress}
+                            disabled={uploading || fetchingLocation}
+                          >
+                            {uploading ? (
+                              <>
+                                <ActivityIndicator size="small" color="#fff" />
+                                <Text style={styles.catchButtonText}>Uploading...</Text>
+                              </>
+                            ) : fetchingLocation ? (
+                              <>
+                                <ActivityIndicator size="small" color="#fff" />
+                                <Text style={styles.catchButtonText}>Getting location...</Text>
+                              </>
+                            ) : (
+                              <>
+                                <Ionicons name="camera" size={20} color="#fff" />
+                                <Text style={styles.catchButtonText}>Catch This Location</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </View>
+                  </ScrollView>
+                </>
               )}
-            </View>
-          )}
-        </View>
-      </Modal>
-    </>
+              </Pressable>
+            )}
+          </TouchableOpacity>
+        </Modal>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -766,13 +944,88 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: colors.modalOverlay,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   modalContent: {
     flex: 1,
     width: '100%',
     position: 'relative',
+  },
+  modalHeaderBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  backButton: {
+    padding: 4,
+  },
+  modalHeaderUsername: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginLeft: 8,
+  },
+  modalHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardElevated,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 5,
+  },
+  modalHeaderCatchCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.secondary,
+  },
+  modalHeaderButton: {
+    padding: 4,
+  },
+  optionsMenu: {
+    position: 'absolute',
+    top: 35,
+    right: 0,
+    backgroundColor: colors.cardElevated,
+    borderRadius: 8,
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 5,
+    overflow: 'hidden',
+    zIndex: 1000,
+  },
+  optionsMenuItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  optionsMenuItemLast: {
+    borderBottomWidth: 0,
+  },
+  optionsMenuText: {
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  optionsMenuTextDanger: {
+    color: '#ff4444',
   },
   closeButton: {
     position: 'absolute',
