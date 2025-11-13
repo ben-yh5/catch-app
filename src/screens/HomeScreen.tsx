@@ -13,7 +13,6 @@ import {
     Dimensions,
     FlatList,
     Image,
-    Platform,
     Pressable,
     RefreshControl,
     StyleSheet,
@@ -198,11 +197,7 @@ export default function HomeScreen() {
   const handleShare = async (postId: string) => {
     setShowOptionsMenu(null);
     // TODO: Implement share functionality
-    if (Platform.OS === 'web') {
-      window.alert('Share functionality coming soon!');
-    } else {
-      Alert.alert('Share', 'Share functionality coming soon!');
-    }
+    Alert.alert('Share', 'Share functionality coming soon!');
   };
 
   const handleDeletePost = async (postId: string) => {
@@ -212,18 +207,16 @@ export default function HomeScreen() {
 
     const postToDelete = posts.find(p => p.id === postId);
 
-    const confirmDelete = Platform.OS === 'web'
-      ? window.confirm('Are you sure you want to delete this post?')
-      : await new Promise<boolean>((resolve) => {
-          Alert.alert(
-            'Delete Post',
-            'Are you sure you want to delete this post?',
-            [
-              { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
-              { text: 'Delete', onPress: () => resolve(true), style: 'destructive' }
-            ]
-          );
-        });
+    const confirmDelete = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Delete Post',
+        'Are you sure you want to delete this post?',
+        [
+          { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
+          { text: 'Delete', onPress: () => resolve(true), style: 'destructive' }
+        ]
+      );
+    });
 
     if (!confirmDelete) return;
 
@@ -234,18 +227,10 @@ export default function HomeScreen() {
       // Update local state
       setPosts(posts.filter(post => post.id !== postId));
 
-      if (Platform.OS === 'web') {
-        window.alert('Post deleted successfully');
-      } else {
-        Alert.alert('Success', 'Post deleted successfully');
-      }
+      Alert.alert('Success', 'Post deleted successfully');
     } catch (error) {
       console.error('Error deleting post:', error);
-      if (Platform.OS === 'web') {
-        window.alert('Error deleting post. Please try again.');
-      } else {
-        Alert.alert('Error', 'Error deleting post. Please try again.');
-      }
+      Alert.alert('Error', 'Error deleting post. Please try again.');
     }
   };
 

@@ -5,7 +5,6 @@ import { colors } from '@/theme/colors';
 import { validateCatch } from '@/utils/catchValidation';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, increment, updateDoc } from 'firebase/firestore';
@@ -16,7 +15,6 @@ import {
   Alert,
   Dimensions,
   Image,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -125,11 +123,7 @@ export default function PostDetailScreen() {
 
   const handleShare = async () => {
     setShowOptionsMenu(false);
-    if (Platform.OS === 'web') {
-      window.alert('Share functionality coming soon!');
-    } else {
-      Alert.alert('Share', 'Share functionality coming soon!');
-    }
+    Alert.alert('Share', 'Share functionality coming soon!');
   };
 
   const handleDeletePost = async () => {
@@ -137,39 +131,28 @@ export default function PostDetailScreen() {
 
     setShowOptionsMenu(false);
 
-    const confirmDelete = Platform.OS === 'web'
-      ? window.confirm('Are you sure you want to delete this post?')
-      : await new Promise<boolean>((resolve) => {
-          Alert.alert(
-            'Delete Post',
-            'Are you sure you want to delete this post?',
-            [
-              { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
-              { text: 'Delete', onPress: () => resolve(true), style: 'destructive' }
-            ]
-          );
-        });
+    const confirmDelete = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Delete Post',
+        'Are you sure you want to delete this post?',
+        [
+          { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
+          { text: 'Delete', onPress: () => resolve(true), style: 'destructive' }
+        ]
+      );
+    });
 
     if (!confirmDelete) return;
 
     try {
       await deleteDoc(doc(db, 'posts', post.id));
-
-      if (Platform.OS === 'web') {
-        window.alert('Post deleted successfully');
-      } else {
-        Alert.alert('Success', 'Post deleted successfully');
-      }
+      Alert.alert('Success', 'Post deleted successfully');
 
       triggerRefresh();
       router.back();
     } catch (error) {
       console.error('Error deleting post:', error);
-      if (Platform.OS === 'web') {
-        window.alert('Error deleting post. Please try again.');
-      } else {
-        Alert.alert('Error', 'Error deleting post. Please try again.');
-      }
+      Alert.alert('Error', 'Error deleting post. Please try again.');
     }
   };
 
@@ -177,39 +160,19 @@ export default function PostDetailScreen() {
     if (!cameraPermission?.granted) {
       const { granted } = await requestCameraPermission();
       if (!granted) {
-        if (Platform.OS === 'web') {
-          window.alert('Camera permission is required to catch this location.');
-        } else {
-          Alert.alert('Permission Required', 'Camera permission is required to catch this location.');
-        }
+        Alert.alert('Permission Required', 'Camera permission is required to catch this location.');
         return;
       }
     }
 
-    if (Platform.OS === 'web') {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        await handleCatchPhoto(result.assets[0].uri);
-      }
-    } else {
-      setCatchMode(true);
-    }
+    setCatchMode(true);
   };
 
   const handleCatchPhoto = async (photoUri: string) => {
     setCatchPhoto(photoUri);
 
     if (!post) {
-      if (Platform.OS === 'web') {
-        window.alert('Post not found. Please try again.');
-      } else {
-        Alert.alert('Error', 'Post not found. Please try again.');
-      }
+      Alert.alert('Error', 'Post not found. Please try again.');
       return;
     }
 
@@ -218,11 +181,7 @@ export default function PostDetailScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setFetchingLocation(false);
-        if (Platform.OS === 'web') {
-          window.alert('Location permission is required to validate your catch.');
-        } else {
-          Alert.alert('Permission Required', 'Location permission is required to validate your catch.');
-        }
+        Alert.alert('Permission Required', 'Location permission is required to validate your catch.');
         return;
       }
 
@@ -243,16 +202,10 @@ export default function PostDetailScreen() {
       setFetchingLocation(false);
 
       if (!validation.isValid) {
-        if (Platform.OS === 'web') {
-          window.alert(
-            `You're too far away!\n\nYou're ${validation.distance}m away.\nMust be within ${validation.requiredDistance}m.`
-          );
-        } else {
-          Alert.alert(
-            'Too Far Away',
-            `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m to catch this location.`
-          );
-        }
+        Alert.alert(
+          'Too Far Away',
+          `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m to catch this location.`
+        );
       } else {
         await createCatchPost(photoUri, coords);
       }
@@ -261,23 +214,11 @@ export default function PostDetailScreen() {
       setFetchingLocation(false);
 
       if (error.code === 'functions/not-found') {
-        if (Platform.OS === 'web') {
-          window.alert('This post no longer exists or has no location data.');
-        } else {
-          Alert.alert('Error', 'This post no longer exists or has no location data.');
-        }
+        Alert.alert('Error', 'This post no longer exists or has no location data.');
       } else if (error.code === 'functions/unauthenticated') {
-        if (Platform.OS === 'web') {
-          window.alert('You must be logged in to catch posts.');
-        } else {
-          Alert.alert('Authentication Required', 'You must be logged in to catch posts.');
-        }
+        Alert.alert('Authentication Required', 'You must be logged in to catch posts.');
       } else {
-        if (Platform.OS === 'web') {
-          window.alert('Error validating your location. Please try again.');
-        } else {
-          Alert.alert('Error', 'Error validating your location. Please try again.');
-        }
+        Alert.alert('Error', 'Error validating your location. Please try again.');
       }
     }
   };
@@ -342,22 +283,14 @@ export default function PostDetailScreen() {
       // Update local state
       setPost({ ...post, catchCount: post.catchCount + 1 });
 
-      if (Platform.OS === 'web') {
-        window.alert('Great catch! Your post has been created.');
-      } else {
-        Alert.alert('Success', 'Great catch! Your post has been created.');
-      }
+      Alert.alert('Success', 'Great catch! Your post has been created.');
 
       setCatchPhoto(null);
       setCatchLocation(null);
       triggerRefresh();
     } catch (error) {
       console.error('Error creating catch post:', error);
-      if (Platform.OS === 'web') {
-        window.alert('Error creating catch post. Please try again.');
-      } else {
-        Alert.alert('Error', 'Error creating catch post. Please try again.');
-      }
+      Alert.alert('Error', 'Error creating catch post. Please try again.');
     } finally {
       setUploading(false);
     }

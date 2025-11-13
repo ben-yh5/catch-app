@@ -368,14 +368,10 @@ export default function PostScreen() {
         ? 'Location: Captured'
         : 'No location';
 
-      if (Platform.OS === 'web') {
-        window.alert(`Post Created!\n\nPost ID: ${docRef.id}\nCaption: ${caption || '(no caption)'}\n${locationText}`);
-      } else {
-        Alert.alert(
-          'Success!',
-          `Your post has been created!\n\nPost ID: ${docRef.id}\n${caption || '(no caption)'}\n${locationText}`
-        );
-      }
+      Alert.alert(
+        'Success!',
+        `Your post has been created!\n\nPost ID: ${docRef.id}\n${caption || '(no caption)'}\n${locationText}`
+      );
 
       // Reset state
       setCapturedImage(null);
@@ -396,11 +392,7 @@ export default function PostScreen() {
       console.error('Full error:', JSON.stringify(error, null, 2));
       setUploading(false);
 
-      if (Platform.OS === 'web') {
-        window.alert(`Failed to create post: ${error.code || 'Unknown'}\n${error.message}`);
-      } else {
-        Alert.alert('Error', `Failed to create post:\n\n${error.code || 'Unknown'}\n${error.message}`);
-      }
+      Alert.alert('Error', `Failed to create post:\n\n${error.code || 'Unknown'}\n${error.message}`);
     }
   };
 
