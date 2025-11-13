@@ -1,15 +1,11 @@
 import { useAuth } from '@/context/AuthContext';
 import { usePost } from '@/context/PostContext';
-import { db, storage } from '@/services/firebase';
+import { db } from '@/services/firebase';
 import { colors } from '@/theme/colors';
-import { validateCatch } from '@/utils/catchValidation';
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, DocumentData, getDoc, getDocs, increment, limit, orderBy, query, QueryDocumentSnapshot, startAfter, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import PostDetailModal from '@/components/PostDetailModal';
+import { arrayRemove, arrayUnion, collection, deleteDoc, doc, DocumentData, getDoc, getDocs, limit, orderBy, query, QueryDocumentSnapshot, startAfter, updateDoc } from 'firebase/firestore';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -17,11 +13,9 @@ import {
     Dimensions,
     FlatList,
     Image,
-    Modal,
     Platform,
     Pressable,
     RefreshControl,
-    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -59,18 +53,9 @@ export default function HomeScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([]);
+  const [showOptionsMenu, setShowOptionsMenu] = useState<string | null>(null); // Store post ID of open menu
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [showOptionsMenu, setShowOptionsMenu] = useState<string | null>(null); // Store post ID of open menu
-
-  // Catch flow states
-  const [catchMode, setCatchMode] = useState(false);
-  const [catchPhoto, setCatchPhoto] = useState<string | null>(null);
-  const [catchLocation, setCatchLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [cameraRef, setCameraRef] = useState<any>(null);
-  const [uploading, setUploading] = useState(false);
-  const [fetchingLocation, setFetchingLocation] = useState(false);
 
   const fetchBookmarks = async () => {
     if (!user) return;
@@ -130,7 +115,12 @@ export default function HomeScreen() {
       setHasMore(fetchedPosts.length === POSTS_PER_PAGE);
 
       if (loadMore) {
-        setPosts(prev => [...prev, ...fetchedPosts]);
+        // Deduplicate posts when loading more
+        setPosts(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newPosts = fetchedPosts.filter(p => !existingIds.has(p.id));
+          return [...prev, ...newPosts];
+        });
       } else {
         setPosts(fetchedPosts);
         // Fetch bookmarks on initial load
@@ -244,11 +234,6 @@ export default function HomeScreen() {
       // Update local state
       setPosts(posts.filter(post => post.id !== postId));
 
-      // Close modal if this was the selected post
-      if (selectedPost?.id === postId) {
-        setModalVisible(false);
-      }
-
       if (Platform.OS === 'web') {
         window.alert('Post deleted successfully');
       } else {
@@ -261,223 +246,6 @@ export default function HomeScreen() {
       } else {
         Alert.alert('Error', 'Error deleting post. Please try again.');
       }
-    }
-  };
-
-  const handleCatchPress = async () => {
-    // Request camera permissions
-    if (!cameraPermission?.granted) {
-      const { granted } = await requestCameraPermission();
-      if (!granted) {
-        if (Platform.OS === 'web') {
-          window.alert('Camera permission is required to catch this location.');
-        } else {
-          Alert.alert('Permission Required', 'Camera permission is required to catch this location.');
-        }
-        return;
-      }
-    }
-
-    // On web, use image picker as camera is not supported
-    if (Platform.OS === 'web') {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        await handleCatchPhoto(result.assets[0].uri);
-      }
-    } else {
-      // On native, show camera
-      setCatchMode(true);
-    }
-  };
-
-  const handleCatchPhoto = async (photoUri: string) => {
-    setCatchPhoto(photoUri);
-
-    // Check if original post exists
-    if (!selectedPost) {
-      if (Platform.OS === 'web') {
-        window.alert('Post not found. Please try again.');
-      } else {
-        Alert.alert('Error', 'Post not found. Please try again.');
-      }
-      return;
-    }
-
-    // Get current GPS location
-    setFetchingLocation(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('Location permission denied');
-        setFetchingLocation(false);
-        if (Platform.OS === 'web') {
-          window.alert('Location permission is required to validate your catch.');
-        } else {
-          Alert.alert('Permission Required', 'Location permission is required to validate your catch.');
-        }
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({});
-      const coords = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      };
-
-      setCatchLocation(coords);
-      console.log('Validating catch at:', coords);
-
-      // Validate location server-side (coordinates of target post never sent to client)
-      const validation = await validateCatch(
-        selectedPost.id,
-        coords.latitude,
-        coords.longitude
-      );
-
-      console.log(`Validation result: ${validation.isValid}, Distance: ${validation.distance}m`);
-
-      setFetchingLocation(false);
-
-      if (!validation.isValid) {
-        if (Platform.OS === 'web') {
-          window.alert(
-            `You're too far away!\n\nYou're ${validation.distance}m away.\nMust be within ${validation.requiredDistance}m.`
-          );
-        } else {
-          Alert.alert(
-            'Too Far Away',
-            `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m to catch this location.`
-          );
-        }
-      } else {
-        // Success! Create the catch post
-        await createCatchPost(photoUri, coords);
-      }
-    } catch (error: any) {
-      console.error('Error validating catch:', error);
-      setFetchingLocation(false);
-
-      // Handle specific Firebase errors
-      if (error.code === 'functions/not-found') {
-        if (Platform.OS === 'web') {
-          window.alert('This post no longer exists or has no location data.');
-        } else {
-          Alert.alert('Error', 'This post no longer exists or has no location data.');
-        }
-      } else if (error.code === 'functions/unauthenticated') {
-        if (Platform.OS === 'web') {
-          window.alert('You must be logged in to catch posts.');
-        } else {
-          Alert.alert('Authentication Required', 'You must be logged in to catch posts.');
-        }
-      } else {
-        if (Platform.OS === 'web') {
-          window.alert('Error validating your location. Please try again.');
-        } else {
-          Alert.alert('Error', 'Error validating your location. Please try again.');
-        }
-      }
-    }
-  };
-
-  const takeCatchPicture = async () => {
-    if (cameraRef) {
-      const photo = await cameraRef.takePictureAsync();
-      setCatchMode(false);
-      setModalVisible(false);
-      await handleCatchPhoto(photo.uri);
-    }
-  };
-
-  const createCatchPost = async (
-    photoUri: string,
-    location: { latitude: number; longitude: number }
-  ) => {
-    if (!user || !selectedPost) return;
-
-    setUploading(true);
-
-    try {
-      // Convert photo URI to blob
-      const response = await fetch(photoUri);
-      const blob = await response.blob();
-
-      // Upload to Firebase Storage
-      const timestamp = Date.now();
-      const storageRef = ref(storage, `posts/${user.uid}/${timestamp}.jpg`);
-      await uploadBytes(storageRef, blob);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      // Get user data for username
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const username = userDoc.exists() ? userDoc.data().username : 'Unknown';
-
-      // Create catch post document
-      const catchPostRef = await addDoc(collection(db, 'posts'), {
-        authorId: user.uid,
-        authorUsername: username,
-        photoURL: downloadURL,
-        caption: `Caught @${selectedPost.authorUsername}'s location!`,
-        hasLocation: true,
-        catchCount: 0,
-        isOriginal: false,
-        parentPostId: selectedPost.id,
-        createdAt: new Date(),
-      });
-
-      // Store location in private collection
-      await addDoc(collection(db, 'post_locations'), {
-        postId: catchPostRef.id,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        createdAt: new Date(),
-      });
-
-      // Increment parent post's catchCount
-      const parentPostRef = doc(db, 'posts', selectedPost.id);
-      await updateDoc(parentPostRef, {
-        catchCount: increment(1),
-      });
-
-      // Increment user's totalCatches
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        totalCatches: increment(1),
-      });
-
-      // Update local state
-      setPosts(posts.map(post =>
-        post.id === selectedPost.id
-          ? { ...post, catchCount: post.catchCount + 1 }
-          : post
-      ));
-
-      // Show success message
-      if (Platform.OS === 'web') {
-        window.alert('Great catch! Your post has been created.');
-      } else {
-        Alert.alert('Success', 'Great catch! Your post has been created.');
-      }
-
-      // Close modal and refresh feed
-      setModalVisible(false);
-      setCatchPhoto(null);
-      setCatchLocation(null);
-      await fetchPosts();
-    } catch (error) {
-      console.error('Error creating catch post:', error);
-      if (Platform.OS === 'web') {
-        window.alert('Error creating catch post. Please try again.');
-      } else {
-        Alert.alert('Error', 'Error creating catch post. Please try again.');
-      }
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -568,25 +336,8 @@ export default function HomeScreen() {
         {item.caption ? (
           <Text style={styles.caption}>{item.caption}</Text>
         ) : null}
-
-        {item.hasLocation ? (
-          <View style={styles.locationContainer}>
-            <Ionicons name="location" size={14} color={colors.primary} />
-            <Text style={styles.locationText}>Location available</Text>
-          </View>
-        ) : null}
       </Pressable>
     );
-  };
-
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return 'Unknown date';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
   };
 
   if (loading) {
@@ -639,199 +390,20 @@ export default function HomeScreen() {
           }
         />
 
-        <Modal
+        <PostDetailModal
           visible={modalVisible}
-          animationType="fade"
-          transparent={true}
-          onRequestClose={() => {
+          post={selectedPost}
+          onClose={() => {
             setModalVisible(false);
-            setCatchMode(false);
-            setShowOptionsMenu(null);
+            setSelectedPost(null);
           }}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => {
-              if (showOptionsMenu) {
-                setShowOptionsMenu(null);
-              }
-            }}
-          >
-            {catchMode ? (
-              // Camera view for catching
-              <TouchableWithoutFeedback>
-                <View style={styles.cameraContainer}>
-                  <CameraView
-                    style={styles.camera}
-                    facing="back"
-                    ref={(ref) => setCameraRef(ref)}
-                  >
-                    <View style={styles.cameraControls}>
-                      <TouchableOpacity
-                        style={styles.cancelButton}
-                        onPress={() => {
-                          setCatchMode(false);
-                          setModalVisible(false);
-                        }}
-                      >
-                        <Ionicons name="close" size={32} color="#fff" />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.captureButton}
-                        onPress={takeCatchPicture}
-                      >
-                        <View style={styles.captureButtonInner} />
-                      </TouchableOpacity>
-                    </View>
-                  </CameraView>
-                </View>
-              </TouchableWithoutFeedback>
-            ) : (
-              // Photo detail modal
-              <Pressable
-                style={styles.modalContent}
-                onPress={() => {
-                  if (showOptionsMenu) {
-                    setShowOptionsMenu(null);
-                  }
-                }}
-              >
-              {selectedPost && (
-                <>
-                  {/* Header bar matching feed card style */}
-                  <View style={[styles.modalHeaderBar, { paddingTop: insets.top }]}>
-                    <View style={styles.modalHeaderLeft}>
-                      <TouchableOpacity
-                        style={styles.backButton}
-                        onPress={() => {
-                          setShowOptionsMenu(null);
-                          setModalVisible(false);
-                        }}
-                      >
-                        <Ionicons name="arrow-back" size={28} color={colors.textPrimary} />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() => {
-                          setShowOptionsMenu(null);
-                          router.push({
-                            pathname: '/user-profile',
-                            params: { userId: selectedPost.authorId }
-                          });
-                        }}
-                      >
-                        <Text style={styles.modalHeaderUsername}>@{selectedPost.authorUsername}</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.modalHeaderRight}>
-                      <View style={styles.modalHeaderBadge}>
-                        <Ionicons name="trophy" size={16} color={colors.secondary} />
-                        <Text style={styles.modalHeaderCatchCount}>{selectedPost.catchCount}</Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => toggleBookmark(selectedPost.id)}
-                        style={styles.modalHeaderButton}
-                      >
-                        <Ionicons
-                          name={bookmarkedPosts.includes(selectedPost.id) ? "bookmark" : "bookmark-outline"}
-                          size={24}
-                          color={bookmarkedPosts.includes(selectedPost.id) ? colors.iconActive : colors.iconInactive}
-                        />
-                      </TouchableOpacity>
-                      <View style={{ zIndex: 10 }}>
-                        <TouchableOpacity
-                          onPress={() => setShowOptionsMenu(showOptionsMenu === selectedPost.id ? null : selectedPost.id)}
-                          style={styles.modalHeaderButton}
-                        >
-                          <Ionicons name="ellipsis-horizontal" size={24} color={colors.textPrimary} />
-                        </TouchableOpacity>
-
-                        {showOptionsMenu === selectedPost.id && (
-                          <View style={styles.optionsMenu}>
-                            <TouchableOpacity
-                              style={styles.optionsMenuItem}
-                              onPress={() => handleShare(selectedPost.id)}
-                            >
-                              <Text style={styles.optionsMenuText}>Share</Text>
-                            </TouchableOpacity>
-                            {selectedPost.authorId === user?.uid && (
-                              <TouchableOpacity
-                                style={[styles.optionsMenuItem, styles.optionsMenuItemLast]}
-                                onPress={() => handleDeletePost(selectedPost.id)}
-                              >
-                                <Text style={[styles.optionsMenuText, styles.optionsMenuTextDanger]}>Delete</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </View>
-
-                  <ScrollView
-                    contentContainerStyle={styles.modalScrollContent}
-                    showsVerticalScrollIndicator={false}
-                    bounces={false}
-                  >
-                    <Image
-                      source={{ uri: selectedPost.photoURL }}
-                      style={styles.modalImage}
-                      resizeMode="contain"
-                    />
-
-                    <View style={styles.modalDetails} pointerEvents="box-none">
-                      {selectedPost.caption ? (
-                        <Text style={styles.modalCaption}>{selectedPost.caption}</Text>
-                      ) : null}
-
-                      <View style={styles.modalMetadata}>
-                        <View style={styles.metadataRow}>
-                          <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} />
-                          <Text style={styles.metadataText}>{formatDate(selectedPost.createdAt)}</Text>
-                        </View>
-                      </View>
-
-                      {selectedPost.authorId !== user?.uid && (
-                        <>
-                          <Text style={styles.catchSubtitle}>Recreate this photo at the same location!</Text>
-                          <TouchableOpacity
-                            style={[
-                              styles.catchButton,
-                              (uploading || fetchingLocation) && styles.catchButtonDisabled
-                            ]}
-                            onPress={handleCatchPress}
-                            disabled={uploading || fetchingLocation}
-                          >
-                            {uploading ? (
-                              <>
-                                <ActivityIndicator size="small" color="#fff" />
-                                <Text style={styles.catchButtonText}>Uploading...</Text>
-                              </>
-                            ) : fetchingLocation ? (
-                              <>
-                                <ActivityIndicator size="small" color="#fff" />
-                                <Text style={styles.catchButtonText}>Getting location...</Text>
-                              </>
-                            ) : (
-                              <>
-                                <Ionicons name="camera" size={20} color="#fff" />
-                                <Text style={styles.catchButtonText}>Catch This Location</Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        </>
-                      )}
-                    </View>
-                  </ScrollView>
-                </>
-              )}
-              </Pressable>
-            )}
-          </TouchableOpacity>
-        </Modal>
+          onPostUpdate={(updatedPost) => {
+            setPosts(posts.map(p => p.id === updatedPost.id ? updatedPost : p));
+          }}
+          onPostDelete={(postId) => {
+            setPosts(posts.filter(p => p.id !== postId));
+          }}
+        />
       </View>
     </TouchableWithoutFeedback>
   );
@@ -941,61 +513,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontFamily: 'monospace',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: colors.modalOverlay,
-  },
-  modalContent: {
-    flex: 1,
-    width: '100%',
-    position: 'relative',
-  },
-  modalHeaderBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  modalHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  backButton: {
-    padding: 4,
-  },
-  modalHeaderUsername: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginLeft: 8,
-  },
-  modalHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  modalHeaderBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.cardElevated,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    gap: 5,
-  },
-  modalHeaderCatchCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.secondary,
-  },
-  modalHeaderButton: {
-    padding: 4,
-  },
   optionsMenu: {
     position: 'absolute',
     top: 35,
@@ -1026,132 +543,6 @@ const styles = StyleSheet.create({
   },
   optionsMenuTextDanger: {
     color: '#ff4444',
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10,
-    padding: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 20,
-  },
-  modalScrollContent: {
-    flexGrow: 1,
-  },
-  modalImage: {
-    width: width,
-    height: width,
-    backgroundColor: colors.imageBackground,
-  },
-  modalDetails: {
-    backgroundColor: colors.modalDark,
-    padding: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  modalUsername: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  modalCatchBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.cardElevated,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 5,
-  },
-  modalCatchCount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.secondary,
-  },
-  modalCaption: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  modalMetadata: {
-    gap: 8,
-  },
-  metadataRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metadataText: {
-    fontSize: 14,
-    color: colors.textTertiary,
-  },
-  catchSubtitle: {
-    fontSize: 14,
-    color: colors.textTertiary,
-    marginTop: 12,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  catchButton: {
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginTop: 20,
-    gap: 8,
-  },
-  catchButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  catchButtonDisabled: {
-    opacity: 0.6,
-  },
-  cameraContainer: {
-    flex: 1,
-    width: '100%',
-  },
-  camera: {
-    flex: 1,
-  },
-  cameraControls: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'space-between',
-    padding: 20,
-  },
-  cancelButton: {
-    alignSelf: 'flex-start',
-    padding: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 20,
-  },
-  captureButton: {
-    alignSelf: 'center',
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: '#fff',
-  },
-  captureButtonInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#fff',
   },
   footerLoader: {
     paddingVertical: 20,

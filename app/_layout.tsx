@@ -22,7 +22,7 @@ function RootLayoutNav() {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(tabs)';
-    const inProtectedRoute = segments[0] === 'settings' || segments[0] === 'user-profile';
+    const inProtectedRoute = segments[0] === 'settings' || segments[0] === 'user-profile' || segments[0] === 'post-detail';
 
     if (!user && (inAuthGroup || inProtectedRoute)) {
       // Redirect to login if user is not authenticated
@@ -40,6 +40,7 @@ function RootLayoutNav() {
         <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="user-profile" options={{ headerShown: false }} />
+        <Stack.Screen name="post-detail" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
