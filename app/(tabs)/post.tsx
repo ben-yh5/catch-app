@@ -1,3 +1,3 @@
-import PostScreen from '@/screens/PostScreen';
+import PostScreen from '@/screens/PostScreen'
 
-export default PostScreen;
+export default PostScreen

@@ -1,16 +1,16 @@
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../services/firebase';
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '../services/firebase'
 
 interface ValidateCatchRequest {
-  postId: string;
-  userLat: number;
-  userLng: number;
+    postId: string
+    userLat: number
+    userLng: number
 }
 
 interface ValidateCatchResponse {
-  isValid: boolean;
-  distance: number;
-  requiredDistance: number;
+    isValid: boolean
+    distance: number
+    requiredDistance: number
 }
 
 /**
@@ -23,20 +23,20 @@ interface ValidateCatchResponse {
  * @returns Promise with validation result including isValid, distance, and requiredDistance
  */
 export const validateCatch = async (
-  postId: string,
-  userLat: number,
-  userLng: number
+    postId: string,
+    userLat: number,
+    userLng: number
 ): Promise<ValidateCatchResponse> => {
-  const validateCatchFunction = httpsCallable<ValidateCatchRequest, ValidateCatchResponse>(
-    functions,
-    'validateCatch'
-  );
+    const validateCatchFunction = httpsCallable<
+        ValidateCatchRequest,
+        ValidateCatchResponse
+    >(functions, 'validateCatch')
 
-  const result = await validateCatchFunction({
-    postId,
-    userLat,
-    userLng,
-  });
+    const result = await validateCatchFunction({
+        postId,
+        userLat,
+        userLng,
+    })
 
-  return result.data;
-};
+    return result.data
+}

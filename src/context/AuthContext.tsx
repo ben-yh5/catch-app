@@ -1,78 +1,94 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User } from 'firebase/auth';
-import { auth, db } from '@/services/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import React, { createContext, useState, useEffect, useContext } from 'react'
+import {
+    onAuthStateChanged,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    User,
+} from 'firebase/auth'
+import { auth, db } from '@/services/firebase'
+import { doc, setDoc } from 'firebase/firestore'
 
 interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, username: string) => Promise<void>;
-  logout: () => Promise<void>;
+    user: User | null
+    loading: boolean
+    login: (email: string, password: string) => Promise<void>
+    signup: (email: string, password: string, username: string) => Promise<void>
+    logout: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+    children,
+}) => {
+    const [user, setUser] = useState<User | null>(null)
+    const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    // Listen for auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
-    });
+    useEffect(() => {
+        // Listen for auth state changes
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            setUser(user)
+            setLoading(false)
+        })
 
-    return unsubscribe;
-  }, []);
+        return unsubscribe
+    }, [])
 
-  const login = async (email: string, password: string) => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error: any) {
-      throw new Error(error.message);
+    const login = async (email: string, password: string) => {
+        try {
+            await signInWithEmailAndPassword(auth, email, password)
+        } catch (error: any) {
+            throw new Error(error.message)
+        }
     }
-  };
 
-  const signup = async (email: string, password: string, username: string) => {
-    try {
-      // Create user account
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+    const signup = async (
+        email: string,
+        password: string,
+        username: string
+    ) => {
+        try {
+            // Create user account
+            const userCredential = await createUserWithEmailAndPassword(
+                auth,
+                email,
+                password
+            )
+            const user = userCredential.user
 
-      // Create user document in Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        username: username,
-        email: email,
-        totalCatches: 0,
-        bookmarkedPosts: [],
-        createdAt: new Date(),
-      });
-    } catch (error: any) {
-      throw new Error(error.message);
+            // Create user document in Firestore
+            await setDoc(doc(db, 'users', user.uid), {
+                username: username,
+                email: email,
+                totalCatches: 0,
+                bookmarkedPosts: [],
+                createdAt: new Date(),
+            })
+        } catch (error: any) {
+            throw new Error(error.message)
+        }
     }
-  };
 
-  const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error: any) {
-      throw new Error(error.message);
+    const logout = async () => {
+        try {
+            await signOut(auth)
+        } catch (error: any) {
+            throw new Error(error.message)
+        }
     }
-  };
 
-  return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+    return (
+        <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+            {children}
+        </AuthContext.Provider>
+    )
+}
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+    const context = useContext(AuthContext)
+    if (context === undefined) {
+        throw new Error('useAuth must be used within an AuthProvider')
+    }
+    return context
+}
