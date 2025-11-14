@@ -3,8 +3,9 @@ import { usePost } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useRouter, useNavigation } from 'expo-router'
 import PostDetailModal from '@/components/PostDetailModal'
+import { useIsFocused } from '@react-navigation/native'
 import {
     arrayRemove,
     arrayUnion,
@@ -57,8 +58,10 @@ const POSTS_PER_PAGE = 20
 
 export default function ExploreScreen() {
     const { user } = useAuth()
-    const { shouldRefresh } = usePost()
+    const { shouldRefresh, updateLastFetch, isStale } = usePost()
     const router = useRouter()
+    const navigation = useNavigation()
+    const isFocused = useIsFocused()
     const insets = useSafeAreaInsets()
     const [posts, setPosts] = useState<Post[]>([])
     const [loading, setLoading] = useState(true)
@@ -71,6 +74,9 @@ export default function ExploreScreen() {
     const [showOptionsMenu, setShowOptionsMenu] = useState<string | null>(null) // Store post ID of open menu
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
+    const [showStaleIndicator, setShowStaleIndicator] = useState(false)
+    const [staleRefreshing, setStaleRefreshing] = useState(false)
+    const flatListRef = React.useRef<FlatList>(null)
 
     const fetchBookmarks = async () => {
         if (!user) return
@@ -145,6 +151,9 @@ export default function ExploreScreen() {
                 setPosts(fetchedPosts)
                 // Fetch bookmarks on initial load
                 await fetchBookmarks()
+                // Update last fetch time
+                updateLastFetch('explore')
+                setShowStaleIndicator(false)
             }
         } catch (error) {
             console.error('Error fetching posts:', error)
@@ -167,6 +176,33 @@ export default function ExploreScreen() {
             fetchPosts(false)
         }
     }, [shouldRefresh])
+
+    // Check for staleness and show indicator
+    useEffect(() => {
+        const checkStale = setInterval(() => {
+            if (isStale('explore') && isFocused) {
+                setShowStaleIndicator(true)
+            }
+        }, 1000) // Check every 1 second for responsive updates
+
+        return () => clearInterval(checkStale)
+    }, [isStale, isFocused])
+
+    // Tab press listener for scroll to top + refresh
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('tabPress' as any, (e: any) => {
+            if (isFocused) {
+                // Already on this tab, scroll to top and refresh
+                e.preventDefault()
+                flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
+                setHasMore(true)
+                setLastDoc(null)
+                fetchPosts(false)
+            }
+        })
+
+        return unsubscribe
+    }, [navigation, isFocused])
 
     const onRefresh = useCallback(() => {
         setRefreshing(true)
@@ -417,6 +453,7 @@ export default function ExploreScreen() {
                     }}
                 />
                 <FlatList
+                    ref={flatListRef}
                     data={posts}
                     renderItem={renderPost}
                     keyExtractor={(item) => item.id}
@@ -482,6 +519,35 @@ export default function ExploreScreen() {
                         setPosts(posts.filter((p) => p.id !== postId))
                     }}
                 />
+
+                {showStaleIndicator && (
+                    <View style={[styles.staleIndicatorContainer, { top: insets.top + 10 }]}>
+                        <TouchableOpacity
+                            style={styles.staleIndicator}
+                            onPress={async () => {
+                                setStaleRefreshing(true)
+                                setHasMore(true)
+                                setLastDoc(null)
+                                await fetchPosts(false)
+                                setStaleRefreshing(false)
+                            }}
+                            disabled={staleRefreshing}
+                        >
+                            {staleRefreshing ? (
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            ) : (
+                                <Ionicons
+                                    name="refresh"
+                                    size={16}
+                                    color={colors.primary}
+                                />
+                            )}
+                            <Text style={styles.staleIndicatorText}>
+                                {staleRefreshing ? 'Refreshing...' : 'Tap to refresh'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
             </View>
         </TouchableWithoutFeedback>
     )
@@ -499,6 +565,35 @@ const styles = StyleSheet.create({
         marginTop: 10,
         fontSize: 16,
         color: colors.textTertiary,
+    },
+    staleIndicatorContainer: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 1000,
+        pointerEvents: 'box-none',
+    },
+    staleIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.cardElevated,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 24,
+        gap: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 5,
+        pointerEvents: 'auto',
+    },
+    staleIndicatorText: {
+        fontSize: 14,
+        color: colors.primary,
+        fontWeight: '600',
     },
     emptyContainer: {
         flex: 1,

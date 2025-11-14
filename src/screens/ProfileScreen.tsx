@@ -3,8 +3,9 @@ import { usePost } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useRouter, useNavigation } from 'expo-router'
 import PostDetailModal from '@/components/PostDetailModal'
+import { useIsFocused } from '@react-navigation/native'
 import {
     collection,
     doc,
@@ -51,8 +52,10 @@ const POSTS_PER_PAGE = 20
 
 export default function ProfileScreen() {
     const { user } = useAuth()
-    const { shouldRefresh } = usePost()
+    const { shouldRefresh, updateLastFetch, isStale } = usePost()
     const router = useRouter()
+    const navigation = useNavigation()
+    const isFocused = useIsFocused()
     const insets = useSafeAreaInsets()
     const [username, setUsername] = useState<string>('')
     const [totalCatches, setTotalCatches] = useState<number>(0)
@@ -71,6 +74,9 @@ export default function ProfileScreen() {
     const [refreshing, setRefreshing] = useState(false)
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
+    const [showStaleIndicator, setShowStaleIndicator] = useState(false)
+    const [staleRefreshing, setStaleRefreshing] = useState(false)
+    const flatListRef = React.useRef<FlatList>(null)
 
     const fetchUserData = async () => {
         if (!user) return
@@ -138,6 +144,10 @@ export default function ProfileScreen() {
                 catchesSnapshot.docs[catchesSnapshot.docs.length - 1]
             setLastCatchDoc(lastCatchVisible || null)
             setHasMoreCatches(fetchedCatches.length === POSTS_PER_PAGE)
+
+            // Update last fetch time
+            updateLastFetch('profile')
+            setShowStaleIndicator(false)
         } catch (error) {
             console.error('Error fetching user data:', error)
         } finally {
@@ -159,6 +169,35 @@ export default function ProfileScreen() {
             fetchUserData()
         }
     }, [shouldRefresh])
+
+    // Check for staleness and show indicator
+    useEffect(() => {
+        const checkStale = setInterval(() => {
+            if (isStale('profile') && isFocused) {
+                setShowStaleIndicator(true)
+            }
+        }, 1000) // Check every 1 second for responsive updates
+
+        return () => clearInterval(checkStale)
+    }, [isStale, isFocused])
+
+    // Tab press listener for scroll to top + refresh
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('tabPress' as any, (e: any) => {
+            if (isFocused) {
+                // Already on this tab, scroll to top and refresh
+                e.preventDefault()
+                flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
+                setHasMorePosts(true)
+                setHasMoreCatches(true)
+                setLastPostDoc(null)
+                setLastCatchDoc(null)
+                fetchUserData()
+            }
+        })
+
+        return unsubscribe
+    }, [navigation, isFocused])
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true)
@@ -318,6 +357,7 @@ export default function ProfileScreen() {
         <>
             <View style={styles.container}>
                 <FlatList
+                    ref={flatListRef}
                     data={displayedPosts}
                     renderItem={renderPost}
                     keyExtractor={(item) => item.id}
@@ -486,6 +526,37 @@ export default function ProfileScreen() {
                     setPosts(posts.filter((p) => p.id !== postId))
                 }}
             />
+
+            {showStaleIndicator && (
+                <View style={[styles.staleIndicatorContainer, { top: insets.top + 66 }]}>
+                    <TouchableOpacity
+                        style={styles.staleIndicator}
+                        onPress={async () => {
+                            setStaleRefreshing(true)
+                            setHasMorePosts(true)
+                            setHasMoreCatches(true)
+                            setLastPostDoc(null)
+                            setLastCatchDoc(null)
+                            await fetchUserData()
+                            setStaleRefreshing(false)
+                        }}
+                        disabled={staleRefreshing}
+                    >
+                        {staleRefreshing ? (
+                            <ActivityIndicator size="small" color={colors.primary} />
+                        ) : (
+                            <Ionicons
+                                name="refresh"
+                                size={16}
+                                color={colors.primary}
+                            />
+                        )}
+                        <Text style={styles.staleIndicatorText}>
+                            {staleRefreshing ? 'Refreshing...' : 'Tap to refresh'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
         </>
     )
 }
@@ -500,6 +571,35 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: colors.background,
+    },
+    staleIndicatorContainer: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 1000,
+        pointerEvents: 'box-none',
+    },
+    staleIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.cardElevated,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 24,
+        gap: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 5,
+        pointerEvents: 'auto',
+    },
+    staleIndicatorText: {
+        fontSize: 14,
+        color: colors.primary,
+        fontWeight: '600',
     },
     profileHeader: {
         position: 'absolute',
