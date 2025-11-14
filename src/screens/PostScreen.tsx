@@ -88,7 +88,6 @@ export default function PostScreen() {
 
         // Mark as processing
         processingRef.current = true
-        setLoadingLocation(true)
 
         try {
             console.log('Starting image processing...')
@@ -108,6 +107,7 @@ export default function PostScreen() {
             // Close camera and show preview
             setShowCamera(false)
             setCapturedImage(processedUri)
+            setLoadingLocation(true)
 
             console.log('Getting device location...')
             const photoLocation = await getDeviceLocation()
@@ -116,10 +116,12 @@ export default function PostScreen() {
             // Check again if cancelled
             if (!processingRef.current) {
                 console.log('Processing was cancelled during location fetch, aborting')
+                setLoadingLocation(false)
                 return
             }
 
             setLocation(photoLocation)
+            setLoadingLocation(false)
             console.log('=== handlePhotoTaken COMPLETE ===')
         } catch (error) {
             console.error('=== ERROR in handlePhotoTaken ===', error)
@@ -127,9 +129,6 @@ export default function PostScreen() {
                 Alert.alert('Error', 'Failed to process photo. Please try again.')
             }
         } finally {
-            if (processingRef.current) {
-                setLoadingLocation(false)
-            }
             processingRef.current = false
         }
     }
@@ -221,8 +220,10 @@ export default function PostScreen() {
     }
 
     const handleCancel = () => {
+        processingRef.current = false
         setCapturedImage(null)
         setLocation(null)
+        setLoadingLocation(false)
     }
 
     // Camera View
