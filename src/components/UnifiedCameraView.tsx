@@ -62,7 +62,7 @@ export default function UnifiedCameraView({
     const cameraViewSize = screenWidth * 0.8
     // Calculate vertical position to center it in the upper portion
     const cameraViewTop = originalPhotoUrl
-        ? screenHeight * 0.15 // Higher up if showing original photo
+        ? 0.0 // Higher up if showing original photo to fit both
         : (screenHeight - cameraViewSize) / 2 - 50 // Centered, accounting for controls
 
     return (
@@ -93,7 +93,7 @@ export default function UnifiedCameraView({
                 <View
                     style={[
                         styles.originalPhotoContainer,
-                        { top: cameraViewTop + cameraViewSize + 20 },
+                        { top: cameraViewTop + cameraViewSize + 10 },
                     ]}
                 >
                     <Text style={styles.originalPhotoLabel}>
