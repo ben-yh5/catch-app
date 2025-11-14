@@ -57,11 +57,17 @@ export default function ProfileScreen() {
     const [username, setUsername] = useState<string>('')
     const [totalCatches, setTotalCatches] = useState<number>(0)
     const [posts, setPosts] = useState<Post[]>([])
+    const [catches, setCatches] = useState<Post[]>([])
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
     const [hasMorePosts, setHasMorePosts] = useState(true)
+    const [hasMoreCatches, setHasMoreCatches] = useState(true)
     const [lastPostDoc, setLastPostDoc] =
         useState<QueryDocumentSnapshot<DocumentData> | null>(null)
+    const [lastCatchDoc, setLastCatchDoc] =
+        useState<QueryDocumentSnapshot<DocumentData> | null>(null)
+    const [showPosts, setShowPosts] = useState(true)
+    const [showCatches, setShowCatches] = useState(false)
     const [refreshing, setRefreshing] = useState(false)
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
@@ -79,18 +85,19 @@ export default function ProfileScreen() {
                 setTotalCatches(userData.totalCatches || 0)
             }
 
-            // Fetch user's posts (paginated)
+            // Fetch user's original posts (paginated)
             const postsQuery = query(
                 collection(db, 'posts'),
                 where('authorId', '==', user.uid),
+                where('isOriginal', '==', true),
                 orderBy('createdAt', 'desc'),
                 limit(POSTS_PER_PAGE)
             )
 
-            const querySnapshot = await getDocs(postsQuery)
+            const postsSnapshot = await getDocs(postsQuery)
             const fetchedPosts: Post[] = []
 
-            querySnapshot.forEach((doc) => {
+            postsSnapshot.forEach((doc) => {
                 fetchedPosts.push({
                     id: doc.id,
                     ...doc.data(),
@@ -100,10 +107,37 @@ export default function ProfileScreen() {
             setPosts(fetchedPosts)
 
             // Update pagination state for posts
-            const lastVisible =
-                querySnapshot.docs[querySnapshot.docs.length - 1]
-            setLastPostDoc(lastVisible || null)
+            const lastPostVisible =
+                postsSnapshot.docs[postsSnapshot.docs.length - 1]
+            setLastPostDoc(lastPostVisible || null)
             setHasMorePosts(fetchedPosts.length === POSTS_PER_PAGE)
+
+            // Fetch user's catches (paginated)
+            const catchesQuery = query(
+                collection(db, 'posts'),
+                where('authorId', '==', user.uid),
+                where('isOriginal', '==', false),
+                orderBy('createdAt', 'desc'),
+                limit(POSTS_PER_PAGE)
+            )
+
+            const catchesSnapshot = await getDocs(catchesQuery)
+            const fetchedCatches: Post[] = []
+
+            catchesSnapshot.forEach((doc) => {
+                fetchedCatches.push({
+                    id: doc.id,
+                    ...doc.data(),
+                } as Post)
+            })
+
+            setCatches(fetchedCatches)
+
+            // Update pagination state for catches
+            const lastCatchVisible =
+                catchesSnapshot.docs[catchesSnapshot.docs.length - 1]
+            setLastCatchDoc(lastCatchVisible || null)
+            setHasMoreCatches(fetchedCatches.length === POSTS_PER_PAGE)
         } catch (error) {
             console.error('Error fetching user data:', error)
         } finally {
@@ -119,7 +153,9 @@ export default function ProfileScreen() {
         // Refresh user data when a new post is created
         if (shouldRefresh) {
             setHasMorePosts(true)
+            setHasMoreCatches(true)
             setLastPostDoc(null)
+            setLastCatchDoc(null)
             fetchUserData()
         }
     }, [shouldRefresh])
@@ -127,7 +163,9 @@ export default function ProfileScreen() {
     const onRefresh = useCallback(async () => {
         setRefreshing(true)
         setHasMorePosts(true)
+        setHasMoreCatches(true)
         setLastPostDoc(null)
+        setLastCatchDoc(null)
         await fetchUserData()
         setRefreshing(false)
     }, [])
@@ -141,6 +179,7 @@ export default function ProfileScreen() {
             const postsQuery = query(
                 collection(db, 'posts'),
                 where('authorId', '==', user.uid),
+                where('isOriginal', '==', true),
                 orderBy('createdAt', 'desc'),
                 startAfter(lastPostDoc),
                 limit(POSTS_PER_PAGE)
@@ -177,9 +216,60 @@ export default function ProfileScreen() {
         }
     }
 
+    const loadMoreCatches = async () => {
+        if (!user || loadingMore || !hasMoreCatches || !lastCatchDoc) return
+
+        setLoadingMore(true)
+
+        try {
+            const catchesQuery = query(
+                collection(db, 'posts'),
+                where('authorId', '==', user.uid),
+                where('isOriginal', '==', false),
+                orderBy('createdAt', 'desc'),
+                startAfter(lastCatchDoc),
+                limit(POSTS_PER_PAGE)
+            )
+
+            const querySnapshot = await getDocs(catchesQuery)
+            const fetchedCatches: Post[] = []
+
+            querySnapshot.forEach((doc) => {
+                fetchedCatches.push({
+                    id: doc.id,
+                    ...doc.data(),
+                } as Post)
+            })
+
+            // Deduplicate catches when loading more
+            setCatches((prev) => {
+                const existingIds = new Set(prev.map((p) => p.id))
+                const newCatches = fetchedCatches.filter(
+                    (p) => !existingIds.has(p.id)
+                )
+                return [...prev, ...newCatches]
+            })
+
+            // Update pagination state
+            const lastVisible =
+                querySnapshot.docs[querySnapshot.docs.length - 1]
+            setLastCatchDoc(lastVisible || null)
+            setHasMoreCatches(fetchedCatches.length === POSTS_PER_PAGE)
+        } catch (error) {
+            console.error('Error loading more catches:', error)
+        } finally {
+            setLoadingMore(false)
+        }
+    }
+
     const handleEndReached = () => {
-        if (hasMorePosts) {
+        // Load more posts if posts are shown and there are more
+        if (showPosts && hasMorePosts && !loadingMore) {
             loadMorePosts()
+        }
+        // Load more catches if catches are shown and there are more
+        if (showCatches && hasMoreCatches && !loadingMore) {
+            loadMoreCatches()
         }
     }
 
@@ -187,6 +277,20 @@ export default function ProfileScreen() {
         setSelectedPost(post)
         setModalVisible(true)
     }
+
+    // Combine and sort posts based on what's toggled on
+    const displayedPosts = React.useMemo(() => {
+        const combined: Post[] = []
+        if (showPosts) combined.push(...posts)
+        if (showCatches) combined.push(...catches)
+
+        // Sort by createdAt descending
+        return combined.sort((a, b) => {
+            const aTime = a.createdAt?.seconds || 0
+            const bTime = b.createdAt?.seconds || 0
+            return bTime - aTime
+        })
+    }, [showPosts, showCatches, posts, catches])
 
     const renderPost = ({ item }: { item: Post }) => (
         <TouchableOpacity
@@ -214,7 +318,7 @@ export default function ProfileScreen() {
         <>
             <View style={styles.container}>
                 <FlatList
-                    data={posts}
+                    data={displayedPosts}
                     renderItem={renderPost}
                     keyExtractor={(item) => item.id}
                     numColumns={2}
@@ -253,6 +357,62 @@ export default function ProfileScreen() {
                                     </View>
                                 </View>
                             </View>
+
+                            <View style={styles.toggleContainer}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.toggleButton,
+                                        showPosts && styles.toggleButtonActive,
+                                    ]}
+                                    onPress={() => setShowPosts(!showPosts)}
+                                >
+                                    <Ionicons
+                                        name={showPosts ? 'checkbox' : 'square-outline'}
+                                        size={20}
+                                        color={
+                                            showPosts
+                                                ? colors.primary
+                                                : colors.textTertiary
+                                        }
+                                    />
+                                    <Text
+                                        style={[
+                                            styles.toggleText,
+                                            showPosts &&
+                                                styles.toggleTextActive,
+                                        ]}
+                                    >
+                                        Posts
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.toggleButton,
+                                        showCatches && styles.toggleButtonActive,
+                                    ]}
+                                    onPress={() => setShowCatches(!showCatches)}
+                                >
+                                    <Ionicons
+                                        name={showCatches ? 'checkbox' : 'square-outline'}
+                                        size={20}
+                                        color={
+                                            showCatches
+                                                ? colors.primary
+                                                : colors.textTertiary
+                                        }
+                                    />
+                                    <Text
+                                        style={[
+                                            styles.toggleText,
+                                            showCatches &&
+                                                styles.toggleTextActive,
+                                        ]}
+                                    >
+                                        Catches
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     }
                     ListEmptyComponent={
@@ -262,7 +422,15 @@ export default function ProfileScreen() {
                                 size={80}
                                 color={colors.textTertiary}
                             />
-                            <Text style={styles.emptyText}>No posts yet</Text>
+                            <Text style={styles.emptyText}>
+                                {!showPosts && !showCatches
+                                    ? 'Select posts or catches to view'
+                                    : showPosts && showCatches
+                                    ? 'No posts or catches yet'
+                                    : showPosts
+                                    ? 'No posts yet'
+                                    : 'No catches yet'}
+                            </Text>
                         </View>
                     }
                     onEndReached={handleEndReached}
@@ -278,7 +446,7 @@ export default function ProfileScreen() {
                         ) : null
                     }
                     columnWrapperStyle={
-                        posts.length > 0 ? styles.row : undefined
+                        displayedPosts.length > 0 ? styles.row : undefined
                     }
                 />
 
@@ -392,6 +560,34 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: colors.textTertiary,
         marginTop: 4,
+    },
+    toggleContainer: {
+        flexDirection: 'row',
+        width: '100%',
+        marginTop: 20,
+        gap: 8,
+    },
+    toggleButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 10,
+        backgroundColor: colors.card,
+        gap: 8,
+    },
+    toggleButtonActive: {
+        backgroundColor: colors.cardElevated,
+    },
+    toggleText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.textTertiary,
+    },
+    toggleTextActive: {
+        color: colors.primary,
     },
     emptyContainer: {
         flex: 1,
