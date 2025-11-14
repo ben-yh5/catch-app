@@ -55,7 +55,7 @@ const { width } = Dimensions.get('window')
 
 const POSTS_PER_PAGE = 20
 
-export default function HomeScreen() {
+export default function ExploreScreen() {
     const { user } = useAuth()
     const { shouldRefresh } = usePost()
     const router = useRouter()

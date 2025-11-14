@@ -396,7 +396,7 @@ export default function PostScreen() {
             setLocation(null)
             setUploading(false)
 
-            // Trigger refresh for home and profile pages
+            // Trigger refresh for explore and profile pages
             triggerRefresh()
 
             // Navigate to profile

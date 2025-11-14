@@ -20,9 +20,18 @@ export default function TabLayout() {
             <Tabs.Screen
                 name="index"
                 options={{
-                    title: 'Home',
+                    title: 'Explore',
                     tabBarIcon: ({ color }) => (
-                        <Ionicons name="home" size={28} color={color} />
+                        <Ionicons name="compass" size={28} color={color} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="map"
+                options={{
+                    title: 'Map',
+                    tabBarIcon: ({ color }) => (
+                        <Ionicons name="map" size={28} color={color} />
                     ),
                 }}
             />
@@ -32,6 +41,15 @@ export default function TabLayout() {
                     title: 'Post',
                     tabBarIcon: ({ color }) => (
                         <Ionicons name="add-circle" size={28} color={color} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="saved"
+                options={{
+                    title: 'Saved',
+                    tabBarIcon: ({ color }) => (
+                        <Ionicons name="bookmark" size={28} color={color} />
                     ),
                 }}
             />

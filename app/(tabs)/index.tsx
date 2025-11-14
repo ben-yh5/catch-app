@@ -1,3 +1,3 @@
-import HomeScreen from '@/screens/HomeScreen'
+import ExploreScreen from '@/screens/ExploreScreen'
 
-export default HomeScreen
+export default ExploreScreen
