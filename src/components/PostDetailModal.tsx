@@ -3,8 +3,9 @@ import { usePost } from '@/context/PostContext'
 import { db, storage } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { validateCatch } from '@/utils/catchValidation'
+import { cropToSquare } from '@/utils/imageProcessing'
 import { Ionicons } from '@expo/vector-icons'
-import { CameraView, useCameraPermissions } from 'expo-camera'
+import { useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
 import {
@@ -34,6 +35,8 @@ import {
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import UnifiedCameraView from './UnifiedCameraView'
+import UnifiedPreviewScreen from './UnifiedPreviewScreen'
 
 interface Post {
     id: string
@@ -75,8 +78,9 @@ export default function PostDetailModal({
 
     // Catch flow states
     const [catchMode, setCatchMode] = useState(false)
+    const [catchPreviewMode, setCatchPreviewMode] = useState(false)
+    const [catchImageUri, setCatchImageUri] = useState<string | null>(null)
     const [cameraPermission, requestCameraPermission] = useCameraPermissions()
-    const [cameraRef, setCameraRef] = useState<any>(null)
     const [uploading, setUploading] = useState(false)
     const [fetchingLocation, setFetchingLocation] = useState(false)
 
@@ -182,9 +186,31 @@ export default function PostDetailModal({
         setCatchMode(true)
     }
 
-    const handleCatchPhoto = async (photoUri: string) => {
-        if (!post) {
-            Alert.alert('Error', 'Post not found. Please try again.')
+    const handleCatchPhotoTaken = async (photoUri: string) => {
+        try {
+            console.log('Catch photo captured, URI:', photoUri)
+
+            // Process the image to 1:1 square
+            const processedUri = await cropToSquare(photoUri)
+            console.log('Catch image processed, new URI:', processedUri)
+
+            setCatchImageUri(processedUri)
+            setCatchMode(false)
+            setCatchPreviewMode(true)
+        } catch (error) {
+            console.error('Error processing catch photo:', error)
+            setCatchMode(false)
+            Alert.alert('Error', 'Failed to process photo. Please try again.')
+        }
+    }
+
+    const handleCatchCameraCancel = () => {
+        setCatchMode(false)
+    }
+
+    const handleCatchConfirm = async () => {
+        if (!post || !catchImageUri) {
+            Alert.alert('Error', 'Post or image not found. Please try again.')
             return
         }
 
@@ -221,7 +247,7 @@ export default function PostDetailModal({
                     `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m to catch this location.`
                 )
             } else {
-                await createCatchPost(photoUri, coords)
+                await createCatchPost(catchImageUri, coords)
             }
         } catch (error: any) {
             console.error('Error validating catch:', error)
@@ -246,12 +272,9 @@ export default function PostDetailModal({
         }
     }
 
-    const takeCatchPicture = async () => {
-        if (cameraRef) {
-            const photo = await cameraRef.takePictureAsync()
-            setCatchMode(false)
-            await handleCatchPhoto(photo.uri)
-        }
+    const handleCatchPreviewCancel = () => {
+        setCatchPreviewMode(false)
+        setCatchImageUri(null)
     }
 
     const createCatchPost = async (
@@ -314,6 +337,10 @@ export default function PostDetailModal({
 
             Alert.alert('Success', 'Great catch! Your post has been created.')
 
+            // Reset catch states
+            setCatchPreviewMode(false)
+            setCatchImageUri(null)
+
             triggerRefresh()
             onClose()
         } catch (error) {
@@ -347,29 +374,35 @@ export default function PostDetailModal({
                     onClose()
                 }}
             >
-                <View style={styles.cameraContainer}>
-                    <CameraView
-                        style={styles.camera}
-                        facing="back"
-                        ref={(ref) => setCameraRef(ref)}
-                    >
-                        <View style={styles.cameraControls}>
-                            <TouchableOpacity
-                                style={styles.cancelButton}
-                                onPress={() => setCatchMode(false)}
-                            >
-                                <Ionicons name="close" size={32} color="#fff" />
-                            </TouchableOpacity>
+                <UnifiedCameraView
+                    onPhotoTaken={handleCatchPhotoTaken}
+                    onCancel={handleCatchCameraCancel}
+                    originalPhotoUrl={post.photoURL}
+                />
+            </Modal>
+        )
+    }
 
-                            <TouchableOpacity
-                                style={styles.captureButton}
-                                onPress={takeCatchPicture}
-                            >
-                                <View style={styles.captureButtonInner} />
-                            </TouchableOpacity>
-                        </View>
-                    </CameraView>
-                </View>
+    if (catchPreviewMode && catchImageUri) {
+        return (
+            <Modal
+                visible={visible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => {
+                    setCatchPreviewMode(false)
+                    onClose()
+                }}
+            >
+                <UnifiedPreviewScreen
+                    imageUri={catchImageUri}
+                    onConfirm={handleCatchConfirm}
+                    onCancel={handleCatchPreviewCancel}
+                    mode="catch"
+                    loading={uploading}
+                    loadingText="Creating catch..."
+                    originalPhotoUrl={post.photoURL}
+                />
             </Modal>
         )
     }
@@ -762,42 +795,5 @@ const styles = StyleSheet.create({
     },
     catchButtonDisabled: {
         opacity: 0.6,
-    },
-    cameraContainer: {
-        flex: 1,
-        width: '100%',
-        backgroundColor: '#000',
-    },
-    camera: {
-        flex: 1,
-    },
-    cameraControls: {
-        flex: 1,
-        backgroundColor: 'transparent',
-        justifyContent: 'space-between',
-        padding: 20,
-    },
-    cancelButton: {
-        alignSelf: 'flex-start',
-        padding: 8,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        borderRadius: 20,
-    },
-    captureButton: {
-        alignSelf: 'center',
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 4,
-        borderColor: '#fff',
-    },
-    captureButtonInner: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: '#fff',
     },
 })
