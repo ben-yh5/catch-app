@@ -1,3 +1,5 @@
+import 'dotenv/config'
+
 export default {
     expo: {
         name: 'catch-app',
@@ -29,6 +31,7 @@ export default {
         },
         plugins: [
             'expo-router',
+            'expo-dev-client',
             [
                 'expo-splash-screen',
                 {
@@ -46,5 +49,6 @@ export default {
             typedRoutes: true,
             reactCompiler: true,
         },
+        extra: {},
     },
 }
