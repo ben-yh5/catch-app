@@ -80,6 +80,10 @@ export default function PostDetailModal({
     const [catchMode, setCatchMode] = useState(false)
     const [catchPreviewMode, setCatchPreviewMode] = useState(false)
     const [catchImageUri, setCatchImageUri] = useState<string | null>(null)
+    const [catchLocation, setCatchLocation] = useState<{
+        latitude: number
+        longitude: number
+    } | null>(null)
     const [cameraPermission, requestCameraPermission] = useCameraPermissions()
     const [uploading, setUploading] = useState(false)
     const [fetchingLocation, setFetchingLocation] = useState(false)
@@ -197,6 +201,19 @@ export default function PostDetailModal({
             setCatchImageUri(processedUri)
             setCatchMode(false)
             setCatchPreviewMode(true)
+
+            // Get location in the background
+            setFetchingLocation(true)
+            const { status } =
+                await Location.requestForegroundPermissionsAsync()
+            if (status === 'granted') {
+                const location = await Location.getCurrentPositionAsync({})
+                setCatchLocation({
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                })
+            }
+            setFetchingLocation(false)
         } catch (error) {
             console.error('Error processing catch photo:', error)
             setCatchMode(false)
@@ -208,50 +225,40 @@ export default function PostDetailModal({
         setCatchMode(false)
     }
 
-    const handleCatchConfirm = async () => {
+    const handleCatchConfirm = async (caption?: string) => {
         if (!post || !catchImageUri) {
             Alert.alert('Error', 'Post or image not found. Please try again.')
             return
         }
 
-        setFetchingLocation(true)
+        if (!catchLocation) {
+            Alert.alert(
+                'Permission Required',
+                'Location permission is required to validate your catch.'
+            )
+            return
+        }
+
+        setUploading(true)
         try {
-            const { status } =
-                await Location.requestForegroundPermissionsAsync()
-            if (status !== 'granted') {
-                setFetchingLocation(false)
-                Alert.alert(
-                    'Permission Required',
-                    'Location permission is required to validate your catch.'
-                )
-                return
-            }
-
-            const location = await Location.getCurrentPositionAsync({})
-            const coords = {
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-            }
-
             const validation = await validateCatch(
                 post.id,
-                coords.latitude,
-                coords.longitude
+                catchLocation.latitude,
+                catchLocation.longitude
             )
 
-            setFetchingLocation(false)
-
             if (!validation.isValid) {
+                setUploading(false)
                 Alert.alert(
                     'Too Far Away',
                     `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m to catch this location.`
                 )
             } else {
-                await createCatchPost(catchImageUri, coords)
+                await createCatchPost(catchImageUri, catchLocation, caption)
             }
         } catch (error: any) {
             console.error('Error validating catch:', error)
-            setFetchingLocation(false)
+            setUploading(false)
 
             if (error.code === 'functions/not-found') {
                 Alert.alert(
@@ -275,15 +282,15 @@ export default function PostDetailModal({
     const handleCatchPreviewCancel = () => {
         setCatchPreviewMode(false)
         setCatchImageUri(null)
+        setCatchLocation(null)
     }
 
     const createCatchPost = async (
         photoUri: string,
-        location: { latitude: number; longitude: number }
+        location: { latitude: number; longitude: number },
+        caption?: string
     ) => {
         if (!user || !post) return
-
-        setUploading(true)
 
         try {
             const response = await fetch(photoUri)
@@ -302,11 +309,14 @@ export default function PostDetailModal({
                 ? userDoc.data().username
                 : 'Unknown'
 
+            const defaultCaption = `Caught @${post.authorUsername}'s location!`
+            const finalCaption = caption?.trim() || defaultCaption
+
             const catchPostRef = await addDoc(collection(db, 'posts'), {
                 authorId: user.uid,
                 authorUsername: username,
                 photoURL: downloadURL,
-                caption: `Caught @${post.authorUsername}'s location!`,
+                caption: finalCaption,
                 hasLocation: true,
                 catchCount: 0,
                 isOriginal: false,
@@ -337,6 +347,7 @@ export default function PostDetailModal({
             // Reset catch states
             setCatchPreviewMode(false)
             setCatchImageUri(null)
+            setCatchLocation(null)
 
             triggerRefresh()
             onClose()
@@ -399,6 +410,8 @@ export default function PostDetailModal({
                     loading={uploading}
                     loadingText="Creating catch..."
                     originalPhotoUrl={post.photoURL}
+                    hasLocation={!!catchLocation}
+                    loadingLocation={fetchingLocation}
                 />
             </Modal>
         )

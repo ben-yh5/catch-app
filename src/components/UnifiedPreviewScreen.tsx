@@ -82,57 +82,57 @@ export default function UnifiedPreviewScreen({
                     </View>
                 )}
 
-                {/* Location display for post mode */}
-                {isPost && (
-                    <View style={styles.locationContainer}>
-                        {loadingLocation ? (
-                            <View style={styles.locationLoading}>
-                                <ActivityIndicator
-                                    size="small"
-                                    color={colors.primary}
-                                />
-                                <Text style={styles.locationLoadingText}>
-                                    Getting location...
-                                </Text>
-                            </View>
-                        ) : hasLocation ? (
-                            <View style={styles.locationInfo}>
-                                <Ionicons
-                                    name="location"
-                                    size={18}
-                                    color={colors.primary}
-                                />
-                                <Text style={styles.locationText}>
-                                    Location captured
-                                </Text>
-                            </View>
-                        ) : (
-                            <View style={styles.locationInfo}>
-                                <Ionicons
-                                    name="location-outline"
-                                    size={18}
-                                    color={colors.textTertiary}
-                                />
-                                <Text style={styles.noLocationText}>
-                                    No location available
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                )}
+                {/* Location display for both modes */}
+                <View style={styles.locationContainer}>
+                    {loadingLocation ? (
+                        <View style={styles.locationLoading}>
+                            <ActivityIndicator
+                                size="small"
+                                color={colors.primary}
+                            />
+                            <Text style={styles.locationLoadingText}>
+                                Getting location...
+                            </Text>
+                        </View>
+                    ) : hasLocation ? (
+                        <View style={styles.locationInfo}>
+                            <Ionicons
+                                name="location"
+                                size={18}
+                                color={colors.primary}
+                            />
+                            <Text style={styles.locationText}>
+                                Location captured
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={styles.locationInfo}>
+                            <Ionicons
+                                name="location-outline"
+                                size={18}
+                                color={colors.textTertiary}
+                            />
+                            <Text style={styles.noLocationText}>
+                                No location available
+                            </Text>
+                        </View>
+                    )}
+                </View>
 
-                {/* Caption input for post mode */}
-                {isPost && (
-                    <TextInput
-                        style={styles.captionInput}
-                        placeholder="Add a caption or hint..."
-                        placeholderTextColor={colors.textTertiary}
-                        value={caption}
-                        onChangeText={setCaption}
-                        multiline
-                        maxLength={200}
-                    />
-                )}
+                {/* Caption input for both modes */}
+                <TextInput
+                    style={styles.captionInput}
+                    placeholder={
+                        isPost
+                            ? 'Add a caption or hint...'
+                            : 'Add a caption (optional)...'
+                    }
+                    placeholderTextColor={colors.textTertiary}
+                    value={caption}
+                    onChangeText={setCaption}
+                    multiline
+                    maxLength={200}
+                />
 
                 {/* Catch mode info */}
                 {isCatch && (
