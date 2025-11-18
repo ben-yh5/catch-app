@@ -8,6 +8,7 @@ import {
     Image,
 } from 'react-native'
 import { CameraView, CameraType } from 'expo-camera'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 
@@ -25,6 +26,7 @@ export default function UnifiedCameraView({
     const [facing, setFacing] = useState<CameraType>('back')
     const [isCameraReady, setIsCameraReady] = useState(false)
     const cameraRef = useRef<CameraView>(null)
+    const insets = useSafeAreaInsets()
 
     const handleCameraReady = () => {
         console.log('Camera is ready')
@@ -62,7 +64,7 @@ export default function UnifiedCameraView({
     const cameraViewSize = screenWidth * 0.8
     // Calculate vertical position to center it in the upper portion
     const cameraViewTop = originalPhotoUrl
-        ? 0.0 // Higher up if showing original photo to fit both
+        ? insets.top + 20 // Add safe area padding when showing original photo
         : (screenHeight - cameraViewSize) / 2 - 50 // Centered, accounting for controls
 
     return (
@@ -143,7 +145,12 @@ export default function UnifiedCameraView({
 
             {/* Camera ready indicator */}
             {!isCameraReady && (
-                <View style={styles.loadingIndicator}>
+                <View
+                    style={[
+                        styles.loadingIndicator,
+                        { top: insets.top + 100 },
+                    ]}
+                >
                     <Text style={styles.loadingText}>Camera loading...</Text>
                 </View>
             )}
@@ -189,7 +196,7 @@ const styles = StyleSheet.create({
     },
     controls: {
         position: 'absolute',
-        bottom: 50,
+        bottom: 30,
         left: 0,
         right: 0,
         flexDirection: 'row',
@@ -232,7 +239,6 @@ const styles = StyleSheet.create({
     },
     loadingIndicator: {
         position: 'absolute',
-        top: 100,
         alignSelf: 'center',
         backgroundColor: 'rgba(0, 0, 0, 0.7)',
         paddingHorizontal: 20,

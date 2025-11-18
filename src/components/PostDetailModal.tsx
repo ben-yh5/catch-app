@@ -448,7 +448,7 @@ export default function PostDetailModal({
                     <View
                         style={[
                             styles.headerBar,
-                            { paddingTop: Math.max(insets.top - 30, 10) },
+                            { paddingTop: insets.top + 10 },
                         ]}
                     >
                         <View style={styles.headerLeft}>

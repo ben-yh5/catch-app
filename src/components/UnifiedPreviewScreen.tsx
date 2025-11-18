@@ -13,6 +13,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/theme/colors'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface UnifiedPreviewScreenProps {
     imageUri: string
@@ -38,6 +39,7 @@ export default function UnifiedPreviewScreen({
     originalPhotoUrl,
 }: UnifiedPreviewScreenProps) {
     const [caption, setCaption] = useState('')
+    const insets = useSafeAreaInsets()
 
     const handleConfirm = () => {
         onConfirm(caption)
@@ -51,7 +53,12 @@ export default function UnifiedPreviewScreen({
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
         >
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <ScrollView
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    { paddingTop: insets.top + 20 },
+                ]}
+            >
                 {/* Title for both modes */}
                 <Text style={styles.title}>
                     {isPost ? 'Preview Your Post' : 'Preview Your Catch'}
