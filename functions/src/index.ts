@@ -100,3 +100,57 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
         )
     }
 })
+
+// Firestore trigger: When a post is created, increment user's post count
+export const onPostCreated = functions.firestore
+    .document('posts/{postId}')
+    .onCreate(async (snap) => {
+        const postData = snap.data()
+        const authorId = postData.authorId
+
+        if (!authorId) {
+            functions.logger.warn('Post created without authorId:', snap.id)
+            return
+        }
+
+        try {
+            const userRef = admin.firestore().collection('users').doc(authorId)
+
+            // Increment totalCatches if this is a catch (not an original post)
+            if (postData.parentPostId && !postData.isOriginal) {
+                await userRef.update({
+                    totalCatches: admin.firestore.FieldValue.increment(1),
+                })
+                functions.logger.info(`Incremented totalCatches for user ${authorId}`)
+            }
+        } catch (error) {
+            functions.logger.error('Error updating user counts on post create:', error)
+        }
+    })
+
+// Firestore trigger: When a post is deleted, decrement user's post count
+export const onPostDeleted = functions.firestore
+    .document('posts/{postId}')
+    .onDelete(async (snap) => {
+        const postData = snap.data()
+        const authorId = postData.authorId
+
+        if (!authorId) {
+            functions.logger.warn('Deleted post had no authorId:', snap.id)
+            return
+        }
+
+        try {
+            const userRef = admin.firestore().collection('users').doc(authorId)
+
+            // Decrement totalCatches if this was a catch
+            if (postData.parentPostId && !postData.isOriginal) {
+                await userRef.update({
+                    totalCatches: admin.firestore.FieldValue.increment(-1),
+                })
+                functions.logger.info(`Decremented totalCatches for user ${authorId}`)
+            }
+        } catch (error) {
+            functions.logger.error('Error updating user counts on post delete:', error)
+        }
+    })

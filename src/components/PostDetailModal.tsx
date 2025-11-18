@@ -326,10 +326,7 @@ export default function PostDetailModal({
                 catchCount: increment(1),
             })
 
-            const userRef = doc(db, 'users', user.uid)
-            await updateDoc(userRef, {
-                totalCatches: increment(1),
-            })
+            // Note: totalCatches is now auto-updated by Cloud Functions
 
             // Update local state
             const updatedPost = { ...post, catchCount: post.catchCount + 1 }
