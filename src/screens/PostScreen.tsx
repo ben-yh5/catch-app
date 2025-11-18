@@ -252,20 +252,6 @@ export default function PostScreen() {
         )
     }
 
-    // Loading View - Show while processing photo
-    if (loadingLocation) {
-        return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <Text style={{ color: '#fff', fontSize: 18, marginBottom: 10 }}>
-                    Processing photo...
-                </Text>
-                <Text style={{ color: '#888', fontSize: 14 }}>
-                    Please wait
-                </Text>
-            </View>
-        )
-    }
-
     // Default View - Camera Button
     return (
         <View style={styles.container}>
