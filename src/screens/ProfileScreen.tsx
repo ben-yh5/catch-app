@@ -25,9 +25,11 @@ import {
     Dimensions,
     FlatList,
     Image,
+    Modal,
     RefreshControl,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native'
@@ -76,7 +78,12 @@ export default function ProfileScreen() {
     const [modalVisible, setModalVisible] = useState(false)
     const [showStaleIndicator, setShowStaleIndicator] = useState(false)
     const [staleRefreshing, setStaleRefreshing] = useState(false)
+    const [searchVisible, setSearchVisible] = useState(false)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [searchResults, setSearchResults] = useState<{ id: string; username: string }[]>([])
+    const [searchLoading, setSearchLoading] = useState(false)
     const flatListRef = React.useRef<FlatList>(null)
+    const searchInputRef = React.useRef<TextInput>(null)
 
     const fetchUserData = async () => {
         if (!user) return
@@ -317,6 +324,54 @@ export default function ProfileScreen() {
         setModalVisible(true)
     }
 
+    const handleSearch = async (text: string) => {
+        setSearchQuery(text)
+
+        if (text.trim().length === 0) {
+            setSearchResults([])
+            return
+        }
+
+        setSearchLoading(true)
+        try {
+            // Search users by username prefix (case-sensitive for now)
+            const searchLower = text.toLowerCase()
+            const usersQuery = query(
+                collection(db, 'users'),
+                where('username', '>=', searchLower),
+                where('username', '<=', searchLower + '\uf8ff'),
+                limit(10)
+            )
+
+            const snapshot = await getDocs(usersQuery)
+            const results: { id: string; username: string }[] = []
+
+            snapshot.forEach((doc) => {
+                results.push({
+                    id: doc.id,
+                    username: doc.data().username,
+                })
+            })
+
+            setSearchResults(results)
+        } catch (error) {
+            console.error('Error searching users:', error)
+        } finally {
+            setSearchLoading(false)
+        }
+    }
+
+    const handleUserSelect = (userId: string) => {
+        setSearchVisible(false)
+        setSearchQuery('')
+        setSearchResults([])
+        if (userId === user?.uid) {
+            // Already on own profile
+            return
+        }
+        router.push(`/user-profile?userId=${userId}` as any)
+    }
+
     // Combine and sort posts based on what's toggled on
     const displayedPosts = React.useMemo(() => {
         const combined: Post[] = []
@@ -493,7 +548,19 @@ export default function ProfileScreen() {
                 <View
                     style={[styles.profileHeader, { paddingTop: insets.top }]}
                 >
-                    <View style={styles.placeholder} />
+                    <TouchableOpacity
+                        onPress={() => {
+                            setSearchVisible(true)
+                            setTimeout(() => searchInputRef.current?.focus(), 100)
+                        }}
+                        style={styles.searchButton}
+                    >
+                        <Ionicons
+                            name="search"
+                            size={24}
+                            color={colors.textPrimary}
+                        />
+                    </TouchableOpacity>
                     <Text style={styles.headerTitle}>Profile</Text>
                     <TouchableOpacity
                         onPress={() => router.push('/settings' as any)}
@@ -557,6 +624,78 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                 </View>
             )}
+
+            <Modal
+                visible={searchVisible}
+                animationType="fade"
+                transparent
+                onRequestClose={() => {
+                    setSearchVisible(false)
+                    setSearchQuery('')
+                    setSearchResults([])
+                }}
+            >
+                <View style={[styles.searchModalOverlay, { paddingTop: insets.top }]}>
+                    <View style={styles.searchHeader}>
+                        <TouchableOpacity
+                            onPress={() => {
+                                setSearchVisible(false)
+                                setSearchQuery('')
+                                setSearchResults([])
+                            }}
+                            style={styles.searchCloseButton}
+                        >
+                            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+                        </TouchableOpacity>
+                        <View style={styles.searchInputContainer}>
+                            <Ionicons name="search" size={18} color={colors.textTertiary} />
+                            <TextInput
+                                ref={searchInputRef}
+                                style={styles.searchInput}
+                                placeholder="Search users..."
+                                placeholderTextColor={colors.textTertiary}
+                                value={searchQuery}
+                                onChangeText={handleSearch}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => handleSearch('')}>
+                                    <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.searchResults}>
+                        {searchLoading ? (
+                            <View style={styles.searchLoadingContainer}>
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            </View>
+                        ) : searchResults.length > 0 ? (
+                            searchResults.map((result) => (
+                                <TouchableOpacity
+                                    key={result.id}
+                                    style={styles.searchResultItem}
+                                    onPress={() => handleUserSelect(result.id)}
+                                >
+                                    <View style={styles.searchResultAvatar}>
+                                        <Ionicons name="person" size={20} color={colors.textTertiary} />
+                                    </View>
+                                    <Text style={styles.searchResultUsername}>@{result.username}</Text>
+                                    {result.id === user?.uid && (
+                                        <Text style={styles.searchResultYou}>(you)</Text>
+                                    )}
+                                </TouchableOpacity>
+                            ))
+                        ) : searchQuery.length > 0 ? (
+                            <Text style={styles.searchNoResults}>No users found</Text>
+                        ) : (
+                            <Text style={styles.searchHint}>Search for users by username</Text>
+                        )}
+                    </View>
+                </View>
+            </Modal>
         </>
     )
 }
@@ -621,8 +760,83 @@ const styles = StyleSheet.create({
     settingsButton: {
         padding: 4,
     },
-    placeholder: {
-        width: 32,
+    searchButton: {
+        padding: 4,
+    },
+    searchModalOverlay: {
+        flex: 1,
+        backgroundColor: colors.background,
+    },
+    searchHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        gap: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+    },
+    searchCloseButton: {
+        padding: 4,
+    },
+    searchInputContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.card,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        gap: 8,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 16,
+        color: colors.textPrimary,
+    },
+    searchResults: {
+        flex: 1,
+        paddingTop: 8,
+    },
+    searchLoadingContainer: {
+        paddingVertical: 20,
+        alignItems: 'center',
+    },
+    searchResultItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        gap: 12,
+    },
+    searchResultAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.card,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    searchResultUsername: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: colors.textPrimary,
+    },
+    searchResultYou: {
+        fontSize: 14,
+        color: colors.textTertiary,
+    },
+    searchNoResults: {
+        textAlign: 'center',
+        color: colors.textTertiary,
+        fontSize: 16,
+        paddingVertical: 40,
+    },
+    searchHint: {
+        textAlign: 'center',
+        color: colors.textTertiary,
+        fontSize: 16,
+        paddingVertical: 40,
     },
     listContent: {
         paddingBottom: 20,
