@@ -128,15 +128,16 @@ export const onPostCreated = functions.firestore
         }
     })
 
-// Firestore trigger: When a post is deleted, decrement user's post count
+// Firestore trigger: When a post is deleted, handle thread promotion and user counts
 export const onPostDeleted = functions.firestore
     .document('posts/{postId}')
     .onDelete(async (snap) => {
         const postData = snap.data()
+        const postId = snap.id
         const authorId = postData.authorId
 
         if (!authorId) {
-            functions.logger.warn('Deleted post had no authorId:', snap.id)
+            functions.logger.warn('Deleted post had no authorId:', postId)
             return
         }
 
@@ -150,7 +151,107 @@ export const onPostDeleted = functions.firestore
                 })
                 functions.logger.info(`Decremented totalCatches for user ${authorId}`)
             }
+
+            // Handle root post deletion - promote oldest catch to new root
+            if (postData.isOriginal) {
+                functions.logger.info(`Root post ${postId} deleted, checking for thread promotion`)
+
+                // Find all catches in this thread
+                const catchesQuery = await admin
+                    .firestore()
+                    .collection('posts')
+                    .where('rootPostId', '==', postId)
+                    .orderBy('createdAt', 'asc')
+                    .get()
+
+                if (!catchesQuery.empty) {
+                    // Get the oldest catch to promote
+                    const newRootDoc = catchesQuery.docs[0]
+                    const newRootId = newRootDoc.id
+
+                    functions.logger.info(`Promoting catch ${newRootId} to new root`)
+
+                    // Update the new root post
+                    const batch = admin.firestore().batch()
+
+                    // Make the oldest catch the new root
+                    batch.update(newRootDoc.ref, {
+                        isOriginal: true,
+                        parentPostId: null,
+                        rootPostId: null,
+                        catchCount: postData.catchCount - 1, // Transfer catch count minus 1 (this catch no longer counts)
+                    })
+
+                    // Update all other catches to point to the new root
+                    for (let i = 1; i < catchesQuery.docs.length; i++) {
+                        const catchDoc = catchesQuery.docs[i]
+                        batch.update(catchDoc.ref, {
+                            rootPostId: newRootId,
+                            parentPostId: newRootId,
+                        })
+                    }
+
+                    // Transfer location data from deleted root to new root
+                    const oldLocationQuery = await admin
+                        .firestore()
+                        .collection('post_locations')
+                        .where('postId', '==', postId)
+                        .limit(1)
+                        .get()
+
+                    // The new root should already have location data (it was a valid catch)
+                    // But if for some reason it doesn't and the old root did, we could copy it
+                    // For now, the new root keeps its own location data
+
+                    // Delete the old root's location data
+                    if (!oldLocationQuery.empty) {
+                        batch.delete(oldLocationQuery.docs[0].ref)
+                    }
+
+                    await batch.commit()
+                    functions.logger.info(`Thread promotion complete. New root: ${newRootId}`)
+                } else {
+                    // No catches in thread, just delete the location data
+                    const locationQuery = await admin
+                        .firestore()
+                        .collection('post_locations')
+                        .where('postId', '==', postId)
+                        .limit(1)
+                        .get()
+
+                    if (!locationQuery.empty) {
+                        await locationQuery.docs[0].ref.delete()
+                        functions.logger.info(`Deleted location data for post ${postId}`)
+                    }
+                }
+            } else {
+                // Non-root post deleted - decrement root's catchCount
+                const rootPostId = postData.rootPostId
+                if (rootPostId) {
+                    const rootRef = admin.firestore().collection('posts').doc(rootPostId)
+                    const rootDoc = await rootRef.get()
+                    if (rootDoc.exists) {
+                        await rootRef.update({
+                            catchCount: admin.firestore.FieldValue.increment(-1),
+                        })
+                        functions.logger.info(`Decremented catchCount for root post ${rootPostId}`)
+                    }
+                }
+
+                // Delete the catch's location data
+                const locationQuery = await admin
+                    .firestore()
+                    .collection('post_locations')
+                    .where('postId', '==', postId)
+                    .limit(1)
+                    .get()
+
+                if (!locationQuery.empty) {
+                    await locationQuery.docs[0].ref.delete()
+                    functions.logger.info(`Deleted location data for catch ${postId}`)
+                }
+            }
         } catch (error) {
-            functions.logger.error('Error updating user counts on post delete:', error)
+            functions.logger.error('Error handling post deletion:', error)
         }
     })

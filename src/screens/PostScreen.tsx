@@ -180,6 +180,7 @@ export default function PostScreen() {
                 hasLocation: !!location,
                 catchCount: 0,
                 parentPostId: null,
+                rootPostId: null, // Original posts have no root (they ARE the root)
                 isOriginal: true,
                 createdAt: new Date(),
             }

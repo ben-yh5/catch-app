@@ -3,7 +3,7 @@ import { usePost } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
-import PostDetailModal from '@/components/PostDetailModal'
+import ThreadModal from '@/components/ThreadModal'
 import {
     collection,
     doc,
@@ -36,6 +36,7 @@ interface Post {
     hasLocation: boolean
     catchCount: number
     parentPostId: string | null
+    rootPostId: string | null
     isOriginal: boolean
     createdAt: any
 }
@@ -191,9 +192,10 @@ export default function SavedScreen() {
                 />
             </View>
 
-            <PostDetailModal
+            <ThreadModal
                 visible={modalVisible}
                 post={selectedPost}
+                initialPostId={selectedPost?.id}
                 onClose={() => {
                     setModalVisible(false)
                     setSelectedPost(null)

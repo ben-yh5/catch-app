@@ -1,4 +1,4 @@
-import PostDetailModal from '@/components/PostDetailModal'
+import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
 import { db } from '@/services/firebase'
@@ -45,6 +45,7 @@ interface Post {
     hasLocation: boolean
     catchCount: number
     parentPostId: string | null
+    rootPostId: string | null
     isOriginal: boolean
     createdAt: any
 }
@@ -644,9 +645,10 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                 </View>
             </View>
 
-            <PostDetailModal
+            <ThreadModal
                 visible={modalVisible}
                 post={selectedPost}
+                initialPostId={selectedPost?.id}
                 onClose={() => {
                     setModalVisible(false)
                     setSelectedPost(null)
@@ -657,9 +659,15 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             p.id === updatedPost.id ? updatedPost : p
                         )
                     )
+                    setCatches(
+                        catches.map((p) =>
+                            p.id === updatedPost.id ? updatedPost : p
+                        )
+                    )
                 }}
                 onPostDelete={(postId) => {
                     setPosts(posts.filter((p) => p.id !== postId))
+                    setCatches(catches.filter((p) => p.id !== postId))
                 }}
             />
 

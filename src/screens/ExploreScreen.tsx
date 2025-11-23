@@ -4,7 +4,7 @@ import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useNavigation } from 'expo-router'
-import PostDetailModal from '@/components/PostDetailModal'
+import ThreadModal from '@/components/ThreadModal'
 import { useIsFocused } from '@react-navigation/native'
 import {
     arrayRemove,
@@ -21,6 +21,7 @@ import {
     QueryDocumentSnapshot,
     startAfter,
     updateDoc,
+    where,
 } from 'firebase/firestore'
 import React, { useCallback, useEffect, useState } from 'react'
 import {
@@ -45,9 +46,10 @@ interface Post {
     authorUsername: string
     photoURL: string
     caption: string
-    hasLocation: boolean // Changed from location object to boolean flag
+    hasLocation: boolean
     catchCount: number
     parentPostId: string | null
+    rootPostId: string | null
     isOriginal: boolean
     createdAt: any
 }
@@ -106,6 +108,7 @@ export default function ExploreScreen() {
             if (loadMore && lastDoc) {
                 postsQuery = query(
                     collection(db, 'posts'),
+                    where('isOriginal', '==', true),
                     orderBy('catchCount', 'desc'),
                     startAfter(lastDoc),
                     limit(POSTS_PER_PAGE)
@@ -113,6 +116,7 @@ export default function ExploreScreen() {
             } else {
                 postsQuery = query(
                     collection(db, 'posts'),
+                    where('isOriginal', '==', true),
                     orderBy('catchCount', 'desc'),
                     limit(POSTS_PER_PAGE)
                 )
@@ -301,6 +305,16 @@ export default function ExploreScreen() {
         }
     }
 
+    const formatDate = (timestamp: any) => {
+        if (!timestamp) return ''
+        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+        })
+    }
+
     const renderPost = ({ item }: { item: Post }) => {
         const isBookmarked = bookmarkedPosts.includes(item.id)
 
@@ -425,9 +439,12 @@ export default function ExploreScreen() {
                     />
                 </TouchableOpacity>
 
-                {item.caption ? (
-                    <Text style={styles.caption}>{item.caption}</Text>
-                ) : null}
+                <View style={styles.postFooter}>
+                    {item.caption ? (
+                        <Text style={styles.caption}>{item.caption}</Text>
+                    ) : null}
+                    <Text style={styles.dateText}>{formatDate(item.createdAt)}</Text>
+                </View>
             </Pressable>
         )
     }
@@ -501,7 +518,7 @@ export default function ExploreScreen() {
                     }
                 />
 
-                <PostDetailModal
+                <ThreadModal
                     visible={modalVisible}
                     post={selectedPost}
                     onClose={() => {
@@ -664,27 +681,22 @@ const styles = StyleSheet.create({
     },
     postImage: {
         width: '100%',
-        height: width - 20,
+        aspectRatio: 1,
         backgroundColor: colors.imageBackground,
     },
-    caption: {
+    postFooter: {
         padding: 12,
-        paddingTop: 4,
+        paddingTop: 10,
+    },
+    caption: {
         fontSize: 15,
         color: colors.textSecondary,
         lineHeight: 20,
+        marginBottom: 6,
     },
-    locationContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingBottom: 12,
-        gap: 5,
-    },
-    locationText: {
-        fontSize: 13,
-        color: colors.primary,
-        fontFamily: 'monospace',
+    dateText: {
+        fontSize: 12,
+        color: colors.textTertiary,
     },
     optionsMenu: {
         position: 'absolute',
