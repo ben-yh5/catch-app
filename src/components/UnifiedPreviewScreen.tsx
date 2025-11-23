@@ -4,13 +4,13 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    Image,
     TextInput,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
     ActivityIndicator,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/theme/colors'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -69,7 +69,9 @@ export default function UnifiedPreviewScreen({
                     <Image
                         source={{ uri: imageUri }}
                         style={styles.previewImage}
-                        resizeMode="cover"
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={200}
                     />
                 </View>
 
@@ -83,7 +85,9 @@ export default function UnifiedPreviewScreen({
                             <Image
                                 source={{ uri: originalPhotoUrl }}
                                 style={styles.previewImage}
-                                resizeMode="cover"
+                                contentFit="cover"
+                                cachePolicy="memory-disk"
+                                transition={200}
                             />
                         </View>
                     </View>

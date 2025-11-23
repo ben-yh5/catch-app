@@ -27,9 +27,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
-    Dimensions,
     FlatList,
-    Image,
     Pressable,
     RefreshControl,
     StyleSheet,
@@ -38,6 +36,7 @@ import {
     TouchableWithoutFeedback,
     View,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface Post {
@@ -53,8 +52,6 @@ interface Post {
     isOriginal: boolean
     createdAt: any
 }
-
-const { width } = Dimensions.get('window')
 
 const POSTS_PER_PAGE = 20
 
@@ -268,8 +265,6 @@ export default function ExploreScreen() {
 
         setShowOptionsMenu(null)
 
-        const postToDelete = posts.find((p) => p.id === postId)
-
         const confirmDelete = await new Promise<boolean>((resolve) => {
             Alert.alert(
                 'Delete Post',
@@ -435,7 +430,9 @@ export default function ExploreScreen() {
                     <Image
                         source={{ uri: item.photoURL }}
                         style={styles.postImage}
-                        resizeMode="cover"
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={200}
                     />
                 </TouchableOpacity>
 

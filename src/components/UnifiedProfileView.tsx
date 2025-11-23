@@ -25,7 +25,6 @@ import {
     Alert,
     Dimensions,
     FlatList,
-    Image,
     Modal,
     RefreshControl,
     StyleSheet,
@@ -34,6 +33,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface Post {
@@ -437,7 +437,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             <Image
                 source={{ uri: item.photoURL }}
                 style={styles.postImage}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
             />
         </TouchableOpacity>
     )

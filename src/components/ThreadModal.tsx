@@ -30,16 +30,14 @@ import {
     Alert,
     Dimensions,
     FlatList,
-    Image,
     Modal,
-    Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
     ViewToken,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import UnifiedCameraView from './UnifiedCameraView'
 import UnifiedPreviewScreen from './UnifiedPreviewScreen'
@@ -541,7 +539,9 @@ export default function ThreadModal({
             <Image
                 source={{ uri: item.photoURL }}
                 style={styles.galleryImage}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
             />
         </View>
     )

@@ -28,8 +28,7 @@ function RootLayoutNav() {
         const inAuthGroup = segments[0] === '(tabs)'
         const inProtectedRoute =
             segments[0] === 'settings' ||
-            segments[0] === 'user-profile' ||
-            segments[0] === 'post-detail'
+            segments[0] === 'user-profile'
 
         if (!user && (inAuthGroup || inProtectedRoute)) {
             // Redirect to login if user is not authenticated
@@ -55,10 +54,6 @@ function RootLayoutNav() {
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen
                     name="user-profile"
-                    options={{ headerShown: false }}
-                />
-                <Stack.Screen
-                    name="post-detail"
                     options={{ headerShown: false }}
                 />
                 <Stack.Screen

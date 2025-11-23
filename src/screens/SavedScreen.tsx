@@ -18,13 +18,13 @@ import {
     ActivityIndicator,
     Dimensions,
     FlatList,
-    Image,
     RefreshControl,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface Post {
@@ -137,7 +137,9 @@ export default function SavedScreen() {
             <Image
                 source={{ uri: item.photoURL }}
                 style={styles.postImage}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
             />
         </TouchableOpacity>
     )

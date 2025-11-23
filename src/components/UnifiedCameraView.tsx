@@ -5,8 +5,8 @@ import {
     StyleSheet,
     TouchableOpacity,
     Dimensions,
-    Image,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { CameraView, CameraType } from 'expo-camera'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -110,7 +110,9 @@ export default function UnifiedCameraView({
                                 height: cameraViewSize,
                             },
                         ]}
-                        resizeMode="cover"
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={200}
                     />
                 </View>
             )}
