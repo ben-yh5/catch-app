@@ -528,9 +528,10 @@ export default function ThreadModal({
         itemVisiblePercentThreshold: 50,
     }).current
 
+    const cardWidth = width - 20 // Account for container padding
     const getItemLayout = (_: any, index: number) => ({
-        length: width,
-        offset: width * index,
+        length: cardWidth,
+        offset: cardWidth * index,
         index,
     })
 
@@ -609,125 +610,7 @@ export default function ThreadModal({
             }}
         >
             <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                    {/* Header bar */}
-                    <View
-                        style={[
-                            styles.headerBar,
-                            { paddingTop: insets.top + 10 },
-                        ]}
-                    >
-                        <View style={styles.headerLeft}>
-                            <TouchableOpacity
-                                style={styles.backButton}
-                                onPress={() => {
-                                    setShowOptionsMenu(false)
-                                    onClose()
-                                }}
-                            >
-                                <Ionicons
-                                    name="arrow-back"
-                                    size={28}
-                                    color={colors.textPrimary}
-                                />
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                onPress={() => {
-                                    setShowOptionsMenu(false)
-                                    if (currentPost) {
-                                        router.push({
-                                            pathname: '/user-profile',
-                                            params: { userId: currentPost.authorId },
-                                        })
-                                    }
-                                }}
-                            >
-                                <Text style={styles.headerUsername}>
-                                    @{currentPost?.authorUsername || '...'}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.headerRight}>
-                            <View style={styles.headerBadge}>
-                                <Ionicons
-                                    name="trophy"
-                                    size={16}
-                                    color={colors.secondary}
-                                />
-                                <Text style={styles.headerCatchCount}>
-                                    {threadPosts[0]?.catchCount || 0}
-                                </Text>
-                            </View>
-                            <TouchableOpacity
-                                onPress={toggleBookmark}
-                                style={styles.headerButton}
-                            >
-                                <Ionicons
-                                    name={
-                                        bookmarked
-                                            ? 'bookmark'
-                                            : 'bookmark-outline'
-                                    }
-                                    size={24}
-                                    color={
-                                        bookmarked
-                                            ? colors.iconActive
-                                            : colors.iconInactive
-                                    }
-                                />
-                            </TouchableOpacity>
-                            <View style={{ zIndex: 10 }}>
-                                <TouchableOpacity
-                                    onPress={() =>
-                                        setShowOptionsMenu(!showOptionsMenu)
-                                    }
-                                    style={styles.headerButton}
-                                >
-                                    <Ionicons
-                                        name="ellipsis-horizontal"
-                                        size={24}
-                                        color={colors.textPrimary}
-                                    />
-                                </TouchableOpacity>
-
-                                {showOptionsMenu && (
-                                    <View style={styles.optionsMenu}>
-                                        <TouchableOpacity
-                                            style={styles.optionsMenuItem}
-                                            onPress={handleShare}
-                                        >
-                                            <Text
-                                                style={styles.optionsMenuText}
-                                            >
-                                                Share
-                                            </Text>
-                                        </TouchableOpacity>
-                                        {currentPost?.authorId === user?.uid && (
-                                            <TouchableOpacity
-                                                style={[
-                                                    styles.optionsMenuItem,
-                                                    styles.optionsMenuItemLast,
-                                                ]}
-                                                onPress={handleDeletePost}
-                                            >
-                                                <Text
-                                                    style={[
-                                                        styles.optionsMenuText,
-                                                        styles.optionsMenuTextDanger,
-                                                    ]}
-                                                >
-                                                    Delete
-                                                </Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                )}
-                            </View>
-                        </View>
-                    </View>
-
+                <View style={[styles.modalContent, { paddingTop: insets.top + 10 }]}>
                     {loadingThread ? (
                         <View style={styles.loadingContainer}>
                             <ActivityIndicator
@@ -737,116 +620,189 @@ export default function ThreadModal({
                         </View>
                     ) : (
                         <View style={styles.contentContainer}>
-                            {/* Image Gallery */}
-                            <FlatList
-                                ref={flatListRef}
-                                data={threadPosts}
-                                renderItem={renderGalleryItem}
-                                keyExtractor={(item) => item.id}
-                                horizontal
-                                pagingEnabled
-                                showsHorizontalScrollIndicator={false}
-                                onViewableItemsChanged={onViewableItemsChanged}
-                                viewabilityConfig={viewabilityConfig}
-                                getItemLayout={getItemLayout}
-                                style={styles.galleryFlatList}
-                                initialScrollIndex={
-                                    initialPostId
-                                        ? threadPosts.findIndex(
-                                              (p) => p.id === initialPostId
-                                          )
-                                        : 0
-                                }
-                                onScrollToIndexFailed={(info) => {
-                                    setTimeout(() => {
-                                        flatListRef.current?.scrollToIndex({
-                                            index: info.index,
-                                            animated: false,
-                                        })
-                                    }, 100)
-                                }}
-                            />
-
-                            {/* Post Info Card - directly below image */}
-                            <View style={styles.infoCard}>
-                                <View style={styles.infoCardHeader}>
-                                    <View style={styles.infoCardBadge}>
-                                        <Text style={styles.infoCardBadgeText}>
-                                            {currentIndex === 0 ? 'Original' : `Catch #${currentIndex}`}
-                                        </Text>
-                                    </View>
-                                    <Text style={styles.infoCardDate}>
-                                        {currentPost ? formatDate(currentPost.createdAt) : ''}
-                                    </Text>
-                                </View>
-
-                                {currentPost?.caption ? (
-                                    <Text style={styles.caption}>
-                                        {currentPost.caption}
-                                    </Text>
-                                ) : null}
-
-                                {!currentPost?.isOriginal && (
-                                    <View style={styles.metadataRow}>
-                                        <Ionicons
-                                            name="location-outline"
-                                            size={14}
-                                            color={colors.textTertiary}
-                                        />
-                                        <Text style={styles.metadataText}>
-                                            Caught @{threadPosts[0]?.authorUsername}&apos;s location
-                                        </Text>
-                                    </View>
-                                )}
-
-                                {/* Thread Position Indicator */}
-                                {threadPosts.length > 1 && (
-                                    <View style={styles.threadProgress}>
-                                        <View style={styles.progressBar}>
-                                            <View
-                                                style={[
-                                                    styles.progressFill,
-                                                    { width: `${((currentIndex + 1) / threadPosts.length) * 100}%` }
-                                                ]}
+                            {/* Post Card */}
+                            <View style={styles.postCard}>
+                                {/* Card Header */}
+                                <View style={styles.cardHeader}>
+                                    <View style={styles.cardHeaderLeft}>
+                                        <TouchableOpacity
+                                            style={styles.backButtonInCard}
+                                            onPress={() => {
+                                                setShowOptionsMenu(false)
+                                                onClose()
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name="arrow-back"
+                                                size={24}
+                                                color={colors.textPrimary}
                                             />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setShowOptionsMenu(false)
+                                                if (currentPost) {
+                                                    router.push({
+                                                        pathname: '/user-profile',
+                                                        params: { userId: currentPost.authorId },
+                                                    })
+                                                }
+                                            }}
+                                        >
+                                            <Text style={styles.cardUsername}>
+                                                @{currentPost?.authorUsername || '...'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={styles.cardHeaderRight}>
+                                        <View style={styles.catchBadge}>
+                                            <Ionicons
+                                                name="trophy"
+                                                size={16}
+                                                color={colors.secondary}
+                                            />
+                                            <Text style={styles.catchCount}>
+                                                {threadPosts[0]?.catchCount || 0}
+                                            </Text>
                                         </View>
-                                        <Text style={styles.progressText}>
-                                            {currentIndex + 1} of {threadPosts.length}
+                                        <TouchableOpacity
+                                            onPress={toggleBookmark}
+                                            style={styles.headerIconButton}
+                                        >
+                                            <Ionicons
+                                                name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+                                                size={22}
+                                                color={bookmarked ? colors.iconActive : colors.iconInactive}
+                                            />
+                                        </TouchableOpacity>
+                                        <View style={{ zIndex: 10 }}>
+                                            <TouchableOpacity
+                                                onPress={() => setShowOptionsMenu(!showOptionsMenu)}
+                                                style={styles.headerIconButton}
+                                            >
+                                                <Ionicons
+                                                    name="ellipsis-horizontal"
+                                                    size={22}
+                                                    color={colors.textPrimary}
+                                                />
+                                            </TouchableOpacity>
+
+                                            {showOptionsMenu && (
+                                                <View style={styles.optionsMenuInCard}>
+                                                    <TouchableOpacity
+                                                        style={styles.optionsMenuItem}
+                                                        onPress={handleShare}
+                                                    >
+                                                        <Text style={styles.optionsMenuText}>Share</Text>
+                                                    </TouchableOpacity>
+                                                    {currentPost?.authorId === user?.uid && (
+                                                        <TouchableOpacity
+                                                            style={[styles.optionsMenuItem, styles.optionsMenuItemLast]}
+                                                            onPress={handleDeletePost}
+                                                        >
+                                                            <Text style={[styles.optionsMenuText, styles.optionsMenuTextDanger]}>
+                                                                Delete
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </View>
+                                            )}
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {/* Image Gallery */}
+                                <FlatList
+                                    ref={flatListRef}
+                                    data={threadPosts}
+                                    renderItem={renderGalleryItem}
+                                    keyExtractor={(item) => item.id}
+                                    horizontal
+                                    pagingEnabled
+                                    showsHorizontalScrollIndicator={false}
+                                    onViewableItemsChanged={onViewableItemsChanged}
+                                    viewabilityConfig={viewabilityConfig}
+                                    getItemLayout={getItemLayout}
+                                    style={styles.galleryFlatList}
+                                    initialScrollIndex={
+                                        initialPostId
+                                            ? threadPosts.findIndex(
+                                                  (p) => p.id === initialPostId
+                                              )
+                                            : 0
+                                    }
+                                    onScrollToIndexFailed={(info) => {
+                                        setTimeout(() => {
+                                            flatListRef.current?.scrollToIndex({
+                                                index: info.index,
+                                                animated: false,
+                                            })
+                                        }, 100)
+                                    }}
+                                />
+
+                                {/* Card Footer */}
+                                <View style={styles.cardFooter}>
+                                    {/* Caption section - fixed height */}
+                                    <View style={styles.captionSection}>
+                                        <Text style={styles.caption} numberOfLines={1}>
+                                            {currentPost?.caption || '---'}
+                                        </Text>
+
+                                        <Text style={styles.dateText}>
+                                            {currentPost ? formatDate(currentPost.createdAt) : ''}
                                         </Text>
                                     </View>
-                                )}
-                            </View>
 
-                            {/* Catch Button - only show if not own thread */}
-                            {threadPosts[0]?.authorId !== user?.uid && (
-                                <View style={styles.catchSection}>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.catchButton,
-                                            (uploading || fetchingLocation) && styles.catchButtonDisabled,
-                                        ]}
-                                        onPress={handleCatchPress}
-                                        disabled={uploading || fetchingLocation}
-                                    >
-                                        {uploading ? (
-                                            <>
-                                                <ActivityIndicator size="small" color="#fff" />
-                                                <Text style={styles.catchButtonText}>Uploading...</Text>
-                                            </>
-                                        ) : fetchingLocation ? (
-                                            <>
-                                                <ActivityIndicator size="small" color="#fff" />
-                                                <Text style={styles.catchButtonText}>Getting location...</Text>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Ionicons name="camera" size={20} color="#fff" />
-                                                <Text style={styles.catchButtonText}>Catch This Location</Text>
-                                            </>
+                                    {/* Divider */}
+                                    <View style={styles.footerDivider} />
+
+                                    {/* Thread Progress + Catch Button - fixed position */}
+                                    <View style={styles.actionsSection}>
+                                        <View style={styles.threadProgress}>
+                                            <View style={styles.progressBar}>
+                                                <View
+                                                    style={[
+                                                        styles.progressFill,
+                                                        { width: `${((currentIndex + 1) / threadPosts.length) * 100}%` }
+                                                    ]}
+                                                />
+                                            </View>
+                                            <Text style={styles.progressText}>
+                                                {currentIndex + 1} of {threadPosts.length}
+                                            </Text>
+                                        </View>
+
+                                        {threadPosts[0]?.authorId !== user?.uid && (
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.catchButton,
+                                                    (uploading || fetchingLocation) && styles.catchButtonDisabled,
+                                                ]}
+                                                onPress={handleCatchPress}
+                                                disabled={uploading || fetchingLocation}
+                                            >
+                                                {uploading ? (
+                                                    <>
+                                                        <ActivityIndicator size="small" color="#fff" />
+                                                        <Text style={styles.catchButtonText}>Uploading...</Text>
+                                                    </>
+                                                ) : fetchingLocation ? (
+                                                    <>
+                                                        <ActivityIndicator size="small" color="#fff" />
+                                                        <Text style={styles.catchButtonText}>Getting location...</Text>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Ionicons name="camera" size={20} color="#fff" />
+                                                        <Text style={styles.catchButtonText}>Catch This Location</Text>
+                                                    </>
+                                                )}
+                                            </TouchableOpacity>
                                         )}
-                                    </TouchableOpacity>
+                                    </View>
                                 </View>
-                            )}
+                            </View>
                         </View>
                     )}
                 </View>
@@ -865,36 +821,51 @@ const styles = StyleSheet.create({
         width: '100%',
         position: 'relative',
     },
-    headerBar: {
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    contentContainer: {
+        flex: 1,
+        padding: 10,
+    },
+    // Post Card - matches ExploreScreen card style
+    postCard: {
+        backgroundColor: colors.card,
+        borderRadius: 12,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingBottom: 10,
-        backgroundColor: colors.card,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+        padding: 12,
     },
-    headerLeft: {
+    cardHeaderLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        flex: 1,
     },
-    backButton: {
+    backButtonInCard: {
         padding: 4,
+        marginRight: 8,
     },
-    headerUsername: {
+    cardUsername: {
         fontSize: 16,
         fontWeight: '600',
         color: colors.textPrimary,
-        marginLeft: 8,
     },
-    headerRight: {
+    cardHeaderRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 10,
     },
-    headerBadge: {
+    catchBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: colors.cardElevated,
@@ -903,15 +874,15 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         gap: 5,
     },
-    headerCatchCount: {
+    catchCount: {
         fontSize: 14,
         fontWeight: '600',
         color: colors.secondary,
     },
-    headerButton: {
+    headerIconButton: {
         padding: 4,
     },
-    optionsMenu: {
+    optionsMenuInCard: {
         position: 'absolute',
         top: 35,
         right: 0,
@@ -942,74 +913,60 @@ const styles = StyleSheet.create({
     optionsMenuTextDanger: {
         color: '#ff4444',
     },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
+    cardFooter: {
+        padding: 12,
+        paddingTop: 10,
     },
-    contentContainer: {
-        flex: 1,
+    captionSection: {
+        minHeight: 40, // Fixed min height for 1 line + date
+    },
+    metaRow: {
+        marginTop: 4,
+    },
+    footerDivider: {
+        height: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        marginVertical: 12,
+    },
+    actionsSection: {
+        gap: 12,
     },
     galleryFlatList: {
-        height: width,
+        height: width - 20,
         flexGrow: 0,
     },
     galleryItem: {
-        width: width,
-        height: width,
+        width: width - 20,
+        height: width - 20,
     },
     galleryImage: {
         width: '100%',
         height: '100%',
         backgroundColor: colors.imageBackground,
     },
-    // Info Card - flush with image
-    infoCard: {
-        backgroundColor: colors.card,
-        padding: 16,
-    },
-    infoCardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    infoCardBadge: {
-        backgroundColor: colors.primary,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    infoCardBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: colors.textPrimary,
-    },
-    infoCardDate: {
-        fontSize: 13,
-        color: colors.textTertiary,
-    },
     caption: {
         fontSize: 15,
         color: colors.textSecondary,
         lineHeight: 20,
-        marginBottom: 12,
     },
     metadataRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        marginBottom: 12,
+        marginBottom: 6,
     },
     metadataText: {
         fontSize: 13,
+        color: colors.textTertiary,
+    },
+    dateText: {
+        fontSize: 12,
         color: colors.textTertiary,
     },
     threadProgress: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        marginTop: 4,
     },
     progressBar: {
         flex: 1,
@@ -1027,12 +984,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: colors.textTertiary,
         minWidth: 50,
-    },
-    // Catch Section
-    catchSection: {
-        padding: 16,
-        paddingTop: 8,
-        paddingBottom: 40,
     },
     catchButton: {
         backgroundColor: colors.primary,
