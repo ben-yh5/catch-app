@@ -1,19 +1,13 @@
 import React, { useState } from 'react'
 import {
-    View,
-    Text,
     StyleSheet,
-    TouchableOpacity,
-    TextInput,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    ActivityIndicator,
 } from 'react-native'
-import { Image } from 'expo-image'
-import { Ionicons } from '@expo/vector-icons'
 import { colors } from '@/theme/colors'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import PostCard from './PostCard'
 
 interface UnifiedPreviewScreenProps {
     imageUri: string
@@ -48,6 +42,24 @@ export default function UnifiedPreviewScreen({
     const isPost = mode === 'post'
     const isCatch = mode === 'catch'
 
+    // Determine button state
+    const buttonDisabled = loading || (isPost && loadingLocation)
+    const buttonLoading = loading
+
+    let buttonText = isPost ? 'Post' : 'Catch This Location'
+    let buttonLoadingText = loadingText
+
+    if (isPost && loadingLocation) {
+        buttonText = 'Fetching location...'
+    }
+
+    // Format today's date
+    const today = new Date().toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    })
+
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -56,135 +68,40 @@ export default function UnifiedPreviewScreen({
             <ScrollView
                 contentContainerStyle={[
                     styles.scrollContent,
-                    { paddingTop: insets.top + 20 },
+                    { paddingTop: insets.top + 10 },
                 ]}
+                keyboardShouldPersistTaps="handled"
             >
-                {/* Title for both modes */}
-                <Text style={styles.title}>
-                    {isPost ? 'Preview Your Post' : 'Preview Your Catch'}
-                </Text>
+                <PostCard
+                    // Header
+                    showBackButton={true}
+                    onBackPress={onCancel}
+                    headerBadgeText={isPost ? 'New Post' : 'New Catch'}
 
-                {/* Main captured image - 1:1 square */}
-                <View style={styles.imageContainer}>
-                    <Image
-                        source={{ uri: imageUri }}
-                        style={styles.previewImage}
-                        contentFit="cover"
-                        cachePolicy="memory-disk"
-                        transition={200}
-                    />
-                </View>
+                    // Image
+                    images={[imageUri]}
+                    comparisonMode={isCatch && !!originalPhotoUrl}
+                    originalImageUrl={originalPhotoUrl}
 
-                {/* Original photo for catch mode - same size as caught image */}
-                {isCatch && originalPhotoUrl && (
-                    <View style={styles.comparisonContainer}>
-                        <Text style={styles.comparisonLabel}>
-                            Original Photo:
-                        </Text>
-                        <View style={styles.imageContainer}>
-                            <Image
-                                source={{ uri: originalPhotoUrl }}
-                                style={styles.previewImage}
-                                contentFit="cover"
-                                cachePolicy="memory-disk"
-                                transition={200}
-                            />
-                        </View>
-                    </View>
-                )}
+                    // Footer
+                    captionInputMode={true}
+                    captionPlaceholder={isPost ? 'Add a caption or hint...' : 'Add a caption (optional)...'}
+                    onCaptionChange={setCaption}
+                    date={today}
 
-                {/* Location display for both modes */}
-                <View style={styles.locationContainer}>
-                    {loadingLocation ? (
-                        <View style={styles.locationLoading}>
-                            <ActivityIndicator
-                                size="small"
-                                color={colors.primary}
-                            />
-                            <Text style={styles.locationLoadingText}>
-                                Getting location...
-                            </Text>
-                        </View>
-                    ) : hasLocation ? (
-                        <View style={styles.locationInfo}>
-                            <Ionicons
-                                name="location"
-                                size={18}
-                                color={colors.primary}
-                            />
-                            <Text style={styles.locationText}>
-                                Location captured
-                            </Text>
-                        </View>
-                    ) : (
-                        <View style={styles.locationInfo}>
-                            <Ionicons
-                                name="location-outline"
-                                size={18}
-                                color={colors.textTertiary}
-                            />
-                            <Text style={styles.noLocationText}>
-                                No location available
-                            </Text>
-                        </View>
-                    )}
-                </View>
+                    // Progress bar - always show with 1 of 1 for consistency
+                    showProgressBar={true}
+                    totalItems={1}
+                    currentIndex={0}
 
-                {/* Caption input for both modes */}
-                <TextInput
-                    style={styles.captionInput}
-                    placeholder={
-                        isPost
-                            ? 'Add a caption or hint...'
-                            : 'Add a caption (optional)...'
-                    }
-                    placeholderTextColor={colors.textTertiary}
-                    value={caption}
-                    onChangeText={setCaption}
-                    multiline
-                    maxLength={200}
+                    // Action button
+                    actionButtonText={buttonText}
+                    actionButtonIcon={isPost ? 'arrow-up' : 'camera'}
+                    onActionPress={handleConfirm}
+                    actionButtonDisabled={buttonDisabled}
+                    actionButtonLoading={buttonLoading}
+                    actionButtonLoadingText={buttonLoadingText}
                 />
-
-                {/* Catch mode info */}
-                {isCatch && (
-                    <Text style={styles.catchInfo}>
-                        Your catch photo will be posted to your profile
-                    </Text>
-                )}
-
-                {/* Action buttons */}
-                <View style={styles.buttonRow}>
-                    <TouchableOpacity
-                        style={[styles.actionButton, styles.cancelButton]}
-                        onPress={onCancel}
-                        disabled={loading}
-                    >
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[
-                            styles.actionButton,
-                            styles.confirmButton,
-                            loading && styles.confirmButtonDisabled,
-                        ]}
-                        onPress={handleConfirm}
-                        disabled={loading || (isPost && loadingLocation)}
-                    >
-                        {loading ? (
-                            <View style={styles.loadingContainer}>
-                                <ActivityIndicator size="small" color="#fff" />
-                                <Text style={styles.confirmButtonText}>
-                                    {loadingText}
-                                </Text>
-                            </View>
-                        ) : (
-                            <Text style={styles.confirmButtonText}>
-                                {isPost ? 'Post' : 'Confirm Catch'}
-                            </Text>
-                        )}
-                    </TouchableOpacity>
-                </View>
             </ScrollView>
         </KeyboardAvoidingView>
     )
@@ -196,128 +113,6 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
     scrollContent: {
-        padding: 20,
-        alignItems: 'center',
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 20,
-        color: colors.textPrimary,
-    },
-    imageContainer: {
-        width: '100%',
-        aspectRatio: 1,
-        borderRadius: 10,
-        overflow: 'hidden',
-        backgroundColor: colors.imageBackground,
-        marginBottom: 15,
-    },
-    previewImage: {
-        width: '100%',
-        height: '100%',
-    },
-    comparisonContainer: {
-        width: '100%',
-        marginBottom: 15,
-    },
-    comparisonLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: colors.textSecondary,
-        marginBottom: 8,
-        textAlign: 'center',
-    },
-    locationContainer: {
-        width: '100%',
-        marginBottom: 15,
-    },
-    locationLoading: {
-        flexDirection: 'row',
-        alignItems: 'center',
         padding: 10,
-        backgroundColor: colors.card,
-        borderRadius: 8,
-        gap: 10,
-    },
-    locationLoadingText: {
-        fontSize: 14,
-        color: colors.textTertiary,
-    },
-    locationInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 10,
-        backgroundColor: colors.card,
-        borderRadius: 8,
-        gap: 8,
-    },
-    locationText: {
-        fontSize: 14,
-        color: colors.primary,
-        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    },
-    noLocationText: {
-        fontSize: 14,
-        color: colors.textTertiary,
-        fontStyle: 'italic',
-    },
-    captionInput: {
-        width: '100%',
-        backgroundColor: colors.card,
-        padding: 15,
-        borderRadius: 10,
-        fontSize: 16,
-        minHeight: 100,
-        textAlignVertical: 'top',
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: colors.border,
-        color: colors.textPrimary,
-    },
-    catchInfo: {
-        fontSize: 14,
-        color: colors.textTertiary,
-        textAlign: 'center',
-        marginBottom: 20,
-        fontStyle: 'italic',
-    },
-    buttonRow: {
-        flexDirection: 'row',
-        gap: 15,
-        width: '100%',
-    },
-    actionButton: {
-        flex: 1,
-        paddingVertical: 15,
-        borderRadius: 10,
-        alignItems: 'center',
-    },
-    cancelButton: {
-        backgroundColor: colors.card,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    cancelButtonText: {
-        color: colors.textPrimary,
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    confirmButton: {
-        backgroundColor: colors.primary,
-    },
-    confirmButtonDisabled: {
-        backgroundColor: colors.cardElevated,
-        opacity: 0.6,
-    },
-    confirmButtonText: {
-        color: colors.textPrimary,
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    loadingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
     },
 })

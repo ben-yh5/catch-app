@@ -773,33 +773,31 @@ export default function ThreadModal({
                                             </Text>
                                         </View>
 
-                                        {threadPosts[0]?.authorId !== user?.uid && (
-                                            <TouchableOpacity
-                                                style={[
-                                                    styles.catchButton,
-                                                    (uploading || fetchingLocation) && styles.catchButtonDisabled,
-                                                ]}
-                                                onPress={handleCatchPress}
-                                                disabled={uploading || fetchingLocation}
-                                            >
-                                                {uploading ? (
-                                                    <>
-                                                        <ActivityIndicator size="small" color="#fff" />
-                                                        <Text style={styles.catchButtonText}>Uploading...</Text>
-                                                    </>
-                                                ) : fetchingLocation ? (
-                                                    <>
-                                                        <ActivityIndicator size="small" color="#fff" />
-                                                        <Text style={styles.catchButtonText}>Getting location...</Text>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Ionicons name="camera" size={20} color="#fff" />
-                                                        <Text style={styles.catchButtonText}>Catch This Location</Text>
-                                                    </>
-                                                )}
-                                            </TouchableOpacity>
-                                        )}
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.catchButton,
+                                                (uploading || fetchingLocation || threadPosts[0]?.authorId === user?.uid) && styles.catchButtonDisabled,
+                                            ]}
+                                            onPress={handleCatchPress}
+                                            disabled={uploading || fetchingLocation || threadPosts[0]?.authorId === user?.uid}
+                                        >
+                                            {uploading ? (
+                                                <>
+                                                    <ActivityIndicator size="small" color="#fff" />
+                                                    <Text style={styles.catchButtonText}>Uploading...</Text>
+                                                </>
+                                            ) : fetchingLocation ? (
+                                                <>
+                                                    <ActivityIndicator size="small" color="#fff" />
+                                                    <Text style={styles.catchButtonText}>Getting location...</Text>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Ionicons name="camera" size={20} color="#fff" />
+                                                    <Text style={styles.catchButtonText}>Catch This Location</Text>
+                                                </>
+                                            )}
+                                        </TouchableOpacity>
                                     </View>
                                 </View>
                             </View>
