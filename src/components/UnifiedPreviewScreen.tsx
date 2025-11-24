@@ -89,10 +89,8 @@ export default function UnifiedPreviewScreen({
                     onCaptionChange={setCaption}
                     date={today}
 
-                    // Progress bar - always show with 1 of 1 for consistency
-                    showProgressBar={true}
-                    totalItems={1}
-                    currentIndex={0}
+                    // Progress bar - hide for single item preview
+                    showProgressBar={false}
 
                     // Action button
                     actionButtonText={buttonText}

@@ -741,6 +741,44 @@ export default function ThreadModal({
                                     }}
                                 />
 
+                                {/* Thread Timeline - dots with connecting line */}
+                                {threadPosts.length > 1 && (
+                                    <View style={styles.timelineContainer}>
+                                        <View style={styles.timeline}>
+                                            {/* Connecting line */}
+                                            <View style={styles.timelineLine} />
+                                            {/* Filled portion of line */}
+                                            <View
+                                                style={[
+                                                    styles.timelineLineFilled,
+                                                    { width: `${(currentIndex / (threadPosts.length - 1)) * 100}%` }
+                                                ]}
+                                            />
+                                            {/* Dots */}
+                                            {threadPosts.map((_, index) => (
+                                                <TouchableOpacity
+                                                    key={index}
+                                                    style={[
+                                                        styles.timelineDot,
+                                                        { left: `${(index / (threadPosts.length - 1)) * 100}%` },
+                                                        index <= currentIndex && styles.timelineDotFilled,
+                                                        index === currentIndex && styles.timelineDotActive,
+                                                    ]}
+                                                    onPress={() => {
+                                                        flatListRef.current?.scrollToIndex({
+                                                            index,
+                                                            animated: true,
+                                                        })
+                                                    }}
+                                                />
+                                            ))}
+                                        </View>
+                                        <Text style={styles.progressText}>
+                                            {currentIndex + 1} of {threadPosts.length}
+                                        </Text>
+                                    </View>
+                                )}
+
                                 {/* Card Footer */}
                                 <View style={styles.cardFooter}>
                                     {/* Caption section - fixed height */}
@@ -757,46 +795,19 @@ export default function ThreadModal({
                                     {/* Divider */}
                                     <View style={styles.footerDivider} />
 
-                                    {/* Thread Progress + Catch Button - fixed position */}
+                                    {/* Catch Button */}
                                     <View style={styles.actionsSection}>
-                                        <View style={styles.threadProgress}>
-                                            <View style={styles.progressBar}>
-                                                <View
-                                                    style={[
-                                                        styles.progressFill,
-                                                        { width: `${((currentIndex + 1) / threadPosts.length) * 100}%` }
-                                                    ]}
-                                                />
-                                            </View>
-                                            <Text style={styles.progressText}>
-                                                {currentIndex + 1} of {threadPosts.length}
-                                            </Text>
-                                        </View>
 
                                         <TouchableOpacity
                                             style={[
                                                 styles.catchButton,
-                                                (uploading || fetchingLocation || threadPosts[0]?.authorId === user?.uid) && styles.catchButtonDisabled,
+                                                threadPosts[0]?.authorId === user?.uid && styles.catchButtonDisabled,
                                             ]}
                                             onPress={handleCatchPress}
-                                            disabled={uploading || fetchingLocation || threadPosts[0]?.authorId === user?.uid}
+                                            disabled={threadPosts[0]?.authorId === user?.uid}
                                         >
-                                            {uploading ? (
-                                                <>
-                                                    <ActivityIndicator size="small" color="#fff" />
-                                                    <Text style={styles.catchButtonText}>Uploading...</Text>
-                                                </>
-                                            ) : fetchingLocation ? (
-                                                <>
-                                                    <ActivityIndicator size="small" color="#fff" />
-                                                    <Text style={styles.catchButtonText}>Getting location...</Text>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Ionicons name="camera" size={20} color="#fff" />
-                                                    <Text style={styles.catchButtonText}>Catch This Location</Text>
-                                                </>
-                                            )}
+                                            <Ionicons name="camera" size={20} color="#fff" />
+                                            <Text style={styles.catchButtonText}>Catch This Location</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -942,6 +953,54 @@ const styles = StyleSheet.create({
         height: '100%',
         backgroundColor: colors.imageBackground,
     },
+    timelineContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+    },
+    timeline: {
+        flex: 1,
+        height: 12,
+        justifyContent: 'center',
+        position: 'relative',
+    },
+    timelineLine: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        height: 2,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        borderRadius: 1,
+    },
+    timelineLineFilled: {
+        position: 'absolute',
+        left: 0,
+        height: 2,
+        backgroundColor: colors.primary,
+        borderRadius: 1,
+    },
+    timelineDot: {
+        position: 'absolute',
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+        marginLeft: -5,
+        borderWidth: 2,
+        borderColor: colors.card,
+    },
+    timelineDotFilled: {
+        backgroundColor: colors.primary,
+    },
+    timelineDotActive: {
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        marginLeft: -7,
+        marginTop: -2,
+    },
     caption: {
         fontSize: 15,
         color: colors.textSecondary,
@@ -960,23 +1019,6 @@ const styles = StyleSheet.create({
     dateText: {
         fontSize: 12,
         color: colors.textTertiary,
-    },
-    threadProgress: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    progressBar: {
-        flex: 1,
-        height: 4,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        borderRadius: 2,
-        overflow: 'hidden',
-    },
-    progressFill: {
-        height: '100%',
-        backgroundColor: colors.primary,
-        borderRadius: 2,
     },
     progressText: {
         fontSize: 12,
