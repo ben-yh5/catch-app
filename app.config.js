@@ -11,11 +11,11 @@ export default {
         userInterfaceStyle: 'automatic',
         newArchEnabled: true,
         ios: {
-            bundleIdentifier: 'com.catch.app',
+            bundleIdentifier: 'app.catchapp.mobile',
             supportsTablet: true,
         },
         android: {
-            package: 'com.catch.app',
+            package: 'app.catchapp.mobile',
             adaptiveIcon: {
                 backgroundColor: '#E6F4FE',
                 foregroundImage: './assets/images/android-icon-foreground.png',

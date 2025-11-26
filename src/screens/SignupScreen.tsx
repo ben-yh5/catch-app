@@ -12,6 +12,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
+import { isUsernameAvailable, validateUsernameFormat } from '@/utils/usernameValidation'
 
 export default function SignupScreen() {
     const [email, setEmail] = useState('')
@@ -39,13 +40,23 @@ export default function SignupScreen() {
             return
         }
 
-        if (username.length < 3) {
-            Alert.alert('Error', 'Username must be at least 3 characters')
+        // Validate username format
+        const formatError = validateUsernameFormat(username)
+        if (formatError) {
+            Alert.alert('Invalid Username', formatError)
             return
         }
 
         setLoading(true)
         try {
+            // Check if username is available
+            const available = await isUsernameAvailable(username)
+            if (!available) {
+                Alert.alert('Username Taken', 'This username is already in use. Please choose another.')
+                setLoading(false)
+                return
+            }
+
             await signup(email, password, username)
             // Navigation will be handled automatically by auth state change
         } catch (error: any) {
