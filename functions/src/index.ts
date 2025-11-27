@@ -3,8 +3,6 @@ import * as admin from 'firebase-admin'
 
 admin.initializeApp()
 
-const EXPO_PUSH_API = 'https://exp.host/--/api/v2/push/send'
-
 const CATCH_RADIUS_METERS = 100 // Define acceptable proximity (100 meters)
 
 // Haversine formula to calculate distance between two coordinates
@@ -258,32 +256,34 @@ export const onPostDeleted = functions.firestore
         }
     })
 
-// Helper function to send Expo push notification
+// Helper function to send push notification via FCM
 async function sendPushNotification(
     pushToken: string,
     title: string,
     body: string,
     data?: any
 ) {
-    const message = {
-        to: pushToken,
-        sound: 'default',
-        title,
-        body,
-        data: data || {},
-    }
-
     try {
-        const response = await fetch(EXPO_PUSH_API, {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
+        const message: admin.messaging.Message = {
+            notification: {
+                title,
+                body,
             },
-            body: JSON.stringify(message),
-        })
+            data: data || {},
+            token: pushToken,
+            android: {
+                priority: 'high',
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default',
+                    },
+                },
+            },
+        }
 
-        const result = await response.json()
+        const result = await admin.messaging().send(message)
         functions.logger.info('Push notification sent:', result)
         return result
     } catch (error) {

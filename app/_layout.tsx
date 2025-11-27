@@ -32,7 +32,10 @@ export const unstable_settings = {
 async function registerForPushNotificationsAsync() {
     let token
 
+    console.log('🔔 Platform:', Platform.OS)
+
     if (Platform.OS === 'android') {
+        console.log('🔔 Setting up Android notification channel...')
         await Notifications.setNotificationChannelAsync('default', {
             name: 'default',
             importance: Notifications.AndroidImportance.MAX,
@@ -41,24 +44,32 @@ async function registerForPushNotificationsAsync() {
         })
     }
 
+    console.log('🔔 Checking notification permissions...')
     const { status: existingStatus } = await Notifications.getPermissionsAsync()
+    console.log('🔔 Existing permission status:', existingStatus)
     let finalStatus = existingStatus
 
     if (existingStatus !== 'granted') {
+        console.log('🔔 Requesting notification permissions...')
         const { status } = await Notifications.requestPermissionsAsync()
         finalStatus = status
+        console.log('🔔 Permission request result:', status)
     }
 
     if (finalStatus !== 'granted') {
-        console.log('Failed to get push token for push notification!')
+        console.log('❌ Permission denied - cannot get push token')
         return null
     }
 
+    console.log('🔔 Permissions granted, getting FCM token...')
     try {
-        token = (await Notifications.getExpoPushTokenAsync()).data
-        console.log('Push token:', token)
-    } catch (error) {
-        console.log('Error getting push token:', error)
+        // For bare workflow, get the device push token (FCM token for Android, APNs for iOS)
+        token = (await Notifications.getDevicePushTokenAsync()).data
+        console.log('✅ Successfully got FCM push token:', token)
+    } catch (error: any) {
+        console.log('❌ Error getting push token:', error)
+        console.log('❌ Error message:', error.message)
+        console.log('❌ Error stack:', error.stack)
         return null
     }
 

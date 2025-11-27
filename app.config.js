@@ -4,6 +4,7 @@ export default {
     expo: {
         name: 'catch-app',
         slug: 'catch-app',
+        owner: 'your-expo-username', // Replace with your Expo username if using EAS
         version: '1.0.0',
         orientation: 'portrait',
         icon: './assets/images/icon.png',
@@ -47,9 +48,7 @@ export default {
             [
                 'expo-notifications',
                 {
-                    icon: './assets/images/notification-icon.png',
                     color: '#ffffff',
-                    sounds: ['./assets/sounds/notification.wav'],
                 },
             ],
         ],
