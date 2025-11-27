@@ -3,6 +3,8 @@ import * as admin from 'firebase-admin'
 
 admin.initializeApp()
 
+const EXPO_PUSH_API = 'https://exp.host/--/api/v2/push/send'
+
 const CATCH_RADIUS_METERS = 100 // Define acceptable proximity (100 meters)
 
 // Haversine formula to calculate distance between two coordinates
@@ -253,5 +255,108 @@ export const onPostDeleted = functions.firestore
             }
         } catch (error) {
             functions.logger.error('Error handling post deletion:', error)
+        }
+    })
+
+// Helper function to send Expo push notification
+async function sendPushNotification(
+    pushToken: string,
+    title: string,
+    body: string,
+    data?: any
+) {
+    const message = {
+        to: pushToken,
+        sound: 'default',
+        title,
+        body,
+        data: data || {},
+    }
+
+    try {
+        const response = await fetch(EXPO_PUSH_API, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(message),
+        })
+
+        const result = await response.json()
+        functions.logger.info('Push notification sent:', result)
+        return result
+    } catch (error) {
+        functions.logger.error('Error sending push notification:', error)
+        throw error
+    }
+}
+
+// Firestore trigger: When a user's followers array is updated, send notification
+export const onUserFollowed = functions.firestore
+    .document('users/{userId}')
+    .onUpdate(async (change, context) => {
+        const userId = context.params.userId
+        const beforeData = change.before.data()
+        const afterData = change.after.data()
+
+        // Check if followers array was modified
+        const beforeFollowers = beforeData.followers || []
+        const afterFollowers = afterData.followers || []
+
+        // Find new followers (added to the array)
+        const newFollowers = afterFollowers.filter(
+            (followerId: string) => !beforeFollowers.includes(followerId)
+        )
+
+        if (newFollowers.length === 0) {
+            return // No new followers
+        }
+
+        const pushToken = afterData.pushToken
+        if (!pushToken) {
+            functions.logger.info(
+                `User ${userId} has no push token, skipping notification`
+            )
+            return
+        }
+
+        // Get the follower's username for each new follower
+        for (const followerId of newFollowers) {
+            try {
+                const followerDoc = await admin
+                    .firestore()
+                    .collection('users')
+                    .doc(followerId)
+                    .get()
+
+                if (!followerDoc.exists) {
+                    functions.logger.warn(`Follower ${followerId} not found`)
+                    continue
+                }
+
+                const followerData = followerDoc.data()
+                const followerUsername = followerData?.username || 'Someone'
+
+                // Send push notification
+                await sendPushNotification(
+                    pushToken,
+                    'New Follower',
+                    `@${followerUsername} started following you!`,
+                    {
+                        userId: followerId,
+                        type: 'new_follower',
+                    }
+                )
+
+                functions.logger.info(
+                    `Sent follower notification to user ${userId} for follower ${followerId}`
+                )
+            } catch (error) {
+                functions.logger.error(
+                    `Error sending notification for follower ${followerId}:`,
+                    error
+                )
+            }
         }
     })

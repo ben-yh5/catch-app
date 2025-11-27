@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection
+    match /users/{userId} {
+      // Anyone can read user profiles (for viewing other users)
+      allow read: if true;
+
+      // Users can create their own document
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      // Users can delete their own document
+      allow delete: if request.auth != null && request.auth.uid == userId;
+
+      // Users can update their own document
+      allow update: if request.auth != null && request.auth.uid == userId;
+
+      // Allow any authenticated user to update only followers/following arrays
+      // (needed for follow/unfollow functionality where User A updates User B's followers)
+      allow update: if request.auth != null &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers', 'following']);
+    }
+
+    // Posts collection
+    match /posts/{postId} {
+      // Anyone can read posts
+      allow read: if true;
+
+      // Only authenticated users can create posts
+      allow create: if request.auth != null;
+
+      // Only the post author can delete their posts
+      allow delete: if request.auth.uid == resource.data.authorId;
+
+      // Allow updates only to catchCount field (for catches)
+      allow update: if request.auth != null &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['catchCount']);
+    }
+
+    // Post locations collection (server-side only)
+    match /post_locations/{locationId} {
+      // Only server-side access (Cloud Functions)
+      allow read, write: if false;
+    }
+  }
+}

@@ -74,6 +74,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 email: email,
                 totalCatches: 0,
                 bookmarkedPosts: [],
+                followers: [],
+                following: [],
+                pushToken: null,
                 createdAt: new Date(),
             })
         } catch (error: any) {

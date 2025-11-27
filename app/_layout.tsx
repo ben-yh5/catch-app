@@ -5,17 +5,64 @@ import {
 } from '@react-navigation/native'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import 'react-native-reanimated'
+import * as Notifications from 'expo-notifications'
+import { Platform } from 'react-native'
 
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { PostProvider } from '@/context/PostContext'
-import { doc, getDoc, onSnapshot } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/services/firebase'
+
+// Configure notification handler
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+    }),
+})
 
 export const unstable_settings = {
     anchor: '(tabs)',
+}
+
+async function registerForPushNotificationsAsync() {
+    let token
+
+    if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FF231F7C',
+        })
+    }
+
+    const { status: existingStatus } = await Notifications.getPermissionsAsync()
+    let finalStatus = existingStatus
+
+    if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync()
+        finalStatus = status
+    }
+
+    if (finalStatus !== 'granted') {
+        console.log('Failed to get push token for push notification!')
+        return null
+    }
+
+    try {
+        token = (await Notifications.getExpoPushTokenAsync()).data
+        console.log('Push token:', token)
+    } catch (error) {
+        console.log('Error getting push token:', error)
+        return null
+    }
+
+    return token
 }
 
 function RootLayoutNav() {
@@ -24,6 +71,68 @@ function RootLayoutNav() {
     const segments = useSegments()
     const router = useRouter()
     const [hasUserDoc, setHasUserDoc] = useState<boolean | null>(null)
+    const notificationListener = useRef<any>()
+    const responseListener = useRef<any>()
+
+    // Register for push notifications when user is authenticated
+    useEffect(() => {
+        if (!user) return
+
+        console.log('🔔 Registering push notifications for user:', user.uid)
+
+        registerForPushNotificationsAsync().then(async (token) => {
+            if (token) {
+                try {
+                    console.log('🔔 Got push token:', token)
+                    // Update user's push token in Firestore (use setDoc with merge to handle existing users)
+                    const userDocRef = doc(db, 'users', user.uid)
+                    await setDoc(userDocRef, {
+                        pushToken: token,
+                        followers: [],
+                        following: []
+                    }, { merge: true })
+                    console.log('✅ Push token saved to Firestore')
+
+                    // Verify it was saved
+                    const userDoc = await getDoc(userDocRef)
+                    console.log('🔍 Verified saved token:', userDoc.data()?.pushToken)
+                } catch (error) {
+                    console.error('❌ Error updating push token:', error)
+                }
+            } else {
+                console.log('❌ No push token received - check permissions')
+            }
+        })
+
+        // Listen for incoming notifications
+        notificationListener.current = Notifications.addNotificationReceivedListener(
+            (notification) => {
+                console.log('Notification received:', notification)
+            }
+        )
+
+        // Listen for notification responses (user taps notification)
+        responseListener.current = Notifications.addNotificationResponseReceivedListener(
+            (response) => {
+                console.log('Notification response:', response)
+                const data = response.notification.request.content.data
+
+                // Navigate to user profile if notification contains userId
+                if (data.userId) {
+                    router.push(`/user-profile?userId=${data.userId}` as any)
+                }
+            }
+        )
+
+        return () => {
+            if (notificationListener.current) {
+                notificationListener.current.remove()
+            }
+            if (responseListener.current) {
+                responseListener.current.remove()
+            }
+        }
+    }, [user])
 
     // Check if user document exists in Firestore (real-time listener)
     useEffect(() => {

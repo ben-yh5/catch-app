@@ -18,6 +18,9 @@ import {
     QueryDocumentSnapshot,
     startAfter,
     where,
+    updateDoc,
+    arrayUnion,
+    arrayRemove,
 } from 'firebase/firestore'
 import React, { useCallback, useEffect, useState } from 'react'
 import {
@@ -68,6 +71,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     const insets = useSafeAreaInsets()
     const [username, setUsername] = useState<string>('')
     const [totalCatches, setTotalCatches] = useState<number>(0)
+    const [followerCount, setFollowerCount] = useState<number>(0)
+    const [followingCount, setFollowingCount] = useState<number>(0)
+    const [isFollowing, setIsFollowing] = useState<boolean>(false)
     const [posts, setPosts] = useState<Post[]>([])
     const [catches, setCatches] = useState<Post[]>([])
     const [loading, setLoading] = useState(true)
@@ -103,6 +109,13 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                 const userData = userDoc.data()
                 setUsername(userData.username || 'Unknown')
                 setTotalCatches(userData.totalCatches || 0)
+                setFollowerCount(userData.followers?.length || 0)
+                setFollowingCount(userData.following?.length || 0)
+
+                // Check if current user is following this profile
+                if (!isOwnProfile && user) {
+                    setIsFollowing(userData.followers?.includes(user.uid) || false)
+                }
             }
 
             // Fetch user's original posts (paginated)
@@ -414,6 +427,56 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         Alert.alert('Report User', 'This feature is coming soon! (TODO)')
     }
 
+    const handleFollowToggle = async () => {
+        if (!user || !userId) return
+
+        try {
+            const currentUserRef = doc(db, 'users', user.uid)
+            const targetUserRef = doc(db, 'users', userId)
+
+            if (isFollowing) {
+                // Unfollow
+                console.log(`👋 Unfollowing user ${userId}`)
+                setIsFollowing(false)
+                setFollowerCount((prev) => Math.max(0, prev - 1))
+
+                await updateDoc(currentUserRef, {
+                    following: arrayRemove(userId),
+                })
+                await updateDoc(targetUserRef, {
+                    followers: arrayRemove(user.uid),
+                })
+                console.log('✅ Unfollowed successfully')
+            } else {
+                // Follow
+                console.log(`👤 Following user ${userId} from ${user.uid}`)
+                setIsFollowing(true)
+                setFollowerCount((prev) => prev + 1)
+
+                await updateDoc(currentUserRef, {
+                    following: arrayUnion(userId),
+                })
+                console.log('✅ Updated current user following list')
+
+                await updateDoc(targetUserRef, {
+                    followers: arrayUnion(user.uid),
+                })
+                console.log('✅ Updated target user followers list - Cloud Function should trigger now')
+
+                // Check if target user has a push token
+                const targetUserDoc = await getDoc(targetUserRef)
+                const targetUserData = targetUserDoc.data()
+                console.log('🔍 Target user push token:', targetUserData?.pushToken)
+            }
+        } catch (error) {
+            console.error('❌ Error toggling follow:', error)
+            // Revert optimistic update on error
+            setIsFollowing(!isFollowing)
+            setFollowerCount((prev) => (isFollowing ? prev + 1 : prev - 1))
+            Alert.alert('Error', 'Failed to update follow status. Please try again.')
+        }
+    }
+
     // Combine and sort posts based on what's toggled on
     const displayedPosts = React.useMemo(() => {
         const combined: Post[] = []
@@ -494,8 +557,43 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                             Catches
                                         </Text>
                                     </View>
+                                    <View style={styles.statItem}>
+                                        <Text style={styles.statNumber}>
+                                            {followerCount}
+                                        </Text>
+                                        <Text style={styles.statLabel}>
+                                            Followers
+                                        </Text>
+                                    </View>
+                                    <View style={styles.statItem}>
+                                        <Text style={styles.statNumber}>
+                                            {followingCount}
+                                        </Text>
+                                        <Text style={styles.statLabel}>
+                                            Following
+                                        </Text>
+                                    </View>
                                 </View>
                             </View>
+
+                            {!isOwnProfile && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.followButton,
+                                        isFollowing && styles.followingButton,
+                                    ]}
+                                    onPress={handleFollowToggle}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.followButtonText,
+                                            isFollowing && styles.followingButtonText,
+                                        ]}
+                                    >
+                                        {isFollowing ? 'Following' : 'Follow'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
 
                             <View style={styles.toggleContainer}>
                                 <TouchableOpacity
@@ -956,6 +1054,27 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: colors.textTertiary,
         marginTop: 4,
+    },
+    followButton: {
+        marginTop: 20,
+        paddingVertical: 10,
+        paddingHorizontal: 32,
+        borderRadius: 8,
+        backgroundColor: colors.primary,
+        alignSelf: 'center',
+    },
+    followingButton: {
+        backgroundColor: colors.card,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    followButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    followingButtonText: {
+        color: colors.textPrimary,
     },
     toggleContainer: {
         flexDirection: 'row',
