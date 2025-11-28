@@ -37,10 +37,16 @@ service cloud.firestore {
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['catchCount']);
     }
 
-    // Post locations collection (server-side only)
+    // Post locations collection
     match /post_locations/{locationId} {
-      // Only server-side access (Cloud Functions)
-      allow read, write: if false;
+      // No read access (location data is private)
+      allow read: if false;
+
+      // Allow authenticated users to create location documents
+      allow create: if request.auth != null;
+
+      // No updates or deletes from clients (only Cloud Functions can delete)
+      allow update, delete: if false;
     }
   }
 }

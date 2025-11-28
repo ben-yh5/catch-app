@@ -97,16 +97,25 @@ function RootLayoutNav() {
                     console.log('🔔 Got push token:', token)
                     // Update user's push token in Firestore (use setDoc with merge to handle existing users)
                     const userDocRef = doc(db, 'users', user.uid)
-                    await setDoc(userDocRef, {
-                        pushToken: token,
-                        followers: [],
-                        following: []
-                    }, { merge: true })
-                    console.log('✅ Push token saved to Firestore')
 
-                    // Verify it was saved
+                    // Check if user doc exists and has followers/following fields
                     const userDoc = await getDoc(userDocRef)
-                    console.log('🔍 Verified saved token:', userDoc.data()?.pushToken)
+                    if (userDoc.exists()) {
+                        // User exists, just update push token
+                        await setDoc(userDocRef, {
+                            pushToken: token,
+                        }, { merge: true })
+                    } else {
+                        // New user, create with all fields
+                        await setDoc(userDocRef, {
+                            pushToken: token,
+                            followers: [],
+                            following: []
+                        }, { merge: true })
+                    }
+
+                    console.log('✅ Push token saved to Firestore')
+                    console.log('🔍 Verified saved token:', token)
                 } catch (error) {
                     console.error('❌ Error updating push token:', error)
                 }

@@ -95,6 +95,10 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     const [searchQuery, setSearchQuery] = useState('')
     const [searchResults, setSearchResults] = useState<{ id: string; username: string }[]>([])
     const [searchLoading, setSearchLoading] = useState(false)
+    const [followListVisible, setFollowListVisible] = useState(false)
+    const [followListType, setFollowListType] = useState<'followers' | 'following'>('followers')
+    const [followList, setFollowList] = useState<{ id: string; username: string; isFollowing: boolean }[]>([])
+    const [followListLoading, setFollowListLoading] = useState(false)
     const flatListRef = React.useRef<FlatList>(null)
     const searchInputRef = React.useRef<TextInput>(null)
 
@@ -427,6 +431,110 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         Alert.alert('Report User', 'This feature is coming soon! (TODO)')
     }
 
+    const handleShowFollowList = async (type: 'followers' | 'following') => {
+        if (!userId) return
+
+        setFollowListType(type)
+        setFollowListVisible(true)
+        setFollowListLoading(true)
+
+        try {
+            // Fetch the user's document to get followers or following IDs
+            const userDoc = await getDoc(doc(db, 'users', userId))
+            if (!userDoc.exists()) {
+                setFollowListLoading(false)
+                return
+            }
+
+            const userData = userDoc.data()
+            const userIds = type === 'followers'
+                ? (userData.followers || [])
+                : (userData.following || [])
+
+            if (userIds.length === 0) {
+                setFollowList([])
+                setFollowListLoading(false)
+                return
+            }
+
+            // Fetch user details for each ID
+            const users: { id: string; username: string; isFollowing: boolean }[] = []
+
+            for (const uid of userIds) {
+                const userDocRef = doc(db, 'users', uid)
+                const userSnapshot = await getDoc(userDocRef)
+
+                if (userSnapshot.exists()) {
+                    const data = userSnapshot.data()
+
+                    // Check if current user is following this person
+                    let isFollowingThisUser = false
+                    if (user) {
+                        const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
+                        if (currentUserDoc.exists()) {
+                            const currentUserData = currentUserDoc.data()
+                            isFollowingThisUser = (currentUserData.following || []).includes(uid)
+                        }
+                    }
+
+                    users.push({
+                        id: uid,
+                        username: data.username || 'Unknown',
+                        isFollowing: isFollowingThisUser,
+                    })
+                }
+            }
+
+            setFollowList(users)
+        } catch (error) {
+            console.error('Error fetching follow list:', error)
+            Alert.alert('Error', 'Failed to load list')
+        } finally {
+            setFollowListLoading(false)
+        }
+    }
+
+    const handleFollowFromList = async (targetUserId: string) => {
+        if (!user) return
+
+        try {
+            const currentUserRef = doc(db, 'users', user.uid)
+            const targetUserRef = doc(db, 'users', targetUserId)
+
+            // Find the user in the list
+            const userInList = followList.find(u => u.id === targetUserId)
+            if (!userInList) return
+
+            if (userInList.isFollowing) {
+                // Unfollow
+                await updateDoc(currentUserRef, {
+                    following: arrayRemove(targetUserId),
+                })
+                await updateDoc(targetUserRef, {
+                    followers: arrayRemove(user.uid),
+                })
+            } else {
+                // Follow
+                await updateDoc(currentUserRef, {
+                    following: arrayUnion(targetUserId),
+                })
+                await updateDoc(targetUserRef, {
+                    followers: arrayUnion(user.uid),
+                })
+            }
+
+            // Update the list
+            setFollowList(followList.map(u =>
+                u.id === targetUserId
+                    ? { ...u, isFollowing: !u.isFollowing }
+                    : u
+            ))
+        } catch (error) {
+            console.error('Error toggling follow:', error)
+            Alert.alert('Error', 'Failed to update follow status')
+        }
+    }
+
     const handleFollowToggle = async () => {
         if (!user || !userId) return
 
@@ -557,22 +665,28 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                             Catches
                                         </Text>
                                     </View>
-                                    <View style={styles.statItem}>
+                                    <TouchableOpacity
+                                        style={styles.statItem}
+                                        onPress={() => handleShowFollowList('followers')}
+                                    >
                                         <Text style={styles.statNumber}>
                                             {followerCount}
                                         </Text>
                                         <Text style={styles.statLabel}>
                                             Followers
                                         </Text>
-                                    </View>
-                                    <View style={styles.statItem}>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.statItem}
+                                        onPress={() => handleShowFollowList('following')}
+                                    >
                                         <Text style={styles.statNumber}>
                                             {followingCount}
                                         </Text>
                                         <Text style={styles.statLabel}>
                                             Following
                                         </Text>
-                                    </View>
+                                    </TouchableOpacity>
                                 </View>
                             </View>
 
@@ -873,6 +987,80 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                     </View>
                 </View>
             </Modal>
+
+            <Modal
+                visible={followListVisible}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setFollowListVisible(false)}
+            >
+                <View style={[styles.searchModalOverlay, { paddingTop: insets.top }]}>
+                    <View style={styles.searchHeader}>
+                        <TouchableOpacity
+                            onPress={() => setFollowListVisible(false)}
+                            style={styles.searchCloseButton}
+                        >
+                            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>
+                            {followListType === 'followers' ? 'Followers' : 'Following'}
+                        </Text>
+                        <View style={{ width: 24 }} />
+                    </View>
+
+                    <View style={styles.searchResults}>
+                        {followListLoading ? (
+                            <View style={styles.searchLoadingContainer}>
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            </View>
+                        ) : followList.length > 0 ? (
+                            followList.map((userItem) => (
+                                <View key={userItem.id} style={styles.searchResultItem}>
+                                    <TouchableOpacity
+                                        style={styles.followListUserInfo}
+                                        onPress={() => {
+                                            setFollowListVisible(false)
+                                            if (userItem.id === user?.uid) return
+                                            router.push(`/user-profile?userId=${userItem.id}` as any)
+                                        }}
+                                    >
+                                        <View style={styles.searchResultAvatar}>
+                                            <Ionicons name="person" size={20} color={colors.textTertiary} />
+                                        </View>
+                                        <Text style={styles.searchResultUsername}>@{userItem.username}</Text>
+                                        {userItem.id === user?.uid && (
+                                            <Text style={styles.searchResultYou}>(you)</Text>
+                                        )}
+                                    </TouchableOpacity>
+
+                                    {userItem.id !== user?.uid && (
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.followListButton,
+                                                userItem.isFollowing && styles.followListButtonFollowing,
+                                            ]}
+                                            onPress={() => handleFollowFromList(userItem.id)}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.followListButtonText,
+                                                    userItem.isFollowing && styles.followListButtonTextFollowing,
+                                                ]}
+                                            >
+                                                {userItem.isFollowing ? 'Following' : 'Follow'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            ))
+                        ) : (
+                            <Text style={styles.searchNoResults}>
+                                No {followListType === 'followers' ? 'followers' : 'following'} yet
+                            </Text>
+                        )}
+                    </View>
+                </View>
+            </Modal>
         </>
     )
 }
@@ -1018,6 +1206,31 @@ const styles = StyleSheet.create({
         marginTop: 20,
         color: colors.textTertiary,
         fontSize: 16,
+    },
+    followListUserInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    followListButton: {
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        borderRadius: 6,
+        backgroundColor: colors.primary,
+        marginLeft: 12,
+    },
+    followListButtonFollowing: {
+        backgroundColor: colors.card,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    followListButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#FFFFFF',
+    },
+    followListButtonTextFollowing: {
+        color: colors.textPrimary,
     },
     listContent: {
         paddingBottom: 20,
