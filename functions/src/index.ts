@@ -101,12 +101,13 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
     }
 })
 
-// Firestore trigger: When a post is created, increment user's post count
+// Firestore trigger: When a post is created, increment user's post count and notify followers
 export const onPostCreated = functions.firestore
     .document('posts/{postId}')
     .onCreate(async (snap) => {
         const postData = snap.data()
         const authorId = postData.authorId
+        const postId = snap.id
 
         if (!authorId) {
             functions.logger.warn('Post created without authorId:', snap.id)
@@ -123,8 +124,73 @@ export const onPostCreated = functions.firestore
                 })
                 functions.logger.info(`Incremented totalCatches for user ${authorId}`)
             }
+
+            // Send notifications to followers (only for original posts, not catches)
+            if (postData.isOriginal) {
+                const authorDoc = await userRef.get()
+                if (!authorDoc.exists) {
+                    functions.logger.warn(`Author ${authorId} not found`)
+                    return
+                }
+
+                const authorData = authorDoc.data()
+                const authorUsername = authorData?.username || 'Someone'
+                const followers = authorData?.followers || []
+
+                functions.logger.info(
+                    `Notifying ${followers.length} followers about new post from ${authorUsername}`
+                )
+
+                // Notify each follower
+                for (const followerId of followers) {
+                    try {
+                        const followerDoc = await admin
+                            .firestore()
+                            .collection('users')
+                            .doc(followerId)
+                            .get()
+
+                        if (!followerDoc.exists) {
+                            functions.logger.warn(`Follower ${followerId} not found`)
+                            continue
+                        }
+
+                        const followerData = followerDoc.data()
+                        const pushToken = followerData?.pushToken
+
+                        if (!pushToken) {
+                            functions.logger.info(
+                                `Follower ${followerId} has no push token, skipping`
+                            )
+                            continue
+                        }
+
+                        // Send push notification
+                        await sendPushNotification(
+                            pushToken,
+                            'New Post',
+                            `@${authorUsername} just made a new post!`,
+                            {
+                                userId: authorId,
+                                postId: postId,
+                                type: 'new_post',
+                            }
+                        )
+
+                        functions.logger.info(
+                            `Sent new post notification to follower ${followerId}`
+                        )
+                    } catch (error) {
+                        functions.logger.error(
+                            `Error sending notification to follower ${followerId}:`,
+                            error
+                        )
+                        // Continue with other followers even if one fails
+                    }
+                }
+            }
         } catch (error) {
-            functions.logger.error('Error updating user counts on post create:', error)
+            functions.logger.error('Error in onPostCreated trigger:', error)
         }
     })
 
