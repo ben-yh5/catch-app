@@ -7,8 +7,6 @@ import { Image } from 'react-native'
  */
 export async function cropToSquare(uri: string): Promise<string> {
     try {
-        console.log('Processing 1:1 camera image...')
-
         // Get captured image dimensions
         const { width: imageWidth, height: imageHeight } = await new Promise<{
             width: number
@@ -21,14 +19,11 @@ export async function cropToSquare(uri: string): Promise<string> {
             )
         })
 
-        console.log('Captured image dimensions:', imageWidth, 'x', imageHeight)
-
         // If image is already square (or very close), just resize
         const aspectRatio = imageWidth / imageHeight
         const isSquare = aspectRatio > 0.95 && aspectRatio < 1.05
 
         if (isSquare) {
-            console.log('Image is already square, just resizing to 1080x1080')
             const result = await ImageManipulator.manipulateAsync(
                 uri,
                 [{ resize: { width: 1080, height: 1080 } }],
@@ -41,7 +36,6 @@ export async function cropToSquare(uri: string): Promise<string> {
         }
 
         // Fallback: center crop to square if ratio="1:1" didn't work
-        console.log('Image is not square, applying center crop')
         const size = Math.min(imageWidth, imageHeight)
         const originX = (imageWidth - size) / 2
         const originY = (imageHeight - size) / 2
@@ -85,7 +79,6 @@ export async function cropToSquare(uri: string): Promise<string> {
  */
 export async function prepareImageForPreview(uri: string): Promise<string> {
     try {
-        console.log('Preparing image for preview...')
         const resized = await ImageManipulator.manipulateAsync(
             uri,
             [{ resize: { width: 1080 } }],
@@ -94,7 +87,6 @@ export async function prepareImageForPreview(uri: string): Promise<string> {
                 format: ImageManipulator.SaveFormat.JPEG,
             }
         )
-        console.log('Image prepared successfully')
         return resized.uri
     } catch (error) {
         console.error('Error preparing image:', error)

@@ -47,7 +47,6 @@ export default function PostScreen() {
             }
         }
 
-        console.log('Opening camera')
         setShowCamera(true)
     }
 
@@ -83,20 +82,14 @@ export default function PostScreen() {
     }
 
     const handlePhotoTaken = async (uri: string) => {
-        console.log('=== handlePhotoTaken START ===')
-        console.log('Photo captured, URI:', uri)
-
         // Mark as processing
         processingRef.current = true
 
         try {
-            console.log('Starting image processing...')
             const processedUri = await cropToSquare(uri)
-            console.log('Image processed successfully, new URI:', processedUri)
 
             // Check if cancelled
             if (!processingRef.current) {
-                console.log('Processing was cancelled, aborting')
                 return
             }
 
@@ -109,22 +102,18 @@ export default function PostScreen() {
             setCapturedImage(processedUri)
             setLoadingLocation(true)
 
-            console.log('Getting device location...')
             const photoLocation = await getDeviceLocation()
-            console.log('Device location result:', photoLocation)
 
             // Check again if cancelled
             if (!processingRef.current) {
-                console.log('Processing was cancelled during location fetch, aborting')
                 setLoadingLocation(false)
                 return
             }
 
             setLocation(photoLocation)
             setLoadingLocation(false)
-            console.log('=== handlePhotoTaken COMPLETE ===')
         } catch (error) {
-            console.error('=== ERROR in handlePhotoTaken ===', error)
+            console.error('Error in handlePhotoTaken:', error)
             if (processingRef.current) {
                 Alert.alert('Error', 'Failed to process photo. Please try again.')
             }
@@ -145,7 +134,6 @@ export default function PostScreen() {
             return
         }
 
-        console.log('Starting post upload...')
         setUploading(true)
 
         try {
@@ -165,8 +153,7 @@ export default function PostScreen() {
             const storageRef = ref(storage, filename)
 
             // Upload image to Firebase Storage
-            const uploadResult = await uploadBytes(storageRef, blob)
-            console.log('Upload complete:', uploadResult)
+            await uploadBytes(storageRef, blob)
 
             // Get download URL
             const photoURL = await getDownloadURL(storageRef)
@@ -186,7 +173,6 @@ export default function PostScreen() {
             }
 
             const docRef = await addDoc(collection(db, 'posts'), postData)
-            console.log('Post created with ID:', docRef.id)
 
             // Store actual location in separate private collection
             if (location) {

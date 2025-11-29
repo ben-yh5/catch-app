@@ -8,10 +8,9 @@ import {
     GoogleAuthProvider,
     signInWithCredential,
     fetchSignInMethodsForEmail,
-    linkWithCredential,
 } from 'firebase/auth'
 import { auth, db } from '@/services/firebase'
-import { doc, setDoc, getDoc } from 'firebase/firestore'
+import { doc, setDoc} from 'firebase/firestore'
 import { GoogleSignin } from '@react-native-google-signin/google-signin'
 
 interface AuthContextType {
@@ -86,54 +85,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const loginWithGoogle = async () => {
         try {
-            console.log('🔵 Starting Google Sign-In...')
-            console.log('🔵 Web Client ID:', process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID)
-
             // Check if your device supports Google Play
-            console.log('🔵 Checking Google Play Services...')
             await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true })
-            console.log('✅ Google Play Services available')
 
             // Get the users ID token
-            console.log('🔵 Starting sign-in flow...')
             const signInResult = await GoogleSignin.signIn()
-            console.log('🔵 Sign-in result:', JSON.stringify(signInResult, null, 2))
 
             const idToken = signInResult.data?.idToken
             const googleEmail = signInResult.data?.user.email
-            console.log('🔵 ID Token:', idToken ? 'Present' : 'Missing')
-            console.log('🔵 Google Email:', googleEmail)
 
             if (!idToken) {
                 throw new Error('No ID token found')
             }
 
             // Create a Google credential with the token
-            console.log('🔵 Creating Firebase credential...')
             const googleCredential = GoogleAuthProvider.credential(idToken)
 
             // Sign-in the user with the credential
-            console.log('🔵 Signing in with Firebase...')
             const userCredential = await signInWithCredential(auth, googleCredential)
             const user = userCredential.user
-            console.log('✅ Firebase sign-in successful, UID:', user.uid)
 
             // Check if this was an account linking scenario
             if (googleEmail) {
-                const signInMethods = await fetchSignInMethodsForEmail(auth, googleEmail)
-                if (signInMethods.length > 1) {
-                    console.log('✅ Google account linked to existing email/password account')
-                }
+                await fetchSignInMethodsForEmail(auth, googleEmail)
             }
 
             // Note: We don't create the user document here for new users
             // They will be redirected to the username-setup screen by the root layout
-            console.log('✅ Google Sign-In complete!')
         } catch (error: any) {
-            console.error('❌ Google Sign-In Error:', error)
-            console.error('❌ Error code:', error.code)
-            console.error('❌ Error message:', error.message)
-            console.error('❌ Full error:', JSON.stringify(error, null, 2))
+            console.error('Google Sign-In Error:', error)
 
             // Handle account-exists-with-different-credential error
             if (error.code === 'auth/account-exists-with-different-credential') {

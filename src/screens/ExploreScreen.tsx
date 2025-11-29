@@ -93,10 +93,6 @@ export default function ExploreScreen() {
         if (loadMore && (!hasMore || loadingMore)) return
 
         try {
-            console.log(
-                loadMore ? 'Loading more posts...' : 'Fetching initial posts...'
-            )
-
             if (loadMore) {
                 setLoadingMore(true)
             }
@@ -128,8 +124,6 @@ export default function ExploreScreen() {
                     ...doc.data(),
                 } as Post)
             })
-
-            console.log(`Fetched ${fetchedPosts.length} posts`)
 
             // Update last document for pagination
             const lastVisible =

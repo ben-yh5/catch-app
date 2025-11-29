@@ -29,25 +29,21 @@ export default function UnifiedCameraView({
     const insets = useSafeAreaInsets()
 
     const handleCameraReady = () => {
-        console.log('Camera is ready')
         setIsCameraReady(true)
     }
 
     const handleTakePhoto = async () => {
         if (!isCameraReady) {
-            console.log('Camera not ready yet')
             return
         }
 
         if (cameraRef.current) {
             try {
-                console.log('Taking picture...')
                 const photo = await cameraRef.current.takePictureAsync({
                     quality: 0.8,
                 })
 
                 if (photo) {
-                    console.log('Picture taken successfully:', photo.uri)
                     onPhotoTaken(photo.uri)
                 }
             } catch (error) {

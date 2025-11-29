@@ -544,7 +544,6 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
 
             if (isFollowing) {
                 // Unfollow
-                console.log(`👋 Unfollowing user ${userId}`)
                 setIsFollowing(false)
                 setFollowerCount((prev) => Math.max(0, prev - 1))
 
@@ -554,30 +553,21 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                 await updateDoc(targetUserRef, {
                     followers: arrayRemove(user.uid),
                 })
-                console.log('✅ Unfollowed successfully')
             } else {
                 // Follow
-                console.log(`👤 Following user ${userId} from ${user.uid}`)
                 setIsFollowing(true)
                 setFollowerCount((prev) => prev + 1)
 
                 await updateDoc(currentUserRef, {
                     following: arrayUnion(userId),
                 })
-                console.log('✅ Updated current user following list')
 
                 await updateDoc(targetUserRef, {
                     followers: arrayUnion(user.uid),
                 })
-                console.log('✅ Updated target user followers list - Cloud Function should trigger now')
-
-                // Check if target user has a push token
-                const targetUserDoc = await getDoc(targetUserRef)
-                const targetUserData = targetUserDoc.data()
-                console.log('🔍 Target user push token:', targetUserData?.pushToken)
             }
         } catch (error) {
-            console.error('❌ Error toggling follow:', error)
+            console.error('Error toggling follow:', error)
             // Revert optimistic update on error
             setIsFollowing(!isFollowing)
             setFollowerCount((prev) => (isFollowing ? prev + 1 : prev - 1))

@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
 import { isUsernameAvailable, validateUsernameFormat } from '@/utils/usernameValidation'
 import { useRouter } from 'expo-router'
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
@@ -13,7 +13,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
-import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore'
+import { doc, setDoc } from 'firebase/firestore'
 import { db } from '@/services/firebase'
 
 export default function UsernameSetupScreen() {
@@ -54,8 +54,6 @@ export default function UsernameSetupScreen() {
                 bookmarkedPosts: [],
                 createdAt: new Date(),
             })
-
-            console.log('✅ User document created, redirecting to tabs...')
 
             // Navigate directly to tabs
             router.replace('/(tabs)')

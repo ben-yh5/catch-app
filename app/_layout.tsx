@@ -13,7 +13,7 @@ import { Platform } from 'react-native'
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { PostProvider } from '@/context/PostContext'
-import { doc, getDoc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '@/services/firebase'
 
 // Configure notification handler
@@ -22,6 +22,8 @@ Notifications.setNotificationHandler({
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
     }),
 })
 
@@ -32,10 +34,7 @@ export const unstable_settings = {
 async function registerForPushNotificationsAsync() {
     let token
 
-    console.log('🔔 Platform:', Platform.OS)
-
     if (Platform.OS === 'android') {
-        console.log('🔔 Setting up Android notification channel...')
         await Notifications.setNotificationChannelAsync('default', {
             name: 'default',
             importance: Notifications.AndroidImportance.MAX,
@@ -44,32 +43,22 @@ async function registerForPushNotificationsAsync() {
         })
     }
 
-    console.log('🔔 Checking notification permissions...')
     const { status: existingStatus } = await Notifications.getPermissionsAsync()
-    console.log('🔔 Existing permission status:', existingStatus)
     let finalStatus = existingStatus
 
     if (existingStatus !== 'granted') {
-        console.log('🔔 Requesting notification permissions...')
         const { status } = await Notifications.requestPermissionsAsync()
         finalStatus = status
-        console.log('🔔 Permission request result:', status)
     }
 
     if (finalStatus !== 'granted') {
-        console.log('❌ Permission denied - cannot get push token')
         return null
     }
 
-    console.log('🔔 Permissions granted, getting FCM token...')
     try {
         // For bare workflow, get the device push token (FCM token for Android, APNs for iOS)
         token = (await Notifications.getDevicePushTokenAsync()).data
-        console.log('✅ Successfully got FCM push token:', token)
-    } catch (error: any) {
-        console.log('❌ Error getting push token:', error)
-        console.log('❌ Error message:', error.message)
-        console.log('❌ Error stack:', error.stack)
+    } catch {
         return null
     }
 
@@ -82,19 +71,16 @@ function RootLayoutNav() {
     const segments = useSegments()
     const router = useRouter()
     const [hasUserDoc, setHasUserDoc] = useState<boolean | null>(null)
-    const notificationListener = useRef<any>()
-    const responseListener = useRef<any>()
+    const notificationListener = useRef<any>(null)
+    const responseListener = useRef<any>(null)
 
     // Register for push notifications when user is authenticated
     useEffect(() => {
         if (!user) return
 
-        console.log('🔔 Registering push notifications for user:', user.uid)
-
         registerForPushNotificationsAsync().then(async (token) => {
             if (token) {
                 try {
-                    console.log('🔔 Got push token:', token)
                     // Update user's push token in Firestore (use setDoc with merge to handle existing users)
                     const userDocRef = doc(db, 'users', user.uid)
 
@@ -113,28 +99,22 @@ function RootLayoutNav() {
                             following: []
                         }, { merge: true })
                     }
-
-                    console.log('✅ Push token saved to Firestore')
-                    console.log('🔍 Verified saved token:', token)
                 } catch (error) {
-                    console.error('❌ Error updating push token:', error)
+                    console.error('Error updating push token:', error)
                 }
-            } else {
-                console.log('❌ No push token received - check permissions')
             }
         })
 
         // Listen for incoming notifications
         notificationListener.current = Notifications.addNotificationReceivedListener(
-            (notification) => {
-                console.log('Notification received:', notification)
+            () => {
+                // Notification received
             }
         )
 
         // Listen for notification responses (user taps notification)
         responseListener.current = Notifications.addNotificationResponseReceivedListener(
             (response) => {
-                console.log('Notification response:', response)
                 const data = response.notification.request.content.data
 
                 // Navigate to user profile if notification contains userId
@@ -152,7 +132,7 @@ function RootLayoutNav() {
                 responseListener.current.remove()
             }
         }
-    }, [user])
+    }, [user, router])
 
     // Check if user document exists in Firestore (real-time listener)
     useEffect(() => {
@@ -164,7 +144,6 @@ function RootLayoutNav() {
         const userDocRef = doc(db, 'users', user.uid)
         const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
             setHasUserDoc(docSnap.exists())
-            console.log('📄 User doc exists:', docSnap.exists())
         }, (error) => {
             console.error('Error listening to user document:', error)
             setHasUserDoc(false)
@@ -198,7 +177,7 @@ function RootLayoutNav() {
             // Redirect to tabs if user is authenticated, has user doc, and not in a protected route
             router.replace('/(tabs)')
         }
-    }, [user, loading, segments, hasUserDoc])
+    }, [user, loading, segments, hasUserDoc, router])
 
     return (
         <ThemeProvider
