@@ -76,6 +76,26 @@ export default function ExploreScreen() {
     const [showStaleIndicator, setShowStaleIndicator] = useState(false)
     const [staleRefreshing, setStaleRefreshing] = useState(false)
     const flatListRef = React.useRef<FlatList>(null)
+    const lastInteractionTimeRef = React.useRef<number>(Date.now())
+    const interactionTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    // Track user interactions to hide/show stale indicator
+    const recordInteraction = useCallback(() => {
+        lastInteractionTimeRef.current = Date.now()
+        setShowStaleIndicator(false)
+
+        // Clear existing timer
+        if (interactionTimerRef.current) {
+            clearTimeout(interactionTimerRef.current)
+        }
+
+        // Set new timer to show stale indicator after 2 minutes of inactivity
+        interactionTimerRef.current = setTimeout(() => {
+            if (isStale('explore') && isFocused) {
+                setShowStaleIndicator(true)
+            }
+        }, 2 * 60 * 1000) // 2 minutes
+    }, [isStale, isFocused])
 
     const fetchBookmarks = async () => {
         if (!user) return
@@ -161,6 +181,7 @@ export default function ExploreScreen() {
 
     useEffect(() => {
         fetchPosts()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     useEffect(() => {
@@ -170,18 +191,29 @@ export default function ExploreScreen() {
             setLastDoc(null)
             fetchPosts(false)
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [shouldRefresh])
 
-    // Check for staleness and show indicator
+    // Auto-refresh when screen becomes focused after being stale
     useEffect(() => {
-        const checkStale = setInterval(() => {
-            if (isStale('explore') && isFocused) {
-                setShowStaleIndicator(true)
-            }
-        }, 1000) // Check every 1 second for responsive updates
+        if (isFocused && isStale('explore')) {
+            // Auto refresh if data is stale
+            setHasMore(true)
+            setLastDoc(null)
+            fetchPosts(false)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isFocused])
 
-        return () => clearInterval(checkStale)
-    }, [isStale, isFocused])
+    // Start interaction timer on mount and when recordInteraction changes
+    useEffect(() => {
+        recordInteraction()
+        return () => {
+            if (interactionTimerRef.current) {
+                clearTimeout(interactionTimerRef.current)
+            }
+        }
+    }, [recordInteraction])
 
     // Tab press listener for scroll to top + refresh
     useEffect(() => {
@@ -197,19 +229,23 @@ export default function ExploreScreen() {
         })
 
         return unsubscribe
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigation, isFocused])
 
     const onRefresh = useCallback(() => {
         setRefreshing(true)
         setHasMore(true)
         setLastDoc(null)
+        recordInteraction()
         fetchPosts(false)
-    }, [])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [recordInteraction])
 
     const loadMorePosts = useCallback(() => {
         if (!loading && !loadingMore && hasMore) {
             fetchPosts(true)
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loading, loadingMore, hasMore, lastDoc])
 
     const toggleBookmark = async (postId: string) => {
@@ -311,6 +347,7 @@ export default function ExploreScreen() {
             <Pressable
                 style={styles.postCard}
                 onPress={() => {
+                    recordInteraction()
                     if (showOptionsMenu === item.id) {
                         setShowOptionsMenu(null)
                     }
@@ -319,6 +356,7 @@ export default function ExploreScreen() {
                 <View style={styles.postHeader}>
                     <TouchableOpacity
                         onPress={() => {
+                            recordInteraction()
                             setShowOptionsMenu(null)
                             router.push({
                                 pathname: '/user-profile',
@@ -342,7 +380,10 @@ export default function ExploreScreen() {
                             </Text>
                         </View>
                         <TouchableOpacity
-                            onPress={() => toggleBookmark(item.id)}
+                            onPress={() => {
+                                recordInteraction()
+                                toggleBookmark(item.id)
+                            }}
                             style={styles.bookmarkButton}
                         >
                             <Ionicons
@@ -361,13 +402,14 @@ export default function ExploreScreen() {
                         </TouchableOpacity>
                         <View style={{ zIndex: 10 }}>
                             <TouchableOpacity
-                                onPress={() =>
+                                onPress={() => {
+                                    recordInteraction()
                                     setShowOptionsMenu(
                                         showOptionsMenu === item.id
                                             ? null
                                             : item.id
                                     )
-                                }
+                                }}
                                 style={styles.bookmarkButton}
                             >
                                 <Ionicons
@@ -415,6 +457,7 @@ export default function ExploreScreen() {
 
                 <TouchableOpacity
                     onPress={() => {
+                        recordInteraction()
                         setShowOptionsMenu(null)
                         setSelectedPost(item)
                         setModalVisible(true)
@@ -451,7 +494,10 @@ export default function ExploreScreen() {
 
     return (
         <TouchableWithoutFeedback
-            onPress={() => showOptionsMenu && setShowOptionsMenu(null)}
+            onPress={() => {
+                if (showOptionsMenu) setShowOptionsMenu(null)
+                recordInteraction()
+            }}
         >
             <View style={{ flex: 1 }}>
                 <View
@@ -466,6 +512,8 @@ export default function ExploreScreen() {
                     renderItem={renderPost}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
+                    onScroll={recordInteraction}
+                    scrollEventThrottle={2000}
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}
@@ -533,6 +581,7 @@ export default function ExploreScreen() {
                         <TouchableOpacity
                             style={styles.staleIndicator}
                             onPress={async () => {
+                                recordInteraction()
                                 setStaleRefreshing(true)
                                 setHasMore(true)
                                 setLastDoc(null)
