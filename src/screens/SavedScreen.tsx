@@ -43,6 +43,7 @@ interface Post {
 
 const { width } = Dimensions.get('window')
 const ITEM_SIZE = (width - 3) / 2 // 2 columns with 1px gap
+const THUMBNAIL_SIZE = 400 // Target thumbnail resolution for grid items
 
 export default function SavedScreen() {
     const { user } = useAuth()
@@ -135,11 +136,19 @@ export default function SavedScreen() {
             activeOpacity={0.8}
         >
             <Image
-                source={{ uri: item.photoURL }}
+                source={{
+                    uri: item.photoURL,
+                    width: THUMBNAIL_SIZE,
+                    height: THUMBNAIL_SIZE,
+                }}
                 style={styles.postImage}
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 transition={200}
+                placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                placeholderContentFit="cover"
+                recyclingKey={item.id}
+                priority="low"
             />
         </TouchableOpacity>
     )
