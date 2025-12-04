@@ -76,7 +76,7 @@ export default function ThreadModal({
     initialPostId,
 }: ThreadModalProps) {
     const { user } = useAuth()
-    const { triggerRefresh } = usePost()
+    const { notifyPostEvent } = usePost()
     const router = useRouter()
     const insets = useSafeAreaInsets()
 
@@ -272,7 +272,7 @@ export default function ThreadModal({
             if (newThreadPosts.length === 0) {
                 // No more posts, close modal
                 onPostDelete?.(currentPost.id)
-                triggerRefresh()
+                notifyPostEvent('delete', currentPost.id, currentPost.authorId)
                 onClose()
                 return
             } else if (currentIndex >= newThreadPosts.length) {
@@ -281,7 +281,7 @@ export default function ThreadModal({
 
             Alert.alert('Success', 'Post deleted successfully')
             onPostDelete?.(currentPost.id)
-            triggerRefresh()
+            notifyPostEvent('delete', currentPost.id, currentPost.authorId)
         } catch (error) {
             console.error('Error deleting post:', error)
             Alert.alert('Error', 'Error deleting post. Please try again.')
@@ -497,7 +497,7 @@ export default function ThreadModal({
             setCatchImageUri(null)
             setCatchLocation(null)
 
-            triggerRefresh()
+            notifyPostEvent('catch', catchPostRef.id, user.uid)
         } catch (error) {
             console.error('Error creating catch post:', error)
             Alert.alert('Error', 'Error creating catch post. Please try again.')

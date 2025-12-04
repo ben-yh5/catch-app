@@ -1,5 +1,5 @@
 import { useAuth } from '@/context/AuthContext'
-import { usePost } from '@/context/PostContext'
+import { usePost, usePostEvents, PostEvent } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
@@ -57,7 +57,7 @@ const POSTS_PER_PAGE = 20
 
 export default function ExploreScreen() {
     const { user } = useAuth()
-    const { shouldRefresh, updateLastFetch, isStale } = usePost()
+    const { updateLastFetch, isStale } = usePost()
     const router = useRouter()
     const navigation = useNavigation()
     const isFocused = useIsFocused()
@@ -184,15 +184,19 @@ export default function ExploreScreen() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    useEffect(() => {
-        // Refresh posts when a new post is created
-        if (shouldRefresh) {
+    // Subscribe to post events for granular updates
+    usePostEvents((event: PostEvent) => {
+        if (event.action === 'create') {
+            // New post created - refresh feed to show it
             setHasMore(true)
             setLastDoc(null)
             fetchPosts(false)
+        } else if (event.action === 'delete' && event.postId) {
+            // Remove deleted post from local state without re-fetching
+            setPosts(prev => prev.filter(p => p.id !== event.postId))
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [shouldRefresh])
+        // Note: 'catch' events don't affect explore feed since it only shows originals
+    }, [])
 
     // Auto-refresh when screen becomes focused after being stale
     useEffect(() => {

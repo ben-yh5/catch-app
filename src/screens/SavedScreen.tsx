@@ -1,5 +1,5 @@
 import { useAuth } from '@/context/AuthContext'
-import { usePost } from '@/context/PostContext'
+import { usePost, usePostEvents, PostEvent } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
@@ -47,7 +47,7 @@ const THUMBNAIL_SIZE = 400 // Target thumbnail resolution for grid items
 
 export default function SavedScreen() {
     const { user } = useAuth()
-    const { shouldRefresh } = usePost()
+    const { updateLastFetch } = usePost()
     const insets = useSafeAreaInsets()
     const [bookmarkedPosts, setBookmarkedPosts] = useState<Post[]>([])
     const [loading, setLoading] = useState(true)
@@ -100,6 +100,9 @@ export default function SavedScreen() {
             } else {
                 setBookmarkedPosts([])
             }
+
+            // Update last fetch time
+            updateLastFetch('saved')
         } catch (error) {
             console.error('Error fetching bookmarked posts:', error)
         } finally {
@@ -111,12 +114,16 @@ export default function SavedScreen() {
         fetchBookmarkedPosts()
     }, [])
 
-    useEffect(() => {
-        // Refresh when posts are updated
-        if (shouldRefresh) {
-            fetchBookmarkedPosts()
+    // Subscribe to post events for granular updates
+    usePostEvents((event: PostEvent) => {
+        if (event.action === 'delete' && event.postId) {
+            // Remove deleted post from local state without re-fetching
+            setBookmarkedPosts(prev => prev.filter(p => p.id !== event.postId))
+        } else if (event.action === 'create' || event.action === 'catch') {
+            // Only refresh if the user might have bookmarked posts
+            // For now, we'll skip auto-refresh on create/catch since saved is user-specific
         }
-    }, [shouldRefresh])
+    }, [])
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true)
@@ -153,6 +160,12 @@ export default function SavedScreen() {
         </TouchableOpacity>
     )
 
+    const getItemLayout = (_data: any, index: number) => ({
+        length: ITEM_SIZE,
+        offset: ITEM_SIZE * Math.floor(index / 2), // 2 columns
+        index,
+    })
+
     if (loading) {
         return (
             <View style={styles.centerContainer}>
@@ -173,6 +186,7 @@ export default function SavedScreen() {
                     renderItem={renderPost}
                     keyExtractor={(item) => item.id}
                     numColumns={2}
+                    getItemLayout={getItemLayout}
                     contentContainerStyle={styles.listContent}
                     refreshControl={
                         <RefreshControl

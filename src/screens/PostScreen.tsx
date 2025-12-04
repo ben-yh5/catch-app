@@ -29,7 +29,7 @@ export default function PostScreen() {
     const processingRef = useRef(false)
     const router = useRouter()
     const { user } = useAuth()
-    const { triggerRefresh } = usePost()
+    const { notifyPostEvent } = usePost()
 
     const handleOpenCamera = async () => {
         if (!permission) {
@@ -191,8 +191,8 @@ export default function PostScreen() {
             setLocation(null)
             setUploading(false)
 
-            // Trigger refresh for explore and profile pages
-            triggerRefresh()
+            // Notify subscribers of new post creation
+            notifyPostEvent('create', docRef.id, user.uid)
 
             // Navigate to profile
             router.push('/(tabs)/profile')

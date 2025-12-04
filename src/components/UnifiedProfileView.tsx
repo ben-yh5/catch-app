@@ -1,6 +1,6 @@
 import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
-import { usePost } from '@/context/PostContext'
+import { usePost, usePostEvents, PostEvent } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
@@ -65,7 +65,7 @@ const THUMBNAIL_SIZE = 400 // Target thumbnail resolution for grid items
 
 export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileViewProps) {
     const { user } = useAuth()
-    const { shouldRefresh, updateLastFetch, isStale } = usePost()
+    const { updateLastFetch, isStale } = usePost()
     const router = useRouter()
     const navigation = useNavigation()
     const isFocused = useIsFocused()
@@ -194,16 +194,29 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         fetchUserData()
     }, [userId])
 
-    useEffect(() => {
-        // Refresh user data when a new post is created
-        if (shouldRefresh && isOwnProfile) {
-            setHasMorePosts(true)
-            setHasMoreCatches(true)
-            setLastPostDoc(null)
-            setLastCatchDoc(null)
-            fetchUserData()
+    // Subscribe to post events for granular updates
+    usePostEvents((event: PostEvent) => {
+        // Only handle events relevant to this profile
+        if (event.action === 'create' && event.userId === userId) {
+            // New post created by this user - add to top of posts list without full refetch
+            if (isOwnProfile) {
+                setHasMorePosts(true)
+                setLastPostDoc(null)
+                fetchUserData()
+            }
+        } else if (event.action === 'catch' && event.userId === userId) {
+            // User created a catch - update catches list
+            if (isOwnProfile && showCatches) {
+                setHasMoreCatches(true)
+                setLastCatchDoc(null)
+                fetchUserData()
+            }
+        } else if (event.action === 'delete' && event.postId) {
+            // Remove deleted post from local state without re-fetching
+            setPosts(prev => prev.filter(p => p.id !== event.postId))
+            setCatches(prev => prev.filter(p => p.id !== event.postId))
         }
-    }, [shouldRefresh, isOwnProfile])
+    }, [userId, isOwnProfile, showCatches])
 
     // Check for staleness and show indicator (only for own profile)
     useEffect(() => {
@@ -614,6 +627,12 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         </TouchableOpacity>
     )
 
+    const getItemLayout = (_data: any, index: number) => ({
+        length: ITEM_SIZE,
+        offset: ITEM_SIZE * Math.floor(index / 2), // 2 columns
+        index,
+    })
+
     if (loading) {
         return (
             <View style={styles.centerContainer}>
@@ -631,6 +650,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                     renderItem={renderPost}
                     keyExtractor={(item) => item.id}
                     numColumns={2}
+                    getItemLayout={getItemLayout}
                     contentContainerStyle={[
                         styles.listContent,
                         { paddingTop: insets.top + 56 },
