@@ -81,24 +81,19 @@ function RootLayoutNav() {
         registerForPushNotificationsAsync().then(async (token) => {
             if (token) {
                 try {
-                    // Update user's push token in Firestore (use setDoc with merge to handle existing users)
+                    // Only update push token for existing users
+                    // Do not create user documents here - let signup/username-setup handle that
                     const userDocRef = doc(db, 'users', user.uid)
 
-                    // Check if user doc exists and has followers/following fields
+                    // Check if user doc exists
                     const userDoc = await getDoc(userDocRef)
                     if (userDoc.exists()) {
-                        // User exists, just update push token
+                        // User exists, update push token
                         await setDoc(userDocRef, {
                             pushToken: token,
-                        }, { merge: true })
-                    } else {
-                        // New user, create with all fields
-                        await setDoc(userDocRef, {
-                            pushToken: token,
-                            followers: [],
-                            following: []
                         }, { merge: true })
                     }
+                    // If user doc doesn't exist, do nothing - they're in the username setup flow
                 } catch (error) {
                     console.error('Error updating push token:', error)
                 }

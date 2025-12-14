@@ -52,6 +52,9 @@ export default function UsernameSetupScreen() {
                 email: user.email || '',
                 totalCatches: 0,
                 bookmarkedPosts: [],
+                followers: [],
+                following: [],
+                pushToken: null,
                 createdAt: new Date(),
             })
 
