@@ -1,17 +1,16 @@
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
-import { db, storage } from '@/services/firebase'
+import { db, storage, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { validateCatch } from '@/utils/catchValidation'
 import { cropToSquare } from '@/utils/imageProcessing'
+import { isPostSaved } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
 import {
     addDoc,
-    arrayRemove,
-    arrayUnion,
     collection,
     deleteDoc,
     doc,
@@ -24,13 +23,16 @@ import {
     where,
 } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { httpsCallable } from 'firebase/functions'
 import React, { useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
     Dimensions,
     FlatList,
+    Linking,
     Modal,
+    Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -88,9 +90,15 @@ export default function ThreadModal({
     const flatListRef = useRef<FlatList>(null)
 
     // UI state
-    const [bookmarked, setBookmarked] = useState(false)
+    const [isSaved, setIsSaved] = useState(false)
     const [showOptionsMenu, setShowOptionsMenu] = useState(false)
     const [showAddToListModal, setShowAddToListModal] = useState(false)
+
+    // Location state
+    const [postLocation, setPostLocation] = useState<{ latitude: number; longitude: number } | null>(null)
+    const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
+    const [distance, setDistance] = useState<number | null>(null)
+    const [loadingPostLocation, setLoadingPostLocation] = useState(false)
 
     // Catch flow states
     const [catchMode, setCatchMode] = useState(false)
@@ -131,12 +139,25 @@ export default function ThreadModal({
         }
     }, [threadPosts, initialPostId])
 
-    // Update bookmark status when current post changes
+    // Update save status when current post changes
     useEffect(() => {
-        if (currentPost) {
-            fetchBookmarkStatus()
+        if (currentPost && user) {
+            fetchSaveStatus()
         }
-    }, [currentPost?.id])
+    }, [currentPost?.id, user])
+
+    // Fetch location data when root post changes
+    useEffect(() => {
+        if (visible && threadPosts.length > 0) {
+            const rootPost = threadPosts[0]
+            if (rootPost?.hasLocation) {
+                fetchPostLocationAndDistance(rootPost.id)
+            } else {
+                setPostLocation(null)
+                setDistance(null)
+            }
+        }
+    }, [visible, threadPosts])
 
     const fetchThread = async () => {
         if (!post) return
@@ -190,41 +211,122 @@ export default function ThreadModal({
         }
     }
 
-    const fetchBookmarkStatus = async () => {
+    const fetchSaveStatus = async () => {
         if (!user || !currentPost) return
 
         try {
-            const userDoc = await getDoc(doc(db, 'users', user.uid))
-            if (userDoc.exists()) {
-                const bookmarkedPosts = userDoc.data().bookmarkedPosts || []
-                setBookmarked(bookmarkedPosts.includes(currentPost.id))
-            }
+            const saved = await isPostSaved(user.uid, currentPost.id)
+            setIsSaved(saved)
         } catch (error) {
-            console.error('Error fetching bookmark status:', error)
+            console.error('Error fetching save status:', error)
         }
     }
 
-    const toggleBookmark = async () => {
-        if (!user || !currentPost) return
+    // Haversine formula to calculate distance between two coordinates
+    const calculateDistance = (
+        lat1: number,
+        lon1: number,
+        lat2: number,
+        lon2: number
+    ): number => {
+        const R = 6371e3 // Earth's radius in meters
+        const φ1 = (lat1 * Math.PI) / 180
+        const φ2 = (lat2 * Math.PI) / 180
+        const Δφ = ((lat2 - lat1) * Math.PI) / 180
+        const Δλ = ((lon2 - lon1) * Math.PI) / 180
 
-        const wasBookmarked = bookmarked
-        setBookmarked(!bookmarked)
+        const a =
+            Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 
+        return R * c
+    }
+
+    const fetchPostLocationAndDistance = async (postId: string) => {
+        setLoadingPostLocation(true)
         try {
-            const userRef = doc(db, 'users', user.uid)
-            if (wasBookmarked) {
-                await updateDoc(userRef, {
-                    bookmarkedPosts: arrayRemove(currentPost.id),
+            // Fetch post location from Cloud Function
+            const getPostLocation = httpsCallable(functions, 'getPostLocation')
+            const result = await getPostLocation({ postId })
+            const locationData = result.data as { latitude: number; longitude: number; postId: string }
+
+            setPostLocation({
+                latitude: locationData.latitude,
+                longitude: locationData.longitude,
+            })
+
+            // Get user's current location
+            const { status } = await Location.requestForegroundPermissionsAsync()
+            if (status === 'granted') {
+                const userLoc = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
                 })
-            } else {
-                await updateDoc(userRef, {
-                    bookmarkedPosts: arrayUnion(currentPost.id),
+                setUserLocation({
+                    latitude: userLoc.coords.latitude,
+                    longitude: userLoc.coords.longitude,
                 })
+
+                // Calculate distance
+                const dist = calculateDistance(
+                    userLoc.coords.latitude,
+                    userLoc.coords.longitude,
+                    locationData.latitude,
+                    locationData.longitude
+                )
+                setDistance(Math.round(dist))
             }
         } catch (error) {
-            console.error('Error toggling bookmark:', error)
-            setBookmarked(wasBookmarked)
+            console.error('Error fetching post location:', error)
+            setPostLocation(null)
+            setDistance(null)
+        } finally {
+            setLoadingPostLocation(false)
         }
+    }
+
+    const handleGetDirections = async () => {
+        if (!postLocation) {
+            Alert.alert('Location Not Available', 'Location data is not available for this post.')
+            return
+        }
+
+        const { latitude, longitude } = postLocation
+
+        try {
+            let url: string
+            if (Platform.OS === 'ios') {
+                // iOS - Open Apple Maps
+                url = `maps://maps.apple.com/?daddr=${latitude},${longitude}`
+            } else if (Platform.OS === 'android') {
+                // Android - Open Google Maps with navigation
+                url = `google.navigation:q=${latitude},${longitude}`
+            } else {
+                // Web fallback
+                url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
+            }
+
+            const supported = await Linking.canOpenURL(url)
+            if (supported) {
+                await Linking.openURL(url)
+            } else {
+                // Fallback to web URL
+                const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
+                await Linking.openURL(webUrl)
+            }
+        } catch (error) {
+            console.error('Error opening directions:', error)
+            Alert.alert('Error', 'Could not open maps application.')
+        }
+    }
+
+    const handleSavePress = () => {
+        setShowAddToListModal(true)
+        setShowOptionsMenu(false)
+    }
+
+    const handleSaveStateChange = (saved: boolean) => {
+        setIsSaved(saved)
     }
 
     const handleShare = async () => {
@@ -668,13 +770,13 @@ export default function ThreadModal({
                                             </Text>
                                         </View>
                                         <TouchableOpacity
-                                            onPress={toggleBookmark}
+                                            onPress={handleSavePress}
                                             style={styles.headerIconButton}
                                         >
                                             <Ionicons
-                                                name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+                                                name={isSaved ? 'bookmark' : 'bookmark-outline'}
                                                 size={22}
-                                                color={bookmarked ? colors.iconActive : colors.iconInactive}
+                                                color={isSaved ? colors.iconActive : colors.iconInactive}
                                             />
                                         </TouchableOpacity>
                                         <View style={{ zIndex: 10 }}>
@@ -798,9 +900,21 @@ export default function ThreadModal({
                                             {currentPost?.caption || '---'}
                                         </Text>
 
-                                        <Text style={styles.dateText}>
-                                            {currentPost ? formatDate(currentPost.createdAt) : ''}
-                                        </Text>
+                                        <View style={styles.metaRow}>
+                                            <Text style={styles.dateText}>
+                                                {currentPost ? formatDate(currentPost.createdAt) : ''}
+                                            </Text>
+                                            {distance !== null && threadPosts[0]?.hasLocation && (
+                                                <>
+                                                    <Text style={styles.dateSeparator}> • </Text>
+                                                    <Text style={styles.distanceText}>
+                                                        {distance < 1000
+                                                            ? `${distance} m away`
+                                                            : `${(distance / 1000).toFixed(1)} km away`}
+                                                    </Text>
+                                                </>
+                                            )}
+                                        </View>
                                     </View>
 
                                     {/* Divider */}
@@ -808,7 +922,6 @@ export default function ThreadModal({
 
                                     {/* Catch Button */}
                                     <View style={styles.actionsSection}>
-
                                         <TouchableOpacity
                                             style={[
                                                 styles.catchButton,
@@ -820,6 +933,17 @@ export default function ThreadModal({
                                             <Ionicons name="camera" size={20} color="#fff" />
                                             <Text style={styles.catchButtonText}>Catch This Location</Text>
                                         </TouchableOpacity>
+
+                                        {/* Get Directions Button */}
+                                        {threadPosts[0]?.hasLocation && postLocation && (
+                                            <TouchableOpacity
+                                                style={styles.directionsButton}
+                                                onPress={handleGetDirections}
+                                            >
+                                                <Ionicons name="navigate" size={20} color={colors.primary} />
+                                                <Text style={styles.directionsButtonText}>Get Directions</Text>
+                                            </TouchableOpacity>
+                                        )}
                                     </View>
                                 </View>
                             </View>
@@ -834,6 +958,7 @@ export default function ThreadModal({
                     visible={showAddToListModal}
                     onClose={() => setShowAddToListModal(false)}
                     postId={currentPost.id}
+                    onSaveStateChange={handleSaveStateChange}
                 />
             )}
         </Modal>
@@ -1040,6 +1165,15 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: colors.textTertiary,
     },
+    dateSeparator: {
+        fontSize: 12,
+        color: colors.textTertiary,
+    },
+    distanceText: {
+        fontSize: 12,
+        color: colors.secondary,
+        fontWeight: '500',
+    },
     progressText: {
         fontSize: 12,
         color: colors.textTertiary,
@@ -1062,5 +1196,22 @@ const styles = StyleSheet.create({
     },
     catchButtonDisabled: {
         opacity: 0.6,
+    },
+    directionsButton: {
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        borderColor: colors.primary,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        gap: 8,
+    },
+    directionsButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.primary,
     },
 })

@@ -24,6 +24,7 @@ interface List {
     creatorUsername: string
     postIds: string[]
     isPublic: boolean
+    isSavedList?: boolean
     createdAt: any
     updatedAt: any
 }
@@ -57,7 +58,13 @@ export default function ListsScreen() {
                 } as List)
             })
 
-            setLists(fetchedLists)
+            // Sort to put Saved list first
+            const savedList = fetchedLists.find(l => l.isSavedList || l.name === 'Saved')
+            const otherLists = fetchedLists.filter(l => !l.isSavedList && l.name !== 'Saved')
+
+            const sortedLists = savedList ? [savedList, ...otherLists] : otherLists
+
+            setLists(sortedLists)
         } catch (error) {
             console.error('Error fetching lists:', error)
         } finally {
@@ -134,18 +141,23 @@ export default function ListsScreen() {
 
     const renderListItem = ({ item }: { item: List }) => {
         const isOwner = user?.uid === item.creatorId
+        const isSavedList = item.isSavedList || item.name === 'Saved'
 
         return (
             <TouchableOpacity
-                style={styles.listItem}
+                style={[styles.listItem, isSavedList && styles.savedListItem]}
                 onPress={() => router.push(`/list-detail?listId=${item.id}` as any)}
             >
                 <View style={styles.listContent}>
                     <View style={styles.listHeader}>
-                        <Ionicons name="list" size={24} color="#007AFF" />
+                        <Ionicons
+                            name={isSavedList ? 'bookmark' : 'list'}
+                            size={24}
+                            color={isSavedList ? '#FFB800' : '#007AFF'}
+                        />
                         <View style={styles.listInfo}>
                             <Text style={styles.listName}>{item.name}</Text>
-                            {item.description ? (
+                            {item.description && !isSavedList ? (
                                 <Text style={styles.listDescription} numberOfLines={2}>
                                     {item.description}
                                 </Text>
@@ -157,7 +169,7 @@ export default function ListsScreen() {
                         </View>
                     </View>
                 </View>
-                {isOwner && activeTab === 'my' && (
+                {isOwner && activeTab === 'my' && !isSavedList && (
                     <TouchableOpacity
                         style={styles.deleteButton}
                         onPress={(e) => {
@@ -306,6 +318,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#e0e0e0',
         alignItems: 'center',
+    },
+    savedListItem: {
+        backgroundColor: '#FFF9E6',
+        borderColor: '#FFD700',
+        borderWidth: 2,
     },
     listContent: {
         flex: 1,
