@@ -3,6 +3,9 @@ import * as admin from 'firebase-admin'
 
 admin.initializeApp()
 
+// Export test functions (only for development/testing)
+export * from './test-functions'
+
 const CATCH_RADIUS_METERS = 100 // Define acceptable proximity (100 meters)
 
 // Haversine formula to calculate distance between two coordinates
@@ -97,6 +100,148 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError(
             'internal',
             'Failed to validate catch location'
+        )
+    }
+})
+
+// Get location coordinates for a single post (for map pins and directions)
+export const getPostLocation = functions.https.onCall(async (data, context) => {
+    // Check authentication
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            'unauthenticated',
+            'Must be logged in to get post location'
+        )
+    }
+
+    const { postId } = data
+
+    // Validate input
+    if (!postId) {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'Missing required field: postId'
+        )
+    }
+
+    try {
+        // Verify post exists
+        const postRef = admin.firestore().collection('posts').doc(postId)
+        const postDoc = await postRef.get()
+
+        if (!postDoc.exists) {
+            throw new functions.https.HttpsError('not-found', 'Post not found')
+        }
+
+        const postData = postDoc.data()
+
+        if (!postData?.hasLocation) {
+            throw new functions.https.HttpsError(
+                'failed-precondition',
+                'Post has no location data'
+            )
+        }
+
+        // Get post location from private collection (server-side only)
+        const locationQuery = await admin
+            .firestore()
+            .collection('post_locations')
+            .where('postId', '==', postId)
+            .limit(1)
+            .get()
+
+        if (locationQuery.empty) {
+            throw new functions.https.HttpsError(
+                'not-found',
+                'Location data not found'
+            )
+        }
+
+        const locationData = locationQuery.docs[0].data()
+        const { latitude, longitude } = locationData
+
+        return {
+            postId,
+            latitude,
+            longitude,
+        }
+    } catch (error: any) {
+        functions.logger.error('Error getting post location:', error)
+        throw new functions.https.HttpsError(
+            'internal',
+            'Failed to get post location'
+        )
+    }
+})
+
+// Get location coordinates for multiple posts at once (for map view)
+export const getPostLocations = functions.https.onCall(async (data, context) => {
+    // Check authentication
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            'unauthenticated',
+            'Must be logged in to get post locations'
+        )
+    }
+
+    const { postIds } = data
+
+    // Validate input
+    if (!postIds || !Array.isArray(postIds)) {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'postIds must be an array'
+        )
+    }
+
+    if (postIds.length === 0) {
+        return { locations: [] }
+    }
+
+    // Limit to 500 posts to prevent excessive queries
+    if (postIds.length > 500) {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'Cannot fetch more than 500 post locations at once'
+        )
+    }
+
+    try {
+        const locations: {
+            postId: string
+            latitude: number
+            longitude: number
+        }[] = []
+
+        // Firestore 'in' queries are limited to 10 items, so we need to batch
+        const batchSize = 10
+        for (let i = 0; i < postIds.length; i += batchSize) {
+            const batch = postIds.slice(i, i + batchSize)
+
+            // Query locations for this batch
+            const locationQuery = await admin
+                .firestore()
+                .collection('post_locations')
+                .where('postId', 'in', batch)
+                .get()
+
+            // Add to results
+            locationQuery.docs.forEach((doc) => {
+                const locationData = doc.data()
+                locations.push({
+                    postId: locationData.postId,
+                    latitude: locationData.latitude,
+                    longitude: locationData.longitude,
+                })
+            })
+        }
+
+        return { locations }
+    } catch (error: any) {
+        functions.logger.error('Error getting post locations:', error)
+        throw new functions.https.HttpsError(
+            'internal',
+            'Failed to get post locations'
         )
     }
 })
@@ -216,6 +361,24 @@ export const onPostDeleted = functions.firestore
                     totalCatches: admin.firestore.FieldValue.increment(-1),
                 })
                 functions.logger.info(`Decremented totalCatches for user ${authorId}`)
+            }
+
+            // Remove post from any lists that contain it
+            const listsQuery = await admin
+                .firestore()
+                .collection('lists')
+                .where('postIds', 'array-contains', postId)
+                .get()
+
+            if (!listsQuery.empty) {
+                const batch = admin.firestore().batch()
+                listsQuery.docs.forEach((listDoc) => {
+                    batch.update(listDoc.ref, {
+                        postIds: admin.firestore.FieldValue.arrayRemove(postId),
+                    })
+                })
+                await batch.commit()
+                functions.logger.info(`Removed post ${postId} from ${listsQuery.size} list(s)`)
             }
 
             // Handle root post deletion - promote oldest catch to new root

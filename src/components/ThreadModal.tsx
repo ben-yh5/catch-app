@@ -41,6 +41,7 @@ import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import UnifiedCameraView from './UnifiedCameraView'
 import UnifiedPreviewScreen from './UnifiedPreviewScreen'
+import AddToListModal from './AddToListModal'
 
 interface Post {
     id: string
@@ -89,6 +90,7 @@ export default function ThreadModal({
     // UI state
     const [bookmarked, setBookmarked] = useState(false)
     const [showOptionsMenu, setShowOptionsMenu] = useState(false)
+    const [showAddToListModal, setShowAddToListModal] = useState(false)
 
     // Catch flow states
     const [catchMode, setCatchMode] = useState(false)
@@ -691,6 +693,15 @@ export default function ThreadModal({
                                                 <View style={styles.optionsMenuInCard}>
                                                     <TouchableOpacity
                                                         style={styles.optionsMenuItem}
+                                                        onPress={() => {
+                                                            setShowOptionsMenu(false)
+                                                            setShowAddToListModal(true)
+                                                        }}
+                                                    >
+                                                        <Text style={styles.optionsMenuText}>Add to List</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity
+                                                        style={styles.optionsMenuItem}
                                                         onPress={handleShare}
                                                     >
                                                         <Text style={styles.optionsMenuText}>Share</Text>
@@ -816,6 +827,15 @@ export default function ThreadModal({
                     )}
                 </View>
             </View>
+
+            {/* Add to List Modal */}
+            {currentPost && (
+                <AddToListModal
+                    visible={showAddToListModal}
+                    onClose={() => setShowAddToListModal(false)}
+                    postId={currentPost.id}
+                />
+            )}
         </Modal>
     )
 }

@@ -153,7 +153,9 @@ function RootLayoutNav() {
         const inAuthGroup = segments[0] === '(tabs)'
         const inProtectedRoute =
             segments[0] === 'settings' ||
-            segments[0] === 'user-profile'
+            segments[0] === 'user-profile' ||
+            segments[0] === 'create-list' ||
+            segments[0] === 'list-detail'
         const inUsernameSetup = segments[0] === 'username-setup'
 
         if (!user && (inAuthGroup || inProtectedRoute || inUsernameSetup)) {
@@ -189,6 +191,14 @@ function RootLayoutNav() {
                 />
                 <Stack.Screen
                     name="settings"
+                    options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                    name="create-list"
+                    options={{ presentation: 'modal', headerShown: false }}
+                />
+                <Stack.Screen
+                    name="list-detail"
                     options={{ headerShown: false }}
                 />
                 <Stack.Screen

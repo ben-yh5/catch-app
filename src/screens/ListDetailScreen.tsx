@@ -1,0 +1,388 @@
+import React, { useCallback, useEffect, useState } from 'react'
+import {
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    Alert,
+} from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import {
+    collection,
+    doc,
+    documentId,
+    getDoc,
+    getDocs,
+    query,
+    where,
+    deleteDoc,
+    updateDoc,
+    arrayRemove,
+} from 'firebase/firestore'
+import { db } from '@/services/firebase'
+import { useAuth } from '@/context/AuthContext'
+import { Ionicons } from '@expo/vector-icons'
+import { useRouter, useLocalSearchParams } from 'expo-router'
+import { Image } from 'expo-image'
+import ThreadModal from '@/components/ThreadModal'
+
+interface Post {
+    id: string
+    authorId: string
+    authorUsername: string
+    photoURL: string
+    caption: string
+    hasLocation: boolean
+    catchCount: number
+    parentPostId: string | null
+    rootPostId: string | null
+    isOriginal: boolean
+    createdAt: any
+}
+
+interface List {
+    id: string
+    name: string
+    description: string
+    creatorId: string
+    creatorUsername: string
+    postIds: string[]
+    isPublic: boolean
+    createdAt: any
+    updatedAt: any
+}
+
+const { width } = Dimensions.get('window')
+const ITEM_SIZE = (width - 3) / 2
+const THUMBNAIL_SIZE = 400
+
+export default function ListDetailScreen() {
+    const { user } = useAuth()
+    const insets = useSafeAreaInsets()
+    const router = useRouter()
+    const params = useLocalSearchParams()
+    const listId = params.listId as string
+
+    const [list, setList] = useState<List | null>(null)
+    const [posts, setPosts] = useState<Post[]>([])
+    const [loading, setLoading] = useState(true)
+    const [refreshing, setRefreshing] = useState(false)
+    const [selectedPost, setSelectedPost] = useState<Post | null>(null)
+    const [modalVisible, setModalVisible] = useState(false)
+
+    const fetchListAndPosts = async () => {
+        if (!listId) return
+
+        try {
+            // Fetch list document
+            const listDoc = await getDoc(doc(db, 'lists', listId))
+            if (!listDoc.exists()) {
+                Alert.alert('Error', 'List not found')
+                router.back()
+                return
+            }
+
+            const listData = {
+                id: listDoc.id,
+                ...listDoc.data(),
+            } as List
+
+            setList(listData)
+
+            // Fetch posts in the list
+            if (listData.postIds.length > 0) {
+                const batchSize = 30
+                const batches = []
+
+                for (let i = 0; i < listData.postIds.length; i += batchSize) {
+                    const batch = listData.postIds.slice(i, i + batchSize)
+                    batches.push(batch)
+                }
+
+                const allPosts: Post[] = []
+
+                for (const batch of batches) {
+                    const postsQuery = query(
+                        collection(db, 'posts'),
+                        where(documentId(), 'in', batch)
+                    )
+
+                    const postsSnapshot = await getDocs(postsQuery)
+                    postsSnapshot.forEach((doc) => {
+                        allPosts.push({
+                            id: doc.id,
+                            ...doc.data(),
+                        } as Post)
+                    })
+                }
+
+                setPosts(allPosts)
+            } else {
+                setPosts([])
+            }
+        } catch (error) {
+            console.error('Error fetching list:', error)
+            Alert.alert('Error', 'Failed to load list')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        fetchListAndPosts()
+    }, [listId])
+
+    const handleRefresh = async () => {
+        setRefreshing(true)
+        await fetchListAndPosts()
+        setRefreshing(false)
+    }
+
+    const handleDeleteList = () => {
+        if (!list) return
+
+        Alert.alert('Delete List', `Are you sure you want to delete "${list.name}"?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await deleteDoc(doc(db, 'lists', listId))
+                        router.back()
+                    } catch (error) {
+                        console.error('Error deleting list:', error)
+                        Alert.alert('Error', 'Failed to delete list')
+                    }
+                },
+            },
+        ])
+    }
+
+    const handleRemovePost = (postId: string) => {
+        Alert.alert('Remove Post', 'Remove this post from the list?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Remove',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await updateDoc(doc(db, 'lists', listId), {
+                            postIds: arrayRemove(postId),
+                        })
+                        setPosts((prev) => prev.filter((post) => post.id !== postId))
+                        setList((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      postIds: prev.postIds.filter((id) => id !== postId),
+                                  }
+                                : null
+                        )
+                    } catch (error) {
+                        console.error('Error removing post:', error)
+                        Alert.alert('Error', 'Failed to remove post')
+                    }
+                },
+            },
+        ])
+    }
+
+    const handlePostPress = (post: Post) => {
+        setSelectedPost(post)
+        setModalVisible(true)
+    }
+
+    const renderPost = ({ item }: { item: Post }) => {
+        const isOwner = user?.uid === list?.creatorId
+
+        return (
+            <View style={styles.postContainer}>
+                <TouchableOpacity onPress={() => handlePostPress(item)}>
+                    <Image
+                        source={{ uri: `${item.photoURL}&w=${THUMBNAIL_SIZE}` }}
+                        style={styles.postImage}
+                        contentFit="cover"
+                        transition={200}
+                    />
+                </TouchableOpacity>
+                {isOwner && (
+                    <TouchableOpacity
+                        style={styles.removeButton}
+                        onPress={() => handleRemovePost(item.id)}
+                    >
+                        <Ionicons name="close-circle" size={24} color="#FF3B30" />
+                    </TouchableOpacity>
+                )}
+            </View>
+        )
+    }
+
+    const renderEmptyState = () => (
+        <View style={styles.emptyContainer}>
+            <Ionicons name="images-outline" size={64} color="#ccc" />
+            <Text style={styles.emptyText}>No Posts Yet</Text>
+            <Text style={styles.emptySubtext}>Add posts to this list from the thread modal</Text>
+        </View>
+    )
+
+    const isOwner = user?.uid === list?.creatorId
+
+    if (loading || !list) {
+        return (
+            <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
+                <ActivityIndicator size="large" color="#007AFF" />
+            </View>
+        )
+    }
+
+    return (
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color="#000" />
+                </TouchableOpacity>
+                <View style={styles.headerContent}>
+                    <Text style={styles.listName}>{list.name}</Text>
+                    {list.description ? (
+                        <Text style={styles.listDescription}>{list.description}</Text>
+                    ) : null}
+                    <Text style={styles.listMeta}>
+                        {list.postIds.length} {list.postIds.length === 1 ? 'post' : 'posts'} •
+                        @{list.creatorUsername}
+                    </Text>
+                </View>
+                {isOwner && (
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            onPress={() => router.push(`/create-list?listId=${listId}` as any)}
+                            style={styles.iconButton}
+                        >
+                            <Ionicons name="pencil" size={20} color="#007AFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleDeleteList} style={styles.iconButton}>
+                            <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </View>
+
+            {/* Posts Grid */}
+            <FlatList
+                data={posts}
+                renderItem={renderPost}
+                keyExtractor={(item) => item.id}
+                numColumns={2}
+                contentContainerStyle={styles.gridContainer}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+                ListEmptyComponent={renderEmptyState}
+                columnWrapperStyle={styles.row}
+            />
+
+            {/* Thread Modal */}
+            {selectedPost && (
+                <ThreadModal
+                    visible={modalVisible}
+                    onClose={() => setModalVisible(false)}
+                    initialPostId={selectedPost.id}
+                />
+            )}
+        </View>
+    )
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+    },
+    backButton: {
+        padding: 4,
+        marginRight: 12,
+    },
+    headerContent: {
+        flex: 1,
+    },
+    listName: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        marginBottom: 4,
+    },
+    listDescription: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 4,
+    },
+    listMeta: {
+        fontSize: 12,
+        color: '#999',
+    },
+    headerActions: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    iconButton: {
+        padding: 8,
+    },
+    gridContainer: {
+        padding: 1,
+        flexGrow: 1,
+    },
+    row: {
+        gap: 1,
+    },
+    postContainer: {
+        width: ITEM_SIZE,
+        height: ITEM_SIZE,
+        position: 'relative',
+    },
+    postImage: {
+        width: '100%',
+        height: '100%',
+    },
+    removeButton: {
+        position: 'absolute',
+        top: 4,
+        right: 4,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderRadius: 12,
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingTop: 100,
+    },
+    emptyText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#999',
+        marginTop: 16,
+    },
+    emptySubtext: {
+        fontSize: 14,
+        color: '#ccc',
+        marginTop: 8,
+        textAlign: 'center',
+        paddingHorizontal: 40,
+    },
+})
