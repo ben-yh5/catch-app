@@ -46,7 +46,7 @@ export default function UnifiedPreviewScreen({
     const buttonDisabled = loading || (isPost && loadingLocation)
     const buttonLoading = loading
 
-    let buttonText = isPost ? 'Post' : 'Catch This Location'
+    let buttonText = isPost ? 'Post' : 'Catch This Shot'
     let buttonLoadingText = loadingText
 
     if (isPost && loadingLocation) {

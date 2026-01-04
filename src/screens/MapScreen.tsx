@@ -17,7 +17,7 @@ import {
 } from 'react-native'
 import MapView, { Marker, Region, PROVIDER_GOOGLE } from 'react-native-maps'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore'
+import { collection, getDocs, getDoc, doc, query, where, orderBy } from 'firebase/firestore'
 import { db } from '@/services/firebase'
 import { httpsCallable } from 'firebase/functions'
 import ThreadModal from '@/components/ThreadModal'
@@ -43,7 +43,6 @@ interface PostLocation {
 }
 
 type ViewMode = 'explore' | 'myCatches'
-type FilterMode = 'all' | 'popular' | 'trending' | 'nearby'
 
 // Dark mode map style (Google Maps dark theme)
 const darkMapStyle = [
@@ -148,7 +147,6 @@ export default function MapScreen() {
     const [postLocations, setPostLocations] = useState<PostLocation[]>([])
     const [loading, setLoading] = useState(true)
     const [viewMode, setViewMode] = useState<ViewMode>('explore')
-    const [filterMode, setFilterMode] = useState<FilterMode>('all')
     const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null)
 
     // Thread modal state
@@ -170,8 +168,8 @@ export default function MapScreen() {
                 const { status } = await Location.requestForegroundPermissionsAsync()
                 if (status !== 'granted') {
                     Alert.alert(
-                        'Location Permission',
-                        'Location permission is needed to show your position on the map'
+                        'Location Required',
+                        'Location permission is required to use the map and discover nearby shots. Please enable location in your device settings.'
                     )
                     return
                 }
@@ -180,12 +178,18 @@ export default function MapScreen() {
                 setUserLocation(location)
 
                 // Center map on user's location
-                setRegion({
+                const newRegion = {
                     latitude: location.coords.latitude,
                     longitude: location.coords.longitude,
                     latitudeDelta: 0.0922,
                     longitudeDelta: 0.0421,
-                })
+                }
+                setRegion(newRegion)
+
+                // Animate map to user's location
+                if (mapRef.current) {
+                    mapRef.current.animateToRegion(newRegion, 1000)
+                }
             } catch (error) {
                 console.error('Error getting location:', error)
             }
@@ -205,12 +209,16 @@ export default function MapScreen() {
             let postsQuery
 
             if (viewMode === 'explore') {
-                // Show all original posts with locations
+                // Show trending original shots (created or caught in last 14 days)
+                const fourteenDaysAgo = new Date()
+                fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+
                 postsQuery = query(
                     collection(db, 'posts'),
                     where('hasLocation', '==', true),
                     where('isOriginal', '==', true),
-                    orderBy('catchCount', 'desc')
+                    where('createdAt', '>=', fourteenDaysAgo),
+                    orderBy('createdAt', 'desc')
                 )
             } else {
                 // Show posts where user is author OR posts where user has a catch
@@ -242,18 +250,21 @@ export default function MapScreen() {
                 // Fetch those root posts
                 const caughtPosts: Post[] = []
                 for (const rootId of caughtRootIds) {
-                    const rootPostQuery = query(
-                        collection(db, 'posts'),
-                        where('id', '==', rootId),
-                        where('hasLocation', '==', true)
-                    )
-                    const rootPostSnapshot = await getDocs(rootPostQuery)
-                    if (!rootPostSnapshot.empty) {
-                        const rootPost = {
-                            id: rootPostSnapshot.docs[0].id,
-                            ...rootPostSnapshot.docs[0].data(),
-                        } as Post
-                        caughtPosts.push(rootPost)
+                    try {
+                        const rootPostDoc = await getDoc(doc(db, 'posts', rootId))
+                        if (rootPostDoc.exists()) {
+                            const rootPost = {
+                                id: rootPostDoc.id,
+                                ...rootPostDoc.data(),
+                            } as Post
+                            // Only include if it has location
+                            if (rootPost.hasLocation) {
+                                caughtPosts.push(rootPost)
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching root post ${rootId}:`, error)
+                        // Skip this post if it doesn't exist or there's an error
                     }
                 }
 
@@ -324,65 +335,80 @@ export default function MapScreen() {
         return R * c
     }
 
-    // Filter posts based on selected filter
+    // Filter posts based on view mode
     const getFilteredPosts = (): Post[] => {
         let filtered = [...posts]
 
-        switch (filterMode) {
-            case 'popular':
-                filtered = filtered.filter((post) => post.catchCount >= 5)
-                break
-            case 'trending':
-                // Posts created in the last 7 days
-                const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-                filtered = filtered.filter((post) => {
-                    const postDate = post.createdAt?.toMillis?.() || 0
-                    return postDate >= sevenDaysAgo
-                })
-                break
-            case 'nearby':
-                // Posts within 10km of user's location
-                if (userLocation) {
-                    filtered = filtered.filter((post) => {
-                        const location = postLocations.find((loc) => loc.postId === post.id)
-                        if (!location) return false
+        if (viewMode === 'explore') {
+            // Explore mode: Show popular nearby trending shots
 
-                        const distance = getDistanceInMeters(
-                            userLocation.coords.latitude,
-                            userLocation.coords.longitude,
-                            location.latitude,
-                            location.longitude
-                        )
-                        return distance <= 10000 // 10km
-                    })
+            // 1. Filter to nearby (within 25km of user)
+            if (userLocation) {
+                filtered = filtered.filter((post) => {
+                    const location = postLocations.find((loc) => loc.postId === post.id)
+                    if (!location) return false
+
+                    const distance = getDistanceInMeters(
+                        userLocation.coords.latitude,
+                        userLocation.coords.longitude,
+                        location.latitude,
+                        location.longitude
+                    )
+                    return distance <= 25000 // 25km radius
+                })
+            }
+
+            // 2. Sort by popularity (catch count) and recency
+            filtered.sort((a, b) => {
+                // Prioritize shots with catches
+                if (a.catchCount !== b.catchCount) {
+                    return b.catchCount - a.catchCount
                 }
-                break
-            default:
-                break
+                // Then by recency
+                const aTime = a.createdAt?.toMillis?.() || 0
+                const bTime = b.createdAt?.toMillis?.() || 0
+                return bTime - aTime
+            })
+
+            // 3. Limit to max 30 markers to prevent clutter
+            return filtered.slice(0, 30)
         }
 
+        // My Catches mode: Show all user's posts and catches
         return filtered
     }
 
     const filteredPosts = getFilteredPosts()
 
-    // Get markers to display
-    const markers = postLocations
-        .filter((loc) => filteredPosts.find((post) => post.id === loc.postId))
-        .map((loc) => {
-            const post = posts.find((p) => p.id === loc.postId)
-            return { ...loc, post }
+    // Get markers to display - use filteredPosts which have already been filtered
+    const markers = filteredPosts
+        .map((post) => {
+            const location = postLocations.find((loc) => loc.postId === post.id)
+            if (!location) {
+                return null
+            }
+            return { ...location, post }
         })
-        .filter((marker) => marker.post !== undefined)
+        .filter((marker): marker is { postId: string; latitude: number; longitude: number; post: Post } =>
+            marker !== null
+        )
 
-    const handleMarkerPress = (post: Post) => {
+    const handleMarkerPress = (post: Post | undefined) => {
+        if (!post) {
+            console.error('Marker pressed but post is undefined')
+            Alert.alert('Error', 'This shot is no longer available')
+            return
+        }
         setSelectedPost(post)
         setShowThreadModal(true)
     }
 
     const handleThreadModalClose = () => {
         setShowThreadModal(false)
-        setSelectedPost(null)
+        // Small delay to ensure modal is fully closed before clearing state
+        setTimeout(() => {
+            setSelectedPost(null)
+        }, 300)
     }
 
     const handlePostUpdate = (updatedPost: Post) => {
@@ -439,79 +465,54 @@ export default function MapScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Filter Buttons */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.filterContainer}
-                contentContainerStyle={styles.filterContent}
+            {/* Map - always rendered, markers update based on view mode */}
+            <MapView
+                ref={mapRef}
+                style={styles.map}
+                provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                initialRegion={region}
+                showsUserLocation
+                showsMyLocationButton
+                customMapStyle={colorScheme === 'dark' ? darkMapStyle : []}
             >
-                {(['all', 'popular', 'trending', 'nearby'] as FilterMode[]).map((filter) => (
-                    <TouchableOpacity
-                        key={filter}
-                        style={[
-                            styles.filterButton,
-                            filterMode === filter && styles.filterButtonActive,
-                        ]}
-                        onPress={() => setFilterMode(filter)}
+                {markers.map((marker) => (
+                    <Marker
+                        key={marker.postId}
+                        coordinate={{
+                            latitude: marker.latitude,
+                            longitude: marker.longitude,
+                        }}
+                        onPress={() => {
+                            handleMarkerPress(marker.post)
+                        }}
                     >
-                        <Text
-                            style={[
-                                styles.filterText,
-                                filterMode === filter && styles.filterTextActive,
-                            ]}
-                        >
-                            {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                        </Text>
-                    </TouchableOpacity>
+                        <View style={styles.customMarker}>
+                            <Ionicons name="location" size={32} color={colors.primary} />
+                            {marker.post.catchCount > 0 && (
+                                <View style={styles.markerBadge}>
+                                    <Text style={styles.markerBadgeText}>
+                                        {marker.post.catchCount}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    </Marker>
                 ))}
-            </ScrollView>
+            </MapView>
 
-            {/* Map */}
-            {loading ? (
-                <View style={styles.loadingContainer}>
+            {/* Loading overlay */}
+            {loading && (
+                <View style={styles.loadingOverlay}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={styles.loadingText}>Loading posts...</Text>
+                    <Text style={styles.loadingText}>Loading shots...</Text>
                 </View>
-            ) : (
-                <MapView
-                    ref={mapRef}
-                    style={styles.map}
-                    provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                    initialRegion={region}
-                    showsUserLocation
-                    showsMyLocationButton
-                    customMapStyle={colorScheme === 'dark' ? darkMapStyle : []}
-                >
-                    {markers.map((marker) => (
-                        <Marker
-                            key={marker.postId}
-                            coordinate={{
-                                latitude: marker.latitude,
-                                longitude: marker.longitude,
-                            }}
-                            onPress={() => handleMarkerPress(marker.post!)}
-                        >
-                            <View style={styles.customMarker}>
-                                <Ionicons name="location" size={32} color={colors.primary} />
-                                {marker.post!.catchCount > 0 && (
-                                    <View style={styles.markerBadge}>
-                                        <Text style={styles.markerBadgeText}>
-                                            {marker.post!.catchCount}
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-                        </Marker>
-                    ))}
-                </MapView>
             )}
 
             {/* Post count indicator */}
             {!loading && (
                 <View style={styles.postCountContainer}>
                     <Text style={styles.postCountText}>
-                        {filteredPosts.length} {filteredPosts.length === 1 ? 'post' : 'posts'}
+                        {filteredPosts.length} {filteredPosts.length === 1 ? 'shot' : 'shots'}
                     </Text>
                 </View>
             )}
@@ -585,9 +586,9 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     filterButton: {
-        paddingVertical: 8,
-        paddingHorizontal: 16,
-        borderRadius: 16,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 20,
         backgroundColor: colors.cardBackground,
         borderWidth: 1,
         borderColor: colors.border,
@@ -612,6 +613,17 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    loadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
     },
     loadingText: {
         marginTop: 12,

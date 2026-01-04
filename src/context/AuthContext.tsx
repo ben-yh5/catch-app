@@ -72,7 +72,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 username: username,
                 email: email,
                 totalCatches: 0,
-                bookmarkedPosts: [],
                 followers: [],
                 following: [],
                 pushToken: null,

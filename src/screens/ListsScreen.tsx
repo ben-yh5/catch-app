@@ -15,6 +15,7 @@ import { db } from '@/services/firebase'
 import { useAuth } from '@/context/AuthContext'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
+import { colors } from '@/theme/colors'
 
 interface List {
     id: string
@@ -140,53 +141,41 @@ export default function ListsScreen() {
     }
 
     const renderListItem = ({ item }: { item: List }) => {
-        const isOwner = user?.uid === item.creatorId
-        const isSavedList = item.isSavedList || item.name === 'Saved'
+        const isPrivate = !item.isPublic
 
         return (
             <TouchableOpacity
-                style={[styles.listItem, isSavedList && styles.savedListItem]}
+                style={styles.listItem}
                 onPress={() => router.push(`/list-detail?listId=${item.id}` as any)}
             >
                 <View style={styles.listContent}>
                     <View style={styles.listHeader}>
                         <Ionicons
-                            name={isSavedList ? 'bookmark' : 'list'}
+                            name={isPrivate ? 'lock-closed' : 'list'}
                             size={24}
-                            color={isSavedList ? '#FFB800' : '#007AFF'}
+                            color="#007AFF"
                         />
                         <View style={styles.listInfo}>
                             <Text style={styles.listName}>{item.name}</Text>
-                            {item.description && !isSavedList ? (
+                            {item.description ? (
                                 <Text style={styles.listDescription} numberOfLines={2}>
                                     {item.description}
                                 </Text>
                             ) : null}
                             <Text style={styles.listMeta}>
-                                {item.postIds.length} {item.postIds.length === 1 ? 'post' : 'posts'}
+                                {item.postIds.length} {item.postIds.length === 1 ? 'shot' : 'shots'}
                                 {activeTab === 'community' ? ` • @${item.creatorUsername}` : ''}
                             </Text>
                         </View>
                     </View>
                 </View>
-                {isOwner && activeTab === 'my' && !isSavedList && (
-                    <TouchableOpacity
-                        style={styles.deleteButton}
-                        onPress={(e) => {
-                            e.stopPropagation()
-                            handleDeleteList(item.id, item.name)
-                        }}
-                    >
-                        <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-                    </TouchableOpacity>
-                )}
             </TouchableOpacity>
         )
     }
 
     const renderEmptyState = () => (
         <View style={styles.emptyContainer}>
-            <Ionicons name="list-outline" size={64} color="#ccc" />
+            <Ionicons name="list-outline" size={64} color={colors.textTertiary} />
             <Text style={styles.emptyText}>
                 {activeTab === 'my' ? 'No Lists Yet' : 'No Community Lists'}
             </Text>
@@ -265,22 +254,23 @@ export default function ListsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: colors.background,
     },
     header: {
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
+        borderBottomColor: colors.border,
     },
     title: {
         fontSize: 28,
         fontWeight: 'bold',
+        color: colors.textPrimary,
     },
     tabContainer: {
         flexDirection: 'row',
         borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
+        borderBottomColor: colors.border,
     },
     tab: {
         flex: 1,
@@ -290,14 +280,14 @@ const styles = StyleSheet.create({
         borderBottomColor: 'transparent',
     },
     activeTab: {
-        borderBottomColor: '#007AFF',
+        borderBottomColor: colors.primary,
     },
     tabText: {
         fontSize: 16,
-        color: '#666',
+        color: colors.textTertiary,
     },
     activeTabText: {
-        color: '#007AFF',
+        color: colors.primary,
         fontWeight: '600',
     },
     loadingContainer: {
@@ -311,18 +301,13 @@ const styles = StyleSheet.create({
     },
     listItem: {
         flexDirection: 'row',
-        backgroundColor: '#f9f9f9',
+        backgroundColor: colors.card,
         borderRadius: 12,
         padding: 16,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#e0e0e0',
+        borderColor: colors.border,
         alignItems: 'center',
-    },
-    savedListItem: {
-        backgroundColor: '#FFF9E6',
-        borderColor: '#FFD700',
-        borderWidth: 2,
     },
     listContent: {
         flex: 1,
@@ -339,15 +324,16 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '600',
         marginBottom: 4,
+        color: colors.textPrimary,
     },
     listDescription: {
         fontSize: 14,
-        color: '#666',
+        color: colors.textSecondary,
         marginBottom: 6,
     },
     listMeta: {
         fontSize: 12,
-        color: '#999',
+        color: colors.textTertiary,
     },
     deleteButton: {
         padding: 8,
@@ -362,12 +348,12 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#999',
+        color: colors.textTertiary,
         marginTop: 16,
     },
     emptySubtext: {
         fontSize: 14,
-        color: '#ccc',
+        color: colors.textTertiary,
         marginTop: 8,
         textAlign: 'center',
     },
@@ -377,7 +363,7 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: '#007AFF',
+        backgroundColor: colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#000',

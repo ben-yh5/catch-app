@@ -29,6 +29,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Image } from 'expo-image'
 import ThreadModal from '@/components/ThreadModal'
+import { colors } from '@/theme/colors'
 
 interface Post {
     id: string
@@ -215,7 +216,7 @@ export default function ListDetailScreen() {
                         style={styles.removeButton}
                         onPress={() => handleRemovePost(item.id)}
                     >
-                        <Ionicons name="close-circle" size={24} color="#FF3B30" />
+                        <Ionicons name="close-circle" size={24} color={colors.danger} />
                     </TouchableOpacity>
                 )}
             </View>
@@ -224,9 +225,9 @@ export default function ListDetailScreen() {
 
     const renderEmptyState = () => (
         <View style={styles.emptyContainer}>
-            <Ionicons name="images-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>No Posts Yet</Text>
-            <Text style={styles.emptySubtext}>Add posts to this list from the thread modal</Text>
+            <Ionicons name="images-outline" size={64} color={colors.textTertiary} />
+            <Text style={styles.emptyText}>No Shots Yet</Text>
+            <Text style={styles.emptySubtext}>Add shots to this list from any thread</Text>
         </View>
     )
 
@@ -235,7 +236,7 @@ export default function ListDetailScreen() {
     if (loading || !list) {
         return (
             <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
-                <ActivityIndicator size="large" color="#007AFF" />
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         )
     }
@@ -245,7 +246,7 @@ export default function ListDetailScreen() {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#000" />
+                    <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
                 </TouchableOpacity>
                 <View style={styles.headerContent}>
                     <Text style={styles.listName}>{list.name}</Text>
@@ -253,7 +254,7 @@ export default function ListDetailScreen() {
                         <Text style={styles.listDescription}>{list.description}</Text>
                     ) : null}
                     <Text style={styles.listMeta}>
-                        {list.postIds.length} {list.postIds.length === 1 ? 'post' : 'posts'} •
+                        {list.postIds.length} {list.postIds.length === 1 ? 'shot' : 'shots'} •
                         @{list.creatorUsername}
                     </Text>
                 </View>
@@ -263,10 +264,10 @@ export default function ListDetailScreen() {
                             onPress={() => router.push(`/create-list?listId=${listId}` as any)}
                             style={styles.iconButton}
                         >
-                            <Ionicons name="pencil" size={20} color="#007AFF" />
+                            <Ionicons name="pencil" size={20} color={colors.primary} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={handleDeleteList} style={styles.iconButton}>
-                            <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                            <Ionicons name="trash-outline" size={20} color={colors.danger} />
                         </TouchableOpacity>
                     </View>
                 )}
@@ -299,13 +300,13 @@ export default function ListDetailScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: colors.background,
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        backgroundColor: colors.background,
     },
     header: {
         flexDirection: 'row',
@@ -313,7 +314,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
+        borderBottomColor: colors.border,
     },
     backButton: {
         padding: 4,
@@ -326,15 +327,16 @@ const styles = StyleSheet.create({
         fontSize: 22,
         fontWeight: 'bold',
         marginBottom: 4,
+        color: colors.textPrimary,
     },
     listDescription: {
         fontSize: 14,
-        color: '#666',
+        color: colors.textSecondary,
         marginBottom: 4,
     },
     listMeta: {
         fontSize: 12,
-        color: '#999',
+        color: colors.textTertiary,
     },
     headerActions: {
         flexDirection: 'row',
@@ -363,7 +365,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 4,
         right: 4,
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
         borderRadius: 12,
     },
     emptyContainer: {
@@ -375,12 +377,12 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#999',
+        color: colors.textSecondary,
         marginTop: 16,
     },
     emptySubtext: {
         fontSize: 14,
-        color: '#ccc',
+        color: colors.textTertiary,
         marginTop: 8,
         textAlign: 'center',
         paddingHorizontal: 40,

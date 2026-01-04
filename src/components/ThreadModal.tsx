@@ -43,7 +43,7 @@ import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import UnifiedCameraView from './UnifiedCameraView'
 import UnifiedPreviewScreen from './UnifiedPreviewScreen'
-import AddToListModal from './AddToListModal'
+import ListSelectionBottomSheet from './ListSelectionBottomSheet'
 
 interface Post {
     id: string
@@ -178,6 +178,14 @@ export default function ThreadModal({
                     id: rootDoc.id,
                     ...rootDoc.data(),
                 } as Post)
+            } else {
+                // Root post was deleted, but we might have been passed a catch
+                // Just show the post we have
+                console.warn('Root post not found, showing single post')
+                setThreadPosts([post])
+                setCurrentIndex(0)
+                setLoadingThread(false)
+                return
             }
 
             // Fetch all catches in this thread
@@ -195,6 +203,14 @@ export default function ThreadModal({
                 } as Post)
             })
 
+            if (posts.length === 0) {
+                // No posts found in thread, close modal with error
+                Alert.alert('Error', 'This shot is no longer available')
+                onClose()
+                setLoadingThread(false)
+                return
+            }
+
             setThreadPosts(posts)
 
             // Set initial index
@@ -203,9 +219,8 @@ export default function ThreadModal({
             setCurrentIndex(index >= 0 ? index : 0)
         } catch (error) {
             console.error('Error fetching thread:', error)
-            // Fallback to just showing the single post
-            setThreadPosts([post])
-            setCurrentIndex(0)
+            Alert.alert('Error', 'Failed to load shot details')
+            onClose()
         } finally {
             setLoadingThread(false)
         }
@@ -931,7 +946,7 @@ export default function ThreadModal({
                                             disabled={threadPosts[0]?.authorId === user?.uid}
                                         >
                                             <Ionicons name="camera" size={20} color="#fff" />
-                                            <Text style={styles.catchButtonText}>Catch This Location</Text>
+                                            <Text style={styles.catchButtonText}>Catch This Shot</Text>
                                         </TouchableOpacity>
 
                                         {/* Get Directions Button */}
@@ -952,9 +967,9 @@ export default function ThreadModal({
                 </View>
             </View>
 
-            {/* Add to List Modal */}
+            {/* List Selection Bottom Sheet */}
             {currentPost && (
-                <AddToListModal
+                <ListSelectionBottomSheet
                     visible={showAddToListModal}
                     onClose={() => setShowAddToListModal(false)}
                     postId={currentPost.id}

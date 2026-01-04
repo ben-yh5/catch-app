@@ -3,9 +3,6 @@ import * as admin from 'firebase-admin'
 
 admin.initializeApp()
 
-// Export test functions (only for development/testing)
-export * from './test-functions'
-
 const CATCH_RADIUS_METERS = 100 // Define acceptable proximity (100 meters)
 
 // Haversine formula to calculate distance between two coordinates

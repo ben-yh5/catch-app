@@ -5,8 +5,9 @@ import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useNavigation } from 'expo-router'
 import ThreadModal from '@/components/ThreadModal'
+import ListSelectionBottomSheet from '@/components/ListSelectionBottomSheet'
 import { useIsFocused } from '@react-navigation/native'
-import { toggleSavedPost, isPostSaved } from '@/utils/listUtils'
+import { isPostSaved } from '@/utils/listUtils'
 import {
     collection,
     deleteDoc,
@@ -73,6 +74,8 @@ export default function ExploreScreen() {
     const [modalVisible, setModalVisible] = useState(false)
     const [showStaleIndicator, setShowStaleIndicator] = useState(false)
     const [staleRefreshing, setStaleRefreshing] = useState(false)
+    const [showListSheet, setShowListSheet] = useState(false)
+    const [selectedPostForList, setSelectedPostForList] = useState<string | null>(null)
     const flatListRef = React.useRef<FlatList>(null)
     const lastInteractionTimeRef = React.useRef<number>(Date.now())
     const interactionTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -95,22 +98,38 @@ export default function ExploreScreen() {
         }, 2 * 60 * 1000) // 2 minutes
     }, [isStale, isFocused])
 
-    const fetchSavedStatus = async () => {
+    const fetchSavedStatus = useCallback(async () => {
         if (!user || posts.length === 0) return
         try {
             // Check which posts are saved
-            const savedSet = new Set<string>()
-            for (const post of posts) {
-                const isSaved = await isPostSaved(user.uid, post.id)
-                if (isSaved) {
-                    savedSet.add(post.id)
-                }
-            }
-            setSavedPosts(savedSet)
+            const postIds = posts.map(p => p.id)
+            const savedStatuses = await Promise.all(
+                postIds.map(async (postId) => ({
+                    postId,
+                    isSaved: await isPostSaved(user.uid, postId)
+                }))
+            )
+
+            setSavedPosts(prev => {
+                const newSet = new Set(prev)
+                // Update status for posts in current view
+                savedStatuses.forEach(({ postId, isSaved }) => {
+                    if (isSaved) {
+                        newSet.add(postId)
+                    } else {
+                        // Only remove if post exists in current posts list
+                        // This prevents removing posts that were just saved but aren't in view
+                        if (postIds.includes(postId)) {
+                            newSet.delete(postId)
+                        }
+                    }
+                })
+                return newSet
+            })
         } catch (error) {
             console.error('Error fetching saved status:', error)
         }
-    }
+    }, [user, posts])
 
     const fetchPosts = async (loadMore = false) => {
         if (loadMore && (!hasMore || loadingMore)) return
@@ -257,29 +276,8 @@ export default function ExploreScreen() {
 
     const handleToggleSave = async (postId: string) => {
         if (!user) return
-
-        const isSaved = savedPosts.has(postId)
-
-        // Optimistic update
-        const newSavedPosts = new Set(savedPosts)
-        if (isSaved) {
-            newSavedPosts.delete(postId)
-        } else {
-            newSavedPosts.add(postId)
-        }
-        setSavedPosts(newSavedPosts)
-
-        try {
-            const userDoc = await getDoc(doc(db, 'users', user.uid))
-            const username = userDoc.exists() ? userDoc.data().username : 'Unknown'
-
-            await toggleSavedPost(user.uid, username, postId)
-        } catch (error) {
-            console.error('Error toggling save:', error)
-            // Revert on error
-            setSavedPosts(savedPosts)
-            Alert.alert('Error', 'Failed to save post. Please try again.')
-        }
+        setSelectedPostForList(postId)
+        setShowListSheet(true)
     }
 
     const handleShare = async (postId: string) => {
@@ -485,7 +483,7 @@ export default function ExploreScreen() {
         return (
             <View style={styles.centerContainer}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Loading posts...</Text>
+                <Text style={styles.loadingText}>Loading shots...</Text>
             </View>
         )
     }
@@ -526,9 +524,9 @@ export default function ExploreScreen() {
                                 size={80}
                                 color="#ccc"
                             />
-                            <Text style={styles.emptyTitle}>No Posts Yet</Text>
+                            <Text style={styles.emptyTitle}>No Shots Yet</Text>
                             <Text style={styles.emptySubtitle}>
-                                Be the first to share a photo!
+                                Be the first to share a shot!
                             </Text>
                         </View>
                     }
@@ -573,6 +571,31 @@ export default function ExploreScreen() {
                         setPosts(posts.filter((p) => p.id !== postId))
                     }}
                 />
+
+                {selectedPostForList && (
+                    <ListSelectionBottomSheet
+                        visible={showListSheet}
+                        onClose={() => {
+                            setShowListSheet(false)
+                            setSelectedPostForList(null)
+                        }}
+                        postId={selectedPostForList}
+                        onSaveStateChange={(isSaved) => {
+                            // Update the saved state for this specific post
+                            if (selectedPostForList) {
+                                setSavedPosts(prev => {
+                                    const newSet = new Set(prev)
+                                    if (isSaved) {
+                                        newSet.add(selectedPostForList)
+                                    } else {
+                                        newSet.delete(selectedPostForList)
+                                    }
+                                    return newSet
+                                })
+                            }
+                        }}
+                    />
+                )}
 
                 {showStaleIndicator && (
                     <View style={[styles.staleIndicatorContainer, { top: insets.top + 10 }]}>

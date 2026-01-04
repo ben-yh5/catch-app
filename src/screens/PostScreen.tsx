@@ -255,9 +255,9 @@ export default function PostScreen() {
                 color="#ccc"
                 style={styles.icon}
             />
-            <Text style={styles.title}>Share a Location</Text>
+            <Text style={styles.title}>Share a Shot</Text>
             <Text style={styles.subtitle}>
-                Discover and share photo-worthy places around the world
+                Capture and share photo-worthy views around the world
             </Text>
 
             <TouchableOpacity
