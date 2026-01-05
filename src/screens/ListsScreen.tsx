@@ -117,29 +117,6 @@ export default function ListsScreen() {
         setRefreshing(false)
     }
 
-    const handleDeleteList = (listId: string, listName: string) => {
-        Alert.alert(
-            'Delete List',
-            `Are you sure you want to delete "${listName}"?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await deleteDoc(doc(db, 'lists', listId))
-                            setLists((prev) => prev.filter((list) => list.id !== listId))
-                        } catch (error) {
-                            console.error('Error deleting list:', error)
-                            Alert.alert('Error', 'Failed to delete list')
-                        }
-                    },
-                },
-            ]
-        )
-    }
-
     const renderListItem = ({ item }: { item: List }) => {
         const isPrivate = !item.isPublic
 

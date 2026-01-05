@@ -345,20 +345,4 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: colors.textTertiary,
     },
-    createButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 14,
-        marginHorizontal: 16,
-        marginTop: 8,
-        backgroundColor: colors.cardElevated,
-        borderRadius: 12,
-        gap: 8,
-    },
-    createButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.primary,
-    },
 })

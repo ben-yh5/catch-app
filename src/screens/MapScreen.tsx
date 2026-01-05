@@ -12,7 +12,6 @@ import {
     Platform,
     ActivityIndicator,
     TouchableOpacity,
-    ScrollView,
     useColorScheme,
 } from 'react-native'
 import MapView, { Marker, Region, PROVIDER_GOOGLE } from 'react-native-maps'
@@ -575,44 +574,8 @@ const styles = StyleSheet.create({
     toggleTextActive: {
         color: colors.white,
     },
-    filterContainer: {
-        backgroundColor: colors.background,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    filterContent: {
-        paddingHorizontal: 12,
-        paddingBottom: 12,
-        gap: 8,
-    },
-    filterButton: {
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 20,
-        backgroundColor: colors.cardBackground,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    filterButtonActive: {
-        backgroundColor: colors.primary + '20',
-        borderColor: colors.primary,
-    },
-    filterText: {
-        fontSize: 13,
-        fontWeight: '500',
-        color: colors.textSecondary,
-    },
-    filterTextActive: {
-        color: colors.primary,
-        fontWeight: '600',
-    },
     map: {
         flex: 1,
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
     },
     loadingOverlay: {
         position: 'absolute',
