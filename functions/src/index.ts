@@ -1,11 +1,29 @@
+/**
+ * Firebase Cloud Functions for Catch App
+ *
+ * This module provides server-side functions for:
+ * - Location validation for catch functionality
+ * - Post location data retrieval
+ * - Post lifecycle management (creation/deletion)
+ * - Push notifications for social features
+ */
+
 import * as functions from 'firebase-functions'
 import * as admin from 'firebase-admin'
 
 admin.initializeApp()
 
-const CATCH_RADIUS_METERS = 100 // Define acceptable proximity (100 meters)
+/** Maximum distance (in meters) a user must be from a post location to catch it */
+const CATCH_RADIUS_METERS = 100
 
-// Haversine formula to calculate distance between two coordinates
+/**
+ * Calculates the distance between two geographic coordinates using the Haversine formula
+ * @param lat1 - Latitude of first point
+ * @param lon1 - Longitude of first point
+ * @param lat2 - Latitude of second point
+ * @param lon2 - Longitude of second point
+ * @returns Distance in meters between the two points
+ */
 function getDistanceInMeters(
     lat1: number,
     lon1: number,
@@ -26,8 +44,19 @@ function getDistanceInMeters(
     return R * c
 }
 
+/**
+ * HTTPS Callable Function: Validates if a user is close enough to catch a post
+ *
+ * Security: Post coordinates are stored in a private collection (post_locations) that
+ * clients cannot access. This function is the only way to validate catch proximity
+ * without exposing exact coordinates to the client.
+ *
+ * @param data.postId - The ID of the post to catch
+ * @param data.userLat - User's current latitude
+ * @param data.userLng - User's current longitude
+ * @returns Object with validation result, distance, and required distance
+ */
 export const validateCatch = functions.https.onCall(async (data, context) => {
-    // Check authentication
     if (!context.auth) {
         throw new functions.https.HttpsError(
             'unauthenticated',
@@ -37,7 +66,6 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
 
     const { postId, userLat, userLng } = data
 
-    // Validate input
     if (!postId || userLat === undefined || userLng === undefined) {
         throw new functions.https.HttpsError(
             'invalid-argument',
@@ -46,7 +74,6 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
     }
 
     try {
-        // Verify post exists
         const postRef = admin.firestore().collection('posts').doc(postId)
         const postDoc = await postRef.get()
 
@@ -63,7 +90,7 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
             )
         }
 
-        // Get post location from private collection (server-side only)
+        // Fetch coordinates from private collection (server-side only access)
         const locationQuery = await admin
             .firestore()
             .collection('post_locations')
@@ -81,15 +108,12 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
         const locationData = locationQuery.docs[0].data()
         const { latitude: postLat, longitude: postLng } = locationData
 
-        // Calculate distance between user and post location
         const distance = getDistanceInMeters(userLat, userLng, postLat, postLng)
-
-        // Check if within acceptable radius
         const isValid = distance <= CATCH_RADIUS_METERS
 
         return {
             isValid,
-            distance: Math.round(distance), // Return distance for UI feedback
+            distance: Math.round(distance),
             requiredDistance: CATCH_RADIUS_METERS,
         }
     } catch (error: any) {
@@ -101,9 +125,16 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
     }
 })
 
-// Get location coordinates for a single post (for map pins and directions)
+/**
+ * HTTPS Callable Function: Retrieves coordinates for a single post
+ *
+ * Used for map pins and providing directions. Unlike validateCatch, this function
+ * returns the actual coordinates since they're needed for display.
+ *
+ * @param data.postId - The ID of the post
+ * @returns Object with postId, latitude, and longitude
+ */
 export const getPostLocation = functions.https.onCall(async (data, context) => {
-    // Check authentication
     if (!context.auth) {
         throw new functions.https.HttpsError(
             'unauthenticated',
@@ -113,7 +144,6 @@ export const getPostLocation = functions.https.onCall(async (data, context) => {
 
     const { postId } = data
 
-    // Validate input
     if (!postId) {
         throw new functions.https.HttpsError(
             'invalid-argument',
@@ -122,7 +152,6 @@ export const getPostLocation = functions.https.onCall(async (data, context) => {
     }
 
     try {
-        // Verify post exists
         const postRef = admin.firestore().collection('posts').doc(postId)
         const postDoc = await postRef.get()
 
@@ -139,7 +168,6 @@ export const getPostLocation = functions.https.onCall(async (data, context) => {
             )
         }
 
-        // Get post location from private collection (server-side only)
         const locationQuery = await admin
             .firestore()
             .collection('post_locations')
@@ -171,9 +199,16 @@ export const getPostLocation = functions.https.onCall(async (data, context) => {
     }
 })
 
-// Get location coordinates for multiple posts at once (for map view)
+/**
+ * HTTPS Callable Function: Retrieves coordinates for multiple posts at once
+ *
+ * Optimized for map views where multiple post locations need to be displayed.
+ * Uses batched Firestore queries to work around the 'in' operator's 10-item limit.
+ *
+ * @param data.postIds - Array of post IDs (max 500)
+ * @returns Object containing array of locations with postId, latitude, longitude
+ */
 export const getPostLocations = functions.https.onCall(async (data, context) => {
-    // Check authentication
     if (!context.auth) {
         throw new functions.https.HttpsError(
             'unauthenticated',
@@ -183,7 +218,6 @@ export const getPostLocations = functions.https.onCall(async (data, context) => 
 
     const { postIds } = data
 
-    // Validate input
     if (!postIds || !Array.isArray(postIds)) {
         throw new functions.https.HttpsError(
             'invalid-argument',
@@ -195,7 +229,6 @@ export const getPostLocations = functions.https.onCall(async (data, context) => 
         return { locations: [] }
     }
 
-    // Limit to 500 posts to prevent excessive queries
     if (postIds.length > 500) {
         throw new functions.https.HttpsError(
             'invalid-argument',
@@ -210,19 +243,17 @@ export const getPostLocations = functions.https.onCall(async (data, context) => 
             longitude: number
         }[] = []
 
-        // Firestore 'in' queries are limited to 10 items, so we need to batch
+        // Firestore 'in' queries are limited to 10 items, so batch the requests
         const batchSize = 10
         for (let i = 0; i < postIds.length; i += batchSize) {
             const batch = postIds.slice(i, i + batchSize)
 
-            // Query locations for this batch
             const locationQuery = await admin
                 .firestore()
                 .collection('post_locations')
                 .where('postId', 'in', batch)
                 .get()
 
-            // Add to results
             locationQuery.docs.forEach((doc) => {
                 const locationData = doc.data()
                 locations.push({
@@ -243,7 +274,15 @@ export const getPostLocations = functions.https.onCall(async (data, context) => 
     }
 })
 
-// Firestore trigger: When a post is created, increment user's post count and notify followers
+/**
+ * Firestore Trigger: Handles post creation events
+ *
+ * Performs two main tasks:
+ * 1. Increments user's totalCatches count if the new post is a catch
+ * 2. Sends push notifications to all followers when a user creates an original post
+ *
+ * Note: Catches don't trigger follower notifications to avoid spam
+ */
 export const onPostCreated = functions.firestore
     .document('posts/{postId}')
     .onCreate(async (snap) => {
@@ -283,7 +322,6 @@ export const onPostCreated = functions.firestore
                     `Notifying ${followers.length} followers about new post from ${authorUsername}`
                 )
 
-                // Notify each follower
                 for (const followerId of followers) {
                     try {
                         const followerDoc = await admin
@@ -307,7 +345,6 @@ export const onPostCreated = functions.firestore
                             continue
                         }
 
-                        // Send push notification
                         await sendPushNotification(
                             pushToken,
                             'New Post',
@@ -327,7 +364,6 @@ export const onPostCreated = functions.firestore
                             `Error sending notification to follower ${followerId}:`,
                             error
                         )
-                        // Continue with other followers even if one fails
                     }
                 }
             }
@@ -336,7 +372,16 @@ export const onPostCreated = functions.firestore
         }
     })
 
-// Firestore trigger: When a post is deleted, handle thread promotion and user counts
+/**
+ * Firestore Trigger: Handles post deletion events
+ *
+ * Complex logic handles different deletion scenarios:
+ * 1. Catch deleted: Decrements user's totalCatches and root post's catchCount
+ * 2. Root with catches deleted: Promotes oldest catch to new root, updates all thread references
+ * 3. Root without catches deleted: Simply cleans up location data
+ *
+ * Also removes the post from any lists containing it
+ */
 export const onPostDeleted = functions.firestore
     .document('posts/{postId}')
     .onDelete(async (snap) => {
@@ -382,7 +427,6 @@ export const onPostDeleted = functions.firestore
             if (postData.isOriginal) {
                 functions.logger.info(`Root post ${postId} deleted, checking for thread promotion`)
 
-                // Find all catches in this thread
                 const catchesQuery = await admin
                     .firestore()
                     .collection('posts')
@@ -391,24 +435,22 @@ export const onPostDeleted = functions.firestore
                     .get()
 
                 if (!catchesQuery.empty) {
-                    // Get the oldest catch to promote
                     const newRootDoc = catchesQuery.docs[0]
                     const newRootId = newRootDoc.id
 
                     functions.logger.info(`Promoting catch ${newRootId} to new root`)
 
-                    // Update the new root post
                     const batch = admin.firestore().batch()
 
-                    // Make the oldest catch the new root
+                    // Promote oldest catch to root
                     batch.update(newRootDoc.ref, {
                         isOriginal: true,
                         parentPostId: null,
                         rootPostId: null,
-                        catchCount: postData.catchCount - 1, // Transfer catch count minus 1 (this catch no longer counts)
+                        catchCount: postData.catchCount - 1,
                     })
 
-                    // Update all other catches to point to the new root
+                    // Update remaining catches to point to new root
                     for (let i = 1; i < catchesQuery.docs.length; i++) {
                         const catchDoc = catchesQuery.docs[i]
                         batch.update(catchDoc.ref, {
@@ -417,7 +459,7 @@ export const onPostDeleted = functions.firestore
                         })
                     }
 
-                    // Transfer location data from deleted root to new root
+                    // Delete old root's location data (new root keeps its own)
                     const oldLocationQuery = await admin
                         .firestore()
                         .collection('post_locations')
@@ -425,11 +467,6 @@ export const onPostDeleted = functions.firestore
                         .limit(1)
                         .get()
 
-                    // The new root should already have location data (it was a valid catch)
-                    // But if for some reason it doesn't and the old root did, we could copy it
-                    // For now, the new root keeps its own location data
-
-                    // Delete the old root's location data
                     if (!oldLocationQuery.empty) {
                         batch.delete(oldLocationQuery.docs[0].ref)
                     }
@@ -437,7 +474,7 @@ export const onPostDeleted = functions.firestore
                     await batch.commit()
                     functions.logger.info(`Thread promotion complete. New root: ${newRootId}`)
                 } else {
-                    // No catches in thread, just delete the location data
+                    // No catches in thread, just delete location data
                     const locationQuery = await admin
                         .firestore()
                         .collection('post_locations')
@@ -451,7 +488,7 @@ export const onPostDeleted = functions.firestore
                     }
                 }
             } else {
-                // Non-root post deleted - decrement root's catchCount
+                // Catch deleted - decrement root's catchCount
                 const rootPostId = postData.rootPostId
                 if (rootPostId) {
                     const rootRef = admin.firestore().collection('posts').doc(rootPostId)
@@ -464,7 +501,7 @@ export const onPostDeleted = functions.firestore
                     }
                 }
 
-                // Delete the catch's location data
+                // Delete catch's location data
                 const locationQuery = await admin
                     .firestore()
                     .collection('post_locations')
@@ -482,7 +519,16 @@ export const onPostDeleted = functions.firestore
         }
     })
 
-// Helper function to send push notification via FCM
+/**
+ * Helper function to send push notifications via Firebase Cloud Messaging
+ *
+ * Supports both Android (FCM) and iOS (APNs) with platform-specific options
+ *
+ * @param pushToken - Device push token from user document
+ * @param title - Notification title
+ * @param body - Notification message body
+ * @param data - Optional data payload for deep linking and custom handling
+ */
 async function sendPushNotification(
     pushToken: string,
     title: string,
@@ -518,7 +564,12 @@ async function sendPushNotification(
     }
 }
 
-// Firestore trigger: When a user's followers array is updated, send notification
+/**
+ * Firestore Trigger: Handles new follower notifications
+ *
+ * Detects when a user gains new followers by comparing before/after states
+ * of the followers array, then sends a push notification for each new follower
+ */
 export const onUserFollowed = functions.firestore
     .document('users/{userId}')
     .onUpdate(async (change, context) => {
@@ -526,17 +577,16 @@ export const onUserFollowed = functions.firestore
         const beforeData = change.before.data()
         const afterData = change.after.data()
 
-        // Check if followers array was modified
         const beforeFollowers = beforeData.followers || []
         const afterFollowers = afterData.followers || []
 
-        // Find new followers (added to the array)
+        // Find new followers added to the array
         const newFollowers = afterFollowers.filter(
             (followerId: string) => !beforeFollowers.includes(followerId)
         )
 
         if (newFollowers.length === 0) {
-            return // No new followers
+            return
         }
 
         const pushToken = afterData.pushToken
@@ -547,7 +597,6 @@ export const onUserFollowed = functions.firestore
             return
         }
 
-        // Get the follower's username for each new follower
         for (const followerId of newFollowers) {
             try {
                 const followerDoc = await admin
@@ -564,7 +613,6 @@ export const onUserFollowed = functions.firestore
                 const followerData = followerDoc.data()
                 const followerUsername = followerData?.username || 'Someone'
 
-                // Send push notification
                 await sendPushNotification(
                     pushToken,
                     'New Follower',

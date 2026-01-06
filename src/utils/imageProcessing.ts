@@ -1,3 +1,14 @@
+/**
+ * Image Processing Utility
+ *
+ * Handles image manipulation for posts and catches:
+ * - Crops images to 1:1 square aspect ratio
+ * - Resizes to 1080x1080px for consistent uploads
+ * - Compresses JPEGs to reduce storage costs
+ *
+ * All post images in the app are stored as 1080x1080px squares.
+ */
+
 import * as ImageManipulator from 'expo-image-manipulator'
 import { Image } from 'react-native'
 

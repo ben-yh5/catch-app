@@ -1,3 +1,16 @@
+/**
+ * List Management Utility
+ *
+ * Handles operations for the Lists feature, which replaced the deprecated
+ * bookmarkedPosts system. Users can create multiple lists to organize posts.
+ *
+ * Key Features:
+ * - Auto-creates a default "My List" for each user
+ * - Add/remove posts from lists
+ * - Check if posts are saved
+ * - Toggle quick save/unsave
+ */
+
 import { collection, query, where, getDocs, addDoc, doc, updateDoc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore'
 import { db } from '@/services/firebase'
 

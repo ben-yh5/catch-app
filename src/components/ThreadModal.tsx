@@ -1,3 +1,23 @@
+/**
+ * ThreadModal - Full-screen modal for viewing post threads
+ *
+ * This is the primary post viewing interface, showing:
+ * - Horizontal swipeable gallery of all posts in a thread (original + catches)
+ * - Interactive timeline visualization with progress dots
+ * - Post metadata (author, caption, date, catch count)
+ * - Actions: Catch, Add to List, Share, Delete (own posts only)
+ *
+ * Key Features:
+ * - Starts at initialPostId if provided, otherwise shows root post
+ * - "Catch This Location" always catches the ROOT post (not current slide)
+ * - Timeline shows thread progression with filled/unfilled dots
+ * - Deleting root post promotes oldest catch to new root (handled by Cloud Function)
+ *
+ * Thread Structure:
+ * - Root post: isOriginal=true, rootPostId=null
+ * - Catches: isOriginal=false, rootPostId=<root_id>
+ */
+
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
 import { db, storage, functions } from '@/services/firebase'

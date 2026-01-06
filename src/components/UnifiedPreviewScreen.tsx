@@ -1,3 +1,17 @@
+/**
+ * UnifiedPreviewScreen - Photo preview and caption input for posts and catches
+ *
+ * After capturing a photo, users see this screen to:
+ * - Preview their captured image
+ * - Add an optional caption (max 200 characters)
+ * - View location status (captured or not available)
+ * - Confirm or cancel the post/catch
+ *
+ * Used by:
+ * - PostScreen: Creating new posts
+ * - ThreadModal: Confirming catches
+ */
+
 import React, { useState } from 'react'
 import {
     StyleSheet,
@@ -18,7 +32,7 @@ interface UnifiedPreviewScreenProps {
     loadingText?: string
     hasLocation?: boolean
     loadingLocation?: boolean
-    originalPhotoUrl?: string // For catch mode - shows what they're trying to catch
+    originalPhotoUrl?: string
 }
 
 export default function UnifiedPreviewScreen({

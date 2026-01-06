@@ -1,3 +1,19 @@
+/**
+ * PostCard - Reusable post display component
+ *
+ * A flexible component used throughout the app to display posts.
+ * Supports multiple display modes:
+ * - Feed card: Shows username, photo, caption, stats
+ * - Preview: Shows photo with optional caption input
+ * - Gallery: Swipeable photo gallery with timeline
+ *
+ * Used in:
+ * - ExploreScreen: Feed display
+ * - ProfileScreen: Grid/feed display
+ * - ThreadModal: Full-screen gallery
+ * - UnifiedPreviewScreen: Post/catch preview
+ */
+
 import React, { useState, useRef } from 'react'
 import {
     View,
@@ -22,7 +38,6 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
 interface PostCardProps {
-    // Header
     username?: string
     onUsernamePress?: () => void
     onBackPress?: () => void

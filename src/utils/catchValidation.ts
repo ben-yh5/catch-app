@@ -1,3 +1,13 @@
+/**
+ * Catch Validation Utility
+ *
+ * Client-side wrapper for the validateCatch Cloud Function.
+ * Validates whether a user is close enough to a post's location to catch it.
+ *
+ * Security: Post coordinates are never exposed to the client - validation
+ * happens entirely server-side using the private post_locations collection.
+ */
+
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '../services/firebase'
 

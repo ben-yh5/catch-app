@@ -1,4 +1,10 @@
-// Color palette inspired by AllTrails
+/**
+ * Color Theme
+ *
+ * Dark mode color palette for the Catch app.
+ * Inspired by AllTrails with a focus on photo content.
+ */
+
 export const colors = {
     // Backgrounds
     background: '#0a0a0a', // Near black

@@ -1,3 +1,15 @@
+/**
+ * Username Validation Utility
+ *
+ * Provides username format validation and availability checking.
+ * Used during signup and username setup flows to ensure valid, unique usernames.
+ *
+ * Rules:
+ * - 3-20 characters
+ * - Letters, numbers, underscores, and hyphens only
+ * - Must be unique across all users
+ */
+
 import { collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/services/firebase'
 

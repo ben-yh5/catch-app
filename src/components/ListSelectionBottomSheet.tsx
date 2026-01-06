@@ -1,3 +1,19 @@
+/**
+ * ListSelectionBottomSheet - Modal for adding/removing posts from lists
+ *
+ * Allows users to:
+ * - View all their lists
+ * - Add/remove the current post to/from any list
+ * - Create new lists on the fly
+ * - Navigate to list detail or create-list screen
+ *
+ * Features:
+ * - Checkmarks show which lists contain the post
+ * - Optimistic UI updates with error handling
+ * - "Create New List" option at the top
+ * - Animated slide-up presentation
+ */
+
 import React, { useEffect, useState } from 'react'
 import {
     Modal,
