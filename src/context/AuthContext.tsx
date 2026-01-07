@@ -1,3 +1,16 @@
+/**
+ * AuthContext - Authentication state management
+ *
+ * Provides Firebase authentication functionality including:
+ * - Email/password authentication
+ * - Google Sign-In via OAuth
+ * - User session management
+ * - Automatic Firestore user document creation
+ *
+ * The root layout (_layout.tsx) uses this context to handle auth-based navigation
+ * and redirect users to username setup when needed.
+ */
+
 import React, { createContext, useState, useEffect, useContext } from 'react'
 import {
     onAuthStateChanged,
@@ -45,6 +58,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return unsubscribe
     }, [])
 
+    /**
+     * Sign in existing user with email and password
+     */
     const login = async (email: string, password: string) => {
         try {
             await signInWithEmailAndPassword(auth, email, password)
@@ -53,13 +69,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }
 
+    /**
+     * Create new user account with email, password, and username
+     * Automatically creates Firestore user document with default values
+     */
     const signup = async (
         email: string,
         password: string,
         username: string
     ) => {
         try {
-            // Create user account
             const userCredential = await createUserWithEmailAndPassword(
                 auth,
                 email,
@@ -72,7 +91,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 username: username,
                 email: email,
                 totalCatches: 0,
-                bookmarkedPosts: [],
                 followers: [],
                 following: [],
                 pushToken: null,
@@ -83,12 +101,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }
 
+    /**
+     * Sign in with Google OAuth
+     * For new Google users, they'll be redirected to username setup by root layout
+     * Existing users can link their Google account to an email/password account
+     */
     const loginWithGoogle = async () => {
         try {
-            // Check if your device supports Google Play
             await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true })
 
-            // Get the users ID token
             const signInResult = await GoogleSignin.signIn()
 
             const idToken = signInResult.data?.idToken
@@ -98,12 +119,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 throw new Error('No ID token found')
             }
 
-            // Create a Google credential with the token
             const googleCredential = GoogleAuthProvider.credential(idToken)
 
-            // Sign-in the user with the credential
-            const userCredential = await signInWithCredential(auth, googleCredential)
-            const user = userCredential.user
+            await signInWithCredential(auth, googleCredential)
 
             // Check if this was an account linking scenario
             if (googleEmail) {
@@ -115,7 +133,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         } catch (error: any) {
             console.error('Google Sign-In Error:', error)
 
-            // Handle account-exists-with-different-credential error
             if (error.code === 'auth/account-exists-with-different-credential') {
                 throw new Error(
                     'An account already exists with this email. Try signing in with email and password instead.'
@@ -126,10 +143,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }
 
+    /**
+     * Sign out current user from both Firebase and Google
+     */
     const logout = async () => {
         try {
             await signOut(auth)
-            // Also sign out from Google
             await GoogleSignin.signOut()
         } catch (error: any) {
             throw new Error(error.message)
@@ -143,6 +162,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     )
 }
 
+/**
+ * Hook to access authentication context
+ * Must be used within an AuthProvider
+ */
 export const useAuth = () => {
     const context = useContext(AuthContext)
     if (context === undefined) {

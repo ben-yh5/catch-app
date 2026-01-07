@@ -2,19 +2,12 @@ import { Tabs } from 'expo-router'
 import React from 'react'
 import { Ionicons } from '@expo/vector-icons'
 
-import { HapticTab } from '@/components/haptic-tab'
-import { Colors } from '@/constants/theme'
-import { useColorScheme } from '@/hooks/use-color-scheme'
-
 export default function TabLayout() {
-    const colorScheme = useColorScheme()
-
     return (
         <Tabs
             screenOptions={{
-                tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+                tabBarActiveTintColor: '#007AFF',
                 headerShown: false,
-                tabBarButton: HapticTab,
             }}
         >
             <Tabs.Screen
@@ -45,11 +38,11 @@ export default function TabLayout() {
                 }}
             />
             <Tabs.Screen
-                name="saved"
+                name="lists"
                 options={{
-                    title: 'Saved',
+                    title: 'Lists',
                     tabBarIcon: ({ color }) => (
-                        <Ionicons name="bookmark" size={28} color={color} />
+                        <Ionicons name="list" size={28} color={color} />
                     ),
                 }}
             />

@@ -48,5 +48,19 @@ service cloud.firestore {
       // No updates or deletes from clients (only Cloud Functions can delete)
       allow update, delete: if false;
     }
+
+    // Lists collection
+    match /lists/{listId} {
+      // Anyone can read lists (all lists are public)
+      allow read: if true;
+
+      // Only authenticated users can create lists
+      allow create: if request.auth != null &&
+                       request.auth.uid == request.resource.data.creatorId;
+
+      // Only creator can update/delete
+      allow update, delete: if request.auth != null &&
+                            request.auth.uid == resource.data.creatorId;
+    }
   }
 }

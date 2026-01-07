@@ -1,3 +1,16 @@
+/**
+ * UnifiedCameraView - Camera interface for both posts and catches
+ *
+ * Provides a full-screen camera experience with:
+ * - Square (1:1) aspect ratio capture
+ * - Front/back camera toggle
+ * - Optional reference image display (for catch mode)
+ *
+ * Used by:
+ * - PostScreen: Creating new original posts
+ * - ThreadModal: Catching existing posts (shows original photo as reference)
+ */
+
 import React, { useRef, useState } from 'react'
 import {
     View,
@@ -15,7 +28,7 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 interface UnifiedCameraViewProps {
     onPhotoTaken: (uri: string) => void
     onCancel: () => void
-    originalPhotoUrl?: string // For catch mode - shows the original photo below
+    originalPhotoUrl?: string
 }
 
 export default function UnifiedCameraView({

@@ -5,10 +5,10 @@ import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useNavigation } from 'expo-router'
 import ThreadModal from '@/components/ThreadModal'
+import ListSelectionBottomSheet from '@/components/ListSelectionBottomSheet'
 import { useIsFocused } from '@react-navigation/native'
+import { isPostSaved } from '@/utils/listUtils'
 import {
-    arrayRemove,
-    arrayUnion,
     collection,
     deleteDoc,
     doc,
@@ -20,7 +20,6 @@ import {
     query,
     QueryDocumentSnapshot,
     startAfter,
-    updateDoc,
     where,
 } from 'firebase/firestore'
 import React, { useCallback, useEffect, useState } from 'react'
@@ -69,12 +68,14 @@ export default function ExploreScreen() {
     const [hasMore, setHasMore] = useState(true)
     const [lastDoc, setLastDoc] =
         useState<QueryDocumentSnapshot<DocumentData> | null>(null)
-    const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([])
+    const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set())
     const [showOptionsMenu, setShowOptionsMenu] = useState<string | null>(null) // Store post ID of open menu
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
     const [showStaleIndicator, setShowStaleIndicator] = useState(false)
     const [staleRefreshing, setStaleRefreshing] = useState(false)
+    const [showListSheet, setShowListSheet] = useState(false)
+    const [selectedPostForList, setSelectedPostForList] = useState<string | null>(null)
     const flatListRef = React.useRef<FlatList>(null)
     const lastInteractionTimeRef = React.useRef<number>(Date.now())
     const interactionTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -97,17 +98,38 @@ export default function ExploreScreen() {
         }, 2 * 60 * 1000) // 2 minutes
     }, [isStale, isFocused])
 
-    const fetchBookmarks = async () => {
-        if (!user) return
+    const fetchSavedStatus = useCallback(async () => {
+        if (!user || posts.length === 0) return
         try {
-            const userDoc = await getDoc(doc(db, 'users', user.uid))
-            if (userDoc.exists()) {
-                setBookmarkedPosts(userDoc.data().bookmarkedPosts || [])
-            }
+            // Check which posts are saved
+            const postIds = posts.map(p => p.id)
+            const savedStatuses = await Promise.all(
+                postIds.map(async (postId) => ({
+                    postId,
+                    isSaved: await isPostSaved(user.uid, postId)
+                }))
+            )
+
+            setSavedPosts(prev => {
+                const newSet = new Set(prev)
+                // Update status for posts in current view
+                savedStatuses.forEach(({ postId, isSaved }) => {
+                    if (isSaved) {
+                        newSet.add(postId)
+                    } else {
+                        // Only remove if post exists in current posts list
+                        // This prevents removing posts that were just saved but aren't in view
+                        if (postIds.includes(postId)) {
+                            newSet.delete(postId)
+                        }
+                    }
+                })
+                return newSet
+            })
         } catch (error) {
-            console.error('Error fetching bookmarks:', error)
+            console.error('Error fetching saved status:', error)
         }
-    }
+    }, [user, posts])
 
     const fetchPosts = async (loadMore = false) => {
         if (loadMore && (!hasMore || loadingMore)) return
@@ -164,8 +186,8 @@ export default function ExploreScreen() {
                 })
             } else {
                 setPosts(fetchedPosts)
-                // Fetch bookmarks on initial load
-                await fetchBookmarks()
+                // Fetch saved status on initial load
+                await fetchSavedStatus()
                 // Update last fetch time
                 updateLastFetch('explore')
                 setShowStaleIndicator(false)
@@ -252,40 +274,10 @@ export default function ExploreScreen() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loading, loadingMore, hasMore, lastDoc])
 
-    const toggleBookmark = async (postId: string) => {
+    const handleToggleSave = async (postId: string) => {
         if (!user) return
-
-        const isBookmarked = bookmarkedPosts.includes(postId)
-
-        // Optimistic update
-        if (isBookmarked) {
-            setBookmarkedPosts(bookmarkedPosts.filter((id) => id !== postId))
-        } else {
-            setBookmarkedPosts([...bookmarkedPosts, postId])
-        }
-
-        try {
-            const userRef = doc(db, 'users', user.uid)
-            if (isBookmarked) {
-                await updateDoc(userRef, {
-                    bookmarkedPosts: arrayRemove(postId),
-                })
-            } else {
-                await updateDoc(userRef, {
-                    bookmarkedPosts: arrayUnion(postId),
-                })
-            }
-        } catch (error) {
-            console.error('Error toggling bookmark:', error)
-            // Revert optimistic update on error
-            if (isBookmarked) {
-                setBookmarkedPosts([...bookmarkedPosts, postId])
-            } else {
-                setBookmarkedPosts(
-                    bookmarkedPosts.filter((id) => id !== postId)
-                )
-            }
-        }
+        setSelectedPostForList(postId)
+        setShowListSheet(true)
     }
 
     const handleShare = async (postId: string) => {
@@ -345,7 +337,7 @@ export default function ExploreScreen() {
     }
 
     const renderPost = ({ item }: { item: Post }) => {
-        const isBookmarked = bookmarkedPosts.includes(item.id)
+        const isSaved = savedPosts.has(item.id)
 
         return (
             <Pressable
@@ -386,19 +378,19 @@ export default function ExploreScreen() {
                         <TouchableOpacity
                             onPress={() => {
                                 recordInteraction()
-                                toggleBookmark(item.id)
+                                handleToggleSave(item.id)
                             }}
                             style={styles.bookmarkButton}
                         >
                             <Ionicons
                                 name={
-                                    isBookmarked
+                                    isSaved
                                         ? 'bookmark'
                                         : 'bookmark-outline'
                                 }
                                 size={22}
                                 color={
-                                    isBookmarked
+                                    isSaved
                                         ? colors.iconActive
                                         : colors.iconInactive
                                 }
@@ -491,7 +483,7 @@ export default function ExploreScreen() {
         return (
             <View style={styles.centerContainer}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>Loading posts...</Text>
+                <Text style={styles.loadingText}>Loading shots...</Text>
             </View>
         )
     }
@@ -532,9 +524,9 @@ export default function ExploreScreen() {
                                 size={80}
                                 color="#ccc"
                             />
-                            <Text style={styles.emptyTitle}>No Posts Yet</Text>
+                            <Text style={styles.emptyTitle}>No Shots Yet</Text>
                             <Text style={styles.emptySubtitle}>
-                                Be the first to share a photo!
+                                Be the first to share a shot!
                             </Text>
                         </View>
                     }
@@ -579,6 +571,31 @@ export default function ExploreScreen() {
                         setPosts(posts.filter((p) => p.id !== postId))
                     }}
                 />
+
+                {selectedPostForList && (
+                    <ListSelectionBottomSheet
+                        visible={showListSheet}
+                        onClose={() => {
+                            setShowListSheet(false)
+                            setSelectedPostForList(null)
+                        }}
+                        postId={selectedPostForList}
+                        onSaveStateChange={(isSaved) => {
+                            // Update the saved state for this specific post
+                            if (selectedPostForList) {
+                                setSavedPosts(prev => {
+                                    const newSet = new Set(prev)
+                                    if (isSaved) {
+                                        newSet.add(selectedPostForList)
+                                    } else {
+                                        newSet.delete(selectedPostForList)
+                                    }
+                                    return newSet
+                                })
+                            }
+                        }}
+                    />
+                )}
 
                 {showStaleIndicator && (
                     <View style={[styles.staleIndicatorContainer, { top: insets.top + 10 }]}>

@@ -1,10 +1,26 @@
+/**
+ * PostContext - Event-based post state management
+ *
+ * Provides a lightweight event system for coordinating post updates across screens
+ * without causing unnecessary re-renders. Uses ref-based event listeners to avoid
+ * triggering context consumers when events are emitted.
+ *
+ * Key Features:
+ * - Event-based notifications (create, delete, update, catch)
+ * - Ref-based listeners to prevent re-renders
+ * - Per-screen staleness tracking
+ * - Backward compatible refresh flag
+ *
+ * Migration: Prefer notifyPostEvent() over triggerRefresh() for new code
+ */
+
 import React, {
     createContext,
     useState,
     useContext,
-    useCallback,
     useEffect,
     useRef,
+    useCallback,
 } from 'react'
 
 type PostAction = 'create' | 'delete' | 'update' | 'catch'
@@ -27,7 +43,8 @@ interface PostContextType {
 
 const PostContext = createContext<PostContextType | undefined>(undefined)
 
-const STALE_THRESHOLD = 2 * 60 * 1000 // 2 min in milliseconds
+/** Time threshold for considering cached data stale (2 minutes) */
+const STALE_THRESHOLD = 2 * 60 * 1000
 
 export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
     children,
@@ -46,10 +63,17 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
     // Use ref to avoid re-renders when listeners change
     const eventListenersRef = useRef<Set<(event: PostEvent) => void>>(new Set())
 
+    /**
+     * Legacy refresh trigger - prefer notifyPostEvent() for new code
+     */
     const triggerRefresh = useCallback(() => {
         setShouldRefresh(true)
     }, [])
 
+    /**
+     * Emit a post event to all subscribers without causing re-renders
+     * This is the preferred way to notify screens of post changes
+     */
     const notifyPostEvent = useCallback((action: PostAction, postId?: string, userId?: string) => {
         const event: PostEvent = {
             action,
@@ -68,10 +92,13 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
         })
     }, [])
 
+    /**
+     * Subscribe to post events
+     * Returns unsubscribe function for cleanup
+     */
     const subscribeToPostEvents = useCallback((callback: (event: PostEvent) => void) => {
         eventListenersRef.current.add(callback)
 
-        // Return unsubscribe function
         return () => {
             eventListenersRef.current.delete(callback)
         }
@@ -129,6 +156,10 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
     )
 }
 
+/**
+ * Hook to access post context
+ * Must be used within a PostProvider
+ */
 export const usePost = () => {
     const context = useContext(PostContext)
     if (context === undefined) {
@@ -138,7 +169,17 @@ export const usePost = () => {
 }
 
 /**
- * Hook to subscribe to specific post events without causing re-renders
+ * Hook to subscribe to post events without causing re-renders
+ *
+ * Example usage:
+ * ```
+ * usePostEvents((event) => {
+ *   if (event.action === 'delete') {
+ *     setPosts(prev => prev.filter(p => p.id !== event.postId))
+ *   }
+ * }, [])
+ * ```
+ *
  * @param callback Function to call when a post event occurs
  * @param deps Dependencies array for the callback
  */
@@ -155,5 +196,4 @@ export const usePostEvents = (
     }, [subscribeToPostEvents, ...deps])
 }
 
-// Export type for use in components
 export type { PostEvent, PostAction }

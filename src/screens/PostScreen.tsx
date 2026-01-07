@@ -57,8 +57,8 @@ export default function PostScreen() {
 
             if (status !== 'granted') {
                 Alert.alert(
-                    'Location Permission Required',
-                    'Location is needed to tag your post. You can still post without it.'
+                    'Location Required',
+                    'Location permission is required to share locations. Please enable location permissions in your device settings.'
                 )
                 return null
             }
@@ -75,7 +75,7 @@ export default function PostScreen() {
             console.error('Error getting device location:', error)
             Alert.alert(
                 'Location Error',
-                'Could not get your current location.'
+                'Could not get your current location. Please try again.'
             )
             return null
         }
@@ -134,6 +134,15 @@ export default function PostScreen() {
             return
         }
 
+        // Location is now mandatory
+        if (!location) {
+            Alert.alert(
+                'Location Required',
+                'You must enable location permissions to share a location. Please try again with location enabled.'
+            )
+            return
+        }
+
         setUploading(true)
 
         try {
@@ -164,7 +173,7 @@ export default function PostScreen() {
                 authorUsername: username,
                 photoURL: photoURL,
                 caption: caption || '',
-                hasLocation: !!location,
+                hasLocation: true, // Always true now (location is mandatory)
                 catchCount: 0,
                 parentPostId: null,
                 rootPostId: null, // Original posts have no root (they ARE the root)
@@ -175,14 +184,12 @@ export default function PostScreen() {
             const docRef = await addDoc(collection(db, 'posts'), postData)
 
             // Store actual location in separate private collection
-            if (location) {
-                await addDoc(collection(db, 'post_locations'), {
-                    postId: docRef.id,
-                    latitude: location.latitude,
-                    longitude: location.longitude,
-                    createdAt: new Date(),
-                })
-            }
+            await addDoc(collection(db, 'post_locations'), {
+                postId: docRef.id,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                createdAt: new Date(),
+            })
 
             Alert.alert('Success!', 'Your post has been created!')
 
@@ -243,14 +250,14 @@ export default function PostScreen() {
     return (
         <View style={styles.container}>
             <Ionicons
-                name="camera"
+                name="location"
                 size={80}
                 color="#ccc"
                 style={styles.icon}
             />
-            <Text style={styles.title}>Create a Post</Text>
+            <Text style={styles.title}>Share a Shot</Text>
             <Text style={styles.subtitle}>
-                Take a photo to share with the community
+                Capture and share photo-worthy views around the world
             </Text>
 
             <TouchableOpacity
