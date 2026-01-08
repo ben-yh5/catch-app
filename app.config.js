@@ -56,6 +56,7 @@ export default {
                     color: '#ffffff',
                 },
             ],
+            '@rnmapbox/maps',
         ],
         experiments: {
             typedRoutes: true,

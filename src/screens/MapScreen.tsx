@@ -14,12 +14,15 @@ import {
     TouchableOpacity,
     useColorScheme,
 } from 'react-native'
-import MapView, { Marker, Region, PROVIDER_GOOGLE } from 'react-native-maps'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { collection, getDocs, getDoc, doc, query, where, orderBy } from 'firebase/firestore'
 import { db } from '@/services/firebase'
 import { httpsCallable } from 'firebase/functions'
 import ThreadModal from '@/components/ThreadModal'
+import Mapbox, { Camera, MapView, ShapeSource, SymbolLayer, CircleLayer } from '@rnmapbox/maps'
+
+// Set Mapbox access token
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '')
 
 interface Post {
     id: string
@@ -43,102 +46,11 @@ interface PostLocation {
 
 type ViewMode = 'explore' | 'myCatches'
 
-// Dark mode map style (Google Maps dark theme)
-const darkMapStyle = [
-    { elementType: 'geometry', stylers: [{ color: '#212121' }] },
-    { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#212121' }] },
-    {
-        featureType: 'administrative',
-        elementType: 'geometry',
-        stylers: [{ color: '#757575' }],
-    },
-    {
-        featureType: 'administrative.country',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#9e9e9e' }],
-    },
-    {
-        featureType: 'administrative.land_parcel',
-        stylers: [{ visibility: 'off' }],
-    },
-    {
-        featureType: 'administrative.locality',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#bdbdbd' }],
-    },
-    {
-        featureType: 'poi',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#757575' }],
-    },
-    {
-        featureType: 'poi.park',
-        elementType: 'geometry',
-        stylers: [{ color: '#181818' }],
-    },
-    {
-        featureType: 'poi.park',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#616161' }],
-    },
-    {
-        featureType: 'poi.park',
-        elementType: 'labels.text.stroke',
-        stylers: [{ color: '#1b1b1b' }],
-    },
-    {
-        featureType: 'road',
-        elementType: 'geometry.fill',
-        stylers: [{ color: '#2c2c2c' }],
-    },
-    {
-        featureType: 'road',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#8a8a8a' }],
-    },
-    {
-        featureType: 'road.arterial',
-        elementType: 'geometry',
-        stylers: [{ color: '#373737' }],
-    },
-    {
-        featureType: 'road.highway',
-        elementType: 'geometry',
-        stylers: [{ color: '#3c3c3c' }],
-    },
-    {
-        featureType: 'road.highway.controlled_access',
-        elementType: 'geometry',
-        stylers: [{ color: '#4e4e4e' }],
-    },
-    {
-        featureType: 'road.local',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#616161' }],
-    },
-    {
-        featureType: 'transit',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#757575' }],
-    },
-    {
-        featureType: 'water',
-        elementType: 'geometry',
-        stylers: [{ color: '#000000' }],
-    },
-    {
-        featureType: 'water',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#3d3d3d' }],
-    },
-]
-
 export default function MapScreen() {
     const { user } = useAuth()
     const insets = useSafeAreaInsets()
     const mapRef = useRef<MapView>(null)
+    const cameraRef = useRef<Camera>(null)
     const colorScheme = useColorScheme()
 
     // State
@@ -151,14 +63,6 @@ export default function MapScreen() {
     // Thread modal state
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [showThreadModal, setShowThreadModal] = useState(false)
-
-    // Initial map region (centered on San Francisco as default)
-    const [region, setRegion] = useState<Region>({
-        latitude: 37.78825,
-        longitude: -122.4324,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
-    })
 
     // Get user's current location
     useEffect(() => {
@@ -176,18 +80,13 @@ export default function MapScreen() {
                 const location = await Location.getCurrentPositionAsync({})
                 setUserLocation(location)
 
-                // Center map on user's location
-                const newRegion = {
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                    latitudeDelta: 0.0922,
-                    longitudeDelta: 0.0421,
-                }
-                setRegion(newRegion)
-
-                // Animate map to user's location
-                if (mapRef.current) {
-                    mapRef.current.animateToRegion(newRegion, 1000)
+                // Animate to user's location
+                if (cameraRef.current) {
+                    cameraRef.current.setCamera({
+                        centerCoordinate: [location.coords.longitude, location.coords.latitude],
+                        zoomLevel: 12,
+                        animationDuration: 1000,
+                    })
                 }
             } catch (error) {
                 console.error('Error getting location:', error)
@@ -379,25 +278,48 @@ export default function MapScreen() {
 
     const filteredPosts = getFilteredPosts()
 
-    // Get markers to display - use filteredPosts which have already been filtered
-    const markers = filteredPosts
-        .map((post) => {
-            const location = postLocations.find((loc) => loc.postId === post.id)
-            if (!location) {
-                return null
-            }
-            return { ...location, post }
-        })
-        .filter((marker): marker is { postId: string; latitude: number; longitude: number; post: Post } =>
-            marker !== null
-        )
+    // Convert posts to GeoJSON for Mapbox
+    const getGeoJSONData = () => {
+        const features = filteredPosts
+            .map((post) => {
+                const location = postLocations.find((loc) => loc.postId === post.id)
+                if (!location) return null
 
-    const handleMarkerPress = (post: Post | undefined) => {
-        if (!post) {
-            console.error('Marker pressed but post is undefined')
-            Alert.alert('Error', 'This shot is no longer available')
-            return
+                return {
+                    type: 'Feature' as const,
+                    id: post.id,
+                    properties: {
+                        postId: post.id,
+                        authorId: post.authorId,
+                        authorUsername: post.authorUsername,
+                        photoURL: post.photoURL,
+                        caption: post.caption,
+                        catchCount: post.catchCount,
+                    },
+                    geometry: {
+                        type: 'Point' as const,
+                        coordinates: [location.longitude, location.latitude],
+                    },
+                }
+            })
+            .filter((f): f is NonNullable<typeof f> => f !== null)
+
+        return {
+            type: 'FeatureCollection' as const,
+            features,
         }
+    }
+
+    const handleMarkerPress = async (event: any) => {
+        const feature = event.features?.[0]
+        if (!feature) return
+
+        const postId = feature.properties?.postId
+        if (!postId) return
+
+        const post = filteredPosts.find((p) => p.id === postId)
+        if (!post) return
+
         setSelectedPost(post)
         setShowThreadModal(true)
     }
@@ -419,6 +341,22 @@ export default function MapScreen() {
         setPostLocations((prev) => prev.filter((loc) => loc.postId !== postId))
         setShowThreadModal(false)
         setSelectedPost(null)
+    }
+
+    // Mapbox style URL - use dark mode if color scheme is dark
+    const mapStyle = colorScheme === 'dark'
+        ? 'mapbox://styles/mapbox/dark-v11'
+        : 'mapbox://styles/mapbox/streets-v12'
+
+    // Center map on user's location
+    const centerOnUserLocation = () => {
+        if (userLocation && cameraRef.current) {
+            cameraRef.current.setCamera({
+                centerCoordinate: [userLocation.coords.longitude, userLocation.coords.latitude],
+                zoomLevel: 14,
+                animationDuration: 1000,
+            })
+        }
     }
 
     return (
@@ -464,39 +402,108 @@ export default function MapScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Map - always rendered, markers update based on view mode */}
+            {/* Mapbox Map */}
             <MapView
                 ref={mapRef}
                 style={styles.map}
-                provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                initialRegion={region}
-                showsUserLocation
-                showsMyLocationButton
-                customMapStyle={colorScheme === 'dark' ? darkMapStyle : []}
+                styleURL={mapStyle}
+                logoEnabled={false}
+                scaleBarEnabled={false}
+                compassEnabled={true}
+                compassViewPosition={3}
+                compassViewMargins={{ x: 16, y: 100 }}
             >
-                {markers.map((marker) => (
-                    <Marker
-                        key={marker.postId}
-                        coordinate={{
-                            latitude: marker.latitude,
-                            longitude: marker.longitude,
-                        }}
-                        onPress={() => {
-                            handleMarkerPress(marker.post)
+                <Camera
+                    ref={cameraRef}
+                    zoomLevel={12}
+                    centerCoordinate={
+                        userLocation
+                            ? [userLocation.coords.longitude, userLocation.coords.latitude]
+                            : [-122.4324, 37.78825]
+                    }
+                />
+
+                {/* User location */}
+                {userLocation && (
+                    <ShapeSource
+                        id="user-location-source"
+                        shape={{
+                            type: 'Feature',
+                            properties: {},
+                            geometry: {
+                                type: 'Point',
+                                coordinates: [
+                                    userLocation.coords.longitude,
+                                    userLocation.coords.latitude,
+                                ],
+                            },
                         }}
                     >
-                        <View style={styles.customMarker}>
-                            <Ionicons name="location" size={32} color={colors.primary} />
-                            {marker.post.catchCount > 0 && (
-                                <View style={styles.markerBadge}>
-                                    <Text style={styles.markerBadgeText}>
-                                        {marker.post.catchCount}
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-                    </Marker>
-                ))}
+                        <CircleLayer
+                            id="user-location-circle"
+                            style={{
+                                circleRadius: 8,
+                                circleColor: '#007AFF',
+                                circleStrokeWidth: 3,
+                                circleStrokeColor: '#FFFFFF',
+                            }}
+                        />
+                    </ShapeSource>
+                )}
+
+                {/* Post markers with clustering */}
+                <ShapeSource
+                    id="posts-source"
+                    shape={getGeoJSONData()}
+                    cluster={true}
+                    clusterRadius={50}
+                    clusterMaxZoomLevel={14}
+                    onPress={handleMarkerPress}
+                >
+                    {/* Clustered points */}
+                    <CircleLayer
+                        id="clusters"
+                        filter={['has', 'point_count']}
+                        style={{
+                            circleColor: colors.primary,
+                            circleRadius: [
+                                'step',
+                                ['get', 'point_count'],
+                                20,
+                                5,
+                                25,
+                                10,
+                                30,
+                            ],
+                            circleOpacity: 0.9,
+                            circleStrokeWidth: 3,
+                            circleStrokeColor: '#FFFFFF',
+                        }}
+                    />
+
+                    <SymbolLayer
+                        id="cluster-count"
+                        filter={['has', 'point_count']}
+                        style={{
+                            textField: '{point_count_abbreviated}',
+                            textSize: 14,
+                            textColor: '#FFFFFF',
+                            textFont: ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+                        }}
+                    />
+
+                    {/* Individual unclustered points */}
+                    <CircleLayer
+                        id="unclustered-point"
+                        filter={['!', ['has', 'point_count']]}
+                        style={{
+                            circleColor: colors.primary,
+                            circleRadius: 10,
+                            circleStrokeWidth: 3,
+                            circleStrokeColor: '#FFFFFF',
+                        }}
+                    />
+                </ShapeSource>
             </MapView>
 
             {/* Loading overlay */}
@@ -514,6 +521,17 @@ export default function MapScreen() {
                         {filteredPosts.length} {filteredPosts.length === 1 ? 'shot' : 'shots'}
                     </Text>
                 </View>
+            )}
+
+            {/* Center on location button */}
+            {userLocation && (
+                <TouchableOpacity
+                    style={styles.centerButton}
+                    onPress={centerOnUserLocation}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons name="locate" size={24} color={colors.textPrimary} />
+                </TouchableOpacity>
             )}
 
             {/* Thread Modal */}
@@ -593,28 +611,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: colors.textSecondary,
     },
-    customMarker: {
-        position: 'relative',
-    },
-    markerBadge: {
-        position: 'absolute',
-        top: -4,
-        right: -4,
-        backgroundColor: colors.danger,
-        borderRadius: 10,
-        minWidth: 20,
-        height: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 4,
-        borderWidth: 2,
-        borderColor: colors.white,
-    },
-    markerBadgeText: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: colors.white,
-    },
     postCountContainer: {
         position: 'absolute',
         bottom: 20,
@@ -635,5 +631,23 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '600',
         color: colors.textPrimary,
+    },
+    centerButton: {
+        position: 'absolute',
+        bottom: 80,
+        right: 16,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: colors.cardBackground,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
 })
