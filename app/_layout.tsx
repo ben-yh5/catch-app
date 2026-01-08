@@ -168,8 +168,7 @@ function RootLayoutNav() {
             user &&
             hasUserDoc === true &&
             !inAuthGroup &&
-            !inProtectedRoute &&
-            segments[0] !== 'modal'
+            !inProtectedRoute
         ) {
             // Redirect to tabs if user is authenticated, has user doc, and not in a protected route
             router.replace('/(tabs)')
@@ -200,10 +199,6 @@ function RootLayoutNav() {
                 <Stack.Screen
                     name="list-detail"
                     options={{ headerShown: false }}
-                />
-                <Stack.Screen
-                    name="modal"
-                    options={{ presentation: 'modal', title: 'Modal' }}
                 />
             </Stack>
             <StatusBar style="auto" />

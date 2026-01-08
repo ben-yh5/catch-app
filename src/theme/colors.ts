@@ -13,9 +13,9 @@ export const colors = {
     cardElevated: '#2c2c2e', // Slightly lighter gray for badges/buttons
 
     // Accents
-    primary: '#2457F5', // Blue for primary actions
-    secondary: '#CF2CF6', // Pink for catches/trophies
-    danger: '#FF3B30', // Red for delete/destructive actions
+    primary: '#007AFF', // iOS blue for primary actions
+    secondary: '#CF2CF6', // Pink/purple for catches/trophies
+    danger: '#FF3B30', // iOS red for delete/destructive actions
 
     // Text
     textPrimary: '#ffffff', // White
@@ -34,5 +34,5 @@ export const colors = {
 
     // Icon states
     iconInactive: '#98989f',
-    iconActive: '#4e78f7ff',
+    iconActive: '#007AFF', // Same as primary for consistency
 }

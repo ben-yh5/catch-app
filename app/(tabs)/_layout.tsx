@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router'
 import React from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated'
+import { colors } from '@/theme/colors'
 
 const AnimatedIcon = ({ name, color, focused }: { name: any, color: string, focused: boolean }) => {
     const animatedStyle = useAnimatedStyle(() => {
@@ -28,7 +29,7 @@ export default function TabLayout() {
     return (
         <Tabs
             screenOptions={{
-                tabBarActiveTintColor: '#007AFF',
+                tabBarActiveTintColor: colors.primary,
                 headerShown: false,
             }}
         >

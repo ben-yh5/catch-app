@@ -19,7 +19,7 @@ import { collection, getDocs, getDoc, doc, query, where, orderBy } from 'firebas
 import { db } from '@/services/firebase'
 import { httpsCallable } from 'firebase/functions'
 import ThreadModal from '@/components/ThreadModal'
-import Mapbox, { Camera, MapView, ShapeSource, SymbolLayer, CircleLayer } from '@rnmapbox/maps'
+import Mapbox, { Camera, MapView, ShapeSource, SymbolLayer, CircleLayer, LocationPuck } from '@rnmapbox/maps'
 
 // Set Mapbox access token
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '')
@@ -46,6 +46,14 @@ interface PostLocation {
 
 type ViewMode = 'explore' | 'myCatches'
 
+// Map marker colors
+const MAP_COLORS = {
+    userLocation: '#34C759', // iOS green for user location
+    uncaughtPin: '#007AFF', // iOS blue for uncaught posts (primary - to explore)
+    caughtPin: '#CF2CF6', // Pink/purple for caught posts (secondary - achievements)
+    stroke: '#FFFFFF', // White stroke for all markers
+}
+
 export default function MapScreen() {
     const { user } = useAuth()
     const insets = useSafeAreaInsets()
@@ -59,6 +67,8 @@ export default function MapScreen() {
     const [loading, setLoading] = useState(true)
     const [viewMode, setViewMode] = useState<ViewMode>('explore')
     const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null)
+    const [locationLoading, setLocationLoading] = useState(true)
+    const [initialLocation, setInitialLocation] = useState<Location.LocationObject | null>(null)
 
     // Thread modal state
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
@@ -74,22 +84,30 @@ export default function MapScreen() {
                         'Location Required',
                         'Location permission is required to use the map and discover nearby shots. Please enable location in your device settings.'
                     )
+                    setLocationLoading(false)
                     return
                 }
 
-                const location = await Location.getCurrentPositionAsync({})
-                setUserLocation(location)
+                // Use last known location first for speed, then get current
+                const lastKnown = await Location.getLastKnownPositionAsync({})
+                if (lastKnown) {
+                    setUserLocation(lastKnown)
+                    setInitialLocation(lastKnown)
+                    setLocationLoading(false)
+                }
 
-                // Animate to user's location
-                if (cameraRef.current) {
-                    cameraRef.current.setCamera({
-                        centerCoordinate: [location.coords.longitude, location.coords.latitude],
-                        zoomLevel: 12,
-                        animationDuration: 1000,
-                    })
+                // Get current position in background for accuracy
+                const location = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced, // Faster than high accuracy
+                })
+                setUserLocation(location)
+                if (!lastKnown) {
+                    setInitialLocation(location)
+                    setLocationLoading(false)
                 }
             } catch (error) {
                 console.error('Error getting location:', error)
+                setLocationLoading(false)
             }
         })()
     }, [])
@@ -278,12 +296,26 @@ export default function MapScreen() {
 
     const filteredPosts = getFilteredPosts()
 
+    // Check if user has caught a post (they are the author OR they have a catch of this root post)
+    const hasUserCaughtPost = (post: Post): boolean => {
+        // User is the author
+        if (post.authorId === user?.uid) return true
+
+        // Check if user has caught this post (search through posts for a catch by this user)
+        // This is a simple check - in production you might want to cache this
+        return posts.some(
+            (p) => p.rootPostId === post.id && p.authorId === user?.uid && !p.isOriginal
+        )
+    }
+
     // Convert posts to GeoJSON for Mapbox
     const getGeoJSONData = () => {
         const features = filteredPosts
             .map((post) => {
                 const location = postLocations.find((loc) => loc.postId === post.id)
                 if (!location) return null
+
+                const isCaught = hasUserCaughtPost(post)
 
                 return {
                     type: 'Feature' as const,
@@ -295,6 +327,7 @@ export default function MapScreen() {
                         photoURL: post.photoURL,
                         caption: post.caption,
                         catchCount: post.catchCount,
+                        isCaught, // Add caught status
                     },
                     geometry: {
                         type: 'Point' as const,
@@ -314,6 +347,42 @@ export default function MapScreen() {
         const feature = event.features?.[0]
         if (!feature) return
 
+        // Check if this is a cluster
+        const isCluster = feature.properties?.cluster
+        if (isCluster) {
+            // Get cluster's coordinates
+            const coordinates = feature.geometry?.coordinates
+            const clusterId = feature.properties?.cluster_id
+
+            if (coordinates && clusterId && mapRef.current) {
+                try {
+                    // Get the expansion zoom (the zoom level at which the cluster breaks apart)
+                    const zoom = await mapRef.current.getZoom()
+                    const expansionZoom = Math.min(zoom + 4, 20) // Zoom in 4 levels, max 20
+
+                    if (cameraRef.current) {
+                        cameraRef.current.setCamera({
+                            centerCoordinate: coordinates,
+                            zoomLevel: expansionZoom,
+                            animationDuration: 500,
+                        })
+                    }
+                } catch (error) {
+                    console.error('Error expanding cluster:', error)
+                    // Fallback to simple zoom
+                    if (cameraRef.current) {
+                        cameraRef.current.setCamera({
+                            centerCoordinate: coordinates,
+                            zoomLevel: 17,
+                            animationDuration: 500,
+                        })
+                    }
+                }
+            }
+            return
+        }
+
+        // Handle individual marker press
         const postId = feature.properties?.postId
         if (!postId) return
 
@@ -402,54 +471,43 @@ export default function MapScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Mapbox Map */}
-            <MapView
-                ref={mapRef}
-                style={styles.map}
-                styleURL={mapStyle}
-                logoEnabled={false}
-                scaleBarEnabled={false}
-                compassEnabled={true}
-                compassViewPosition={3}
-                compassViewMargins={{ x: 16, y: 100 }}
-            >
+            {/* Show loading overlay while getting location */}
+            {locationLoading ? (
+                <View style={styles.map}>
+                    <View style={styles.locationLoadingOverlay}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={styles.loadingText}>Getting your location...</Text>
+                    </View>
+                </View>
+            ) : (
+                /* Mapbox Map */
+                <MapView
+                    ref={mapRef}
+                    style={styles.map}
+                    styleURL={mapStyle}
+                    logoEnabled={false}
+                    scaleBarEnabled={false}
+                    compassEnabled={true}
+                    compassViewPosition={3}
+                    compassViewMargins={{ x: 16, y: 100 }}
+                >
                 <Camera
                     ref={cameraRef}
                     zoomLevel={12}
                     centerCoordinate={
-                        userLocation
-                            ? [userLocation.coords.longitude, userLocation.coords.latitude]
+                        initialLocation
+                            ? [initialLocation.coords.longitude, initialLocation.coords.latitude]
                             : [-122.4324, 37.78825]
                     }
+                    animationMode="none"
                 />
 
-                {/* User location */}
-                {userLocation && (
-                    <ShapeSource
-                        id="user-location-source"
-                        shape={{
-                            type: 'Feature',
-                            properties: {},
-                            geometry: {
-                                type: 'Point',
-                                coordinates: [
-                                    userLocation.coords.longitude,
-                                    userLocation.coords.latitude,
-                                ],
-                            },
-                        }}
-                    >
-                        <CircleLayer
-                            id="user-location-circle"
-                            style={{
-                                circleRadius: 8,
-                                circleColor: '#007AFF',
-                                circleStrokeWidth: 3,
-                                circleStrokeColor: '#FFFFFF',
-                            }}
-                        />
-                    </ShapeSource>
-                )}
+                {/* Native Mapbox user location puck with heading */}
+                <LocationPuck
+                    pulsing={{ isEnabled: true, color: MAP_COLORS.userLocation, radius: 30, opacity: 0.2 }}
+                    puckBearingEnabled
+                    puckBearing="heading"
+                />
 
                 {/* Post markers with clustering */}
                 <ShapeSource
@@ -457,15 +515,15 @@ export default function MapScreen() {
                     shape={getGeoJSONData()}
                     cluster={true}
                     clusterRadius={50}
-                    clusterMaxZoomLevel={14}
+                    clusterMaxZoomLevel={16}
                     onPress={handleMarkerPress}
                 >
-                    {/* Clustered points */}
+                    {/* Clustered points - use blue (uncaught) for mixed clusters */}
                     <CircleLayer
                         id="clusters"
                         filter={['has', 'point_count']}
                         style={{
-                            circleColor: colors.primary,
+                            circleColor: MAP_COLORS.uncaughtPin,
                             circleRadius: [
                                 'step',
                                 ['get', 'point_count'],
@@ -477,7 +535,7 @@ export default function MapScreen() {
                             ],
                             circleOpacity: 0.9,
                             circleStrokeWidth: 3,
-                            circleStrokeColor: '#FFFFFF',
+                            circleStrokeColor: MAP_COLORS.stroke,
                         }}
                     />
 
@@ -492,19 +550,25 @@ export default function MapScreen() {
                         }}
                     />
 
-                    {/* Individual unclustered points */}
+                    {/* Individual unclustered points - color based on caught status */}
                     <CircleLayer
                         id="unclustered-point"
                         filter={['!', ['has', 'point_count']]}
                         style={{
-                            circleColor: colors.primary,
+                            circleColor: [
+                                'case',
+                                ['get', 'isCaught'],
+                                MAP_COLORS.caughtPin, // Purple if caught
+                                MAP_COLORS.uncaughtPin, // Blue if not caught
+                            ],
                             circleRadius: 10,
                             circleStrokeWidth: 3,
-                            circleStrokeColor: '#FFFFFF',
+                            circleStrokeColor: MAP_COLORS.stroke,
                         }}
                     />
                 </ShapeSource>
             </MapView>
+            )}
 
             {/* Loading overlay */}
             {loading && (
@@ -611,6 +675,12 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: colors.textSecondary,
     },
+    locationLoadingOverlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.background,
+    },
     postCountContainer: {
         position: 'absolute',
         bottom: 20,
@@ -635,7 +705,7 @@ const styles = StyleSheet.create({
     centerButton: {
         position: 'absolute',
         bottom: 80,
-        right: 16,
+        left: 16, // Move to left side to avoid compass on right
         width: 48,
         height: 48,
         borderRadius: 24,
