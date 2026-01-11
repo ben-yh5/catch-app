@@ -25,7 +25,7 @@ import PostCard from './PostCard'
 
 interface UnifiedPreviewScreenProps {
     imageUri: string
-    onConfirm: (caption?: string) => void
+    onConfirm: (title?: string, caption?: string) => void
     onCancel: () => void
     mode: 'post' | 'catch'
     loading?: boolean
@@ -46,18 +46,19 @@ export default function UnifiedPreviewScreen({
     loadingLocation = false,
     originalPhotoUrl,
 }: UnifiedPreviewScreenProps) {
+    const [title, setTitle] = useState('')
     const [caption, setCaption] = useState('')
     const insets = useSafeAreaInsets()
 
     const handleConfirm = () => {
-        onConfirm(caption)
+        onConfirm(title, caption)
     }
 
     const isPost = mode === 'post'
     const isCatch = mode === 'catch'
 
     // Determine button state
-    const buttonDisabled = loading || (isPost && loadingLocation)
+    const buttonDisabled = loading || (isPost && loadingLocation) || (isPost && !title.trim())
     const buttonLoading = loading
 
     let buttonText = isPost ? 'Post' : 'Catch This Shot'
@@ -98,8 +99,11 @@ export default function UnifiedPreviewScreen({
                     originalImageUrl={originalPhotoUrl}
 
                     // Footer
+                    titleInputMode={isPost}
                     captionInputMode={true}
-                    captionPlaceholder={isPost ? 'Add a caption or hint...' : 'Add a caption (optional)...'}
+                    titlePlaceholder="Add a title (required)..."
+                    captionPlaceholder="Add a caption (optional)..."
+                    onTitleChange={setTitle}
                     onCaptionChange={setCaption}
                     date={today}
 

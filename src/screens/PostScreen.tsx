@@ -128,9 +128,15 @@ export default function PostScreen() {
         setLoadingLocation(false)
     }
 
-    const handlePost = async (caption?: string) => {
+    const handlePost = async (title?: string, caption?: string) => {
         if (!user || !capturedImage) {
             Alert.alert('Error', 'User not authenticated or no image captured')
+            return
+        }
+
+        // Title is required
+        if (!title?.trim()) {
+            Alert.alert('Title Required', 'Please add a title for your post.')
             return
         }
 
@@ -172,7 +178,8 @@ export default function PostScreen() {
                 authorId: user.uid,
                 authorUsername: username,
                 photoURL: photoURL,
-                caption: caption || '',
+                title: title.trim(),
+                caption: caption?.trim() || '',
                 hasLocation: true, // Always true now (location is mandatory)
                 catchCount: 0,
                 parentPostId: null,

@@ -70,6 +70,7 @@ interface Post {
     authorId: string
     authorUsername: string
     photoURL: string
+    title?: string
     caption: string
     hasLocation: boolean
     catchCount: number
@@ -116,9 +117,7 @@ export default function ThreadModal({
 
     // Location state
     const [postLocation, setPostLocation] = useState<{ latitude: number; longitude: number } | null>(null)
-    const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
     const [distance, setDistance] = useState<number | null>(null)
-    const [loadingPostLocation, setLoadingPostLocation] = useState(false)
 
     // Catch flow states
     const [catchMode, setCatchMode] = useState(false)
@@ -279,7 +278,6 @@ export default function ThreadModal({
     }
 
     const fetchPostLocationAndDistance = async (postId: string) => {
-        setLoadingPostLocation(true)
         try {
             // Fetch post location from Cloud Function
             const getPostLocation = httpsCallable(functions, 'getPostLocation')
@@ -297,10 +295,6 @@ export default function ThreadModal({
                 const userLoc = await Location.getCurrentPositionAsync({
                     accuracy: Location.Accuracy.Balanced,
                 })
-                setUserLocation({
-                    latitude: userLoc.coords.latitude,
-                    longitude: userLoc.coords.longitude,
-                })
 
                 // Calculate distance
                 const dist = calculateDistance(
@@ -315,8 +309,6 @@ export default function ThreadModal({
             console.error('Error fetching post location:', error)
             setPostLocation(null)
             setDistance(null)
-        } finally {
-            setLoadingPostLocation(false)
         }
     }
 
@@ -472,7 +464,7 @@ export default function ThreadModal({
         setCatchMode(false)
     }
 
-    const handleCatchConfirm = async (caption?: string) => {
+    const handleCatchConfirm = async (title?: string, caption?: string) => {
         // Always catch the ROOT post, not the current post
         const rootPost = threadPosts[0]
         if (!rootPost || !catchImageUri) {
@@ -929,11 +921,19 @@ export default function ThreadModal({
 
                                 {/* Card Footer */}
                                 <View style={styles.cardFooter}>
-                                    {/* Caption section - fixed height */}
+                                    {/* Title and Caption section */}
                                     <View style={styles.captionSection}>
-                                        <Text style={styles.caption} numberOfLines={1}>
-                                            {currentPost?.caption || '---'}
-                                        </Text>
+                                        {currentPost?.title && (
+                                            <Text style={styles.postTitle} numberOfLines={1}>
+                                                {currentPost.title}
+                                            </Text>
+                                        )}
+
+                                        {currentPost?.caption && (
+                                            <Text style={styles.caption} numberOfLines={2}>
+                                                {currentPost.caption}
+                                            </Text>
+                                        )}
 
                                         <View style={styles.metaRow}>
                                             <Text style={styles.dateText}>
@@ -1109,8 +1109,20 @@ const styles = StyleSheet.create({
     captionSection: {
         minHeight: 40, // Fixed min height for 1 line + date
     },
+    postTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: colors.textPrimary,
+        lineHeight: 24,
+        marginBottom: 4,
+    },
+    caption: {
+        fontSize: 14,
+        color: colors.textSecondary,
+        lineHeight: 18,
+    },
     metaRow: {
-        marginTop: 4,
+        marginTop: 6,
     },
     footerDivider: {
         height: 1,
@@ -1180,11 +1192,6 @@ const styles = StyleSheet.create({
         borderRadius: 7,
         marginLeft: -7,
         marginTop: -2,
-    },
-    caption: {
-        fontSize: 15,
-        color: colors.textSecondary,
-        lineHeight: 20,
     },
     metadataRow: {
         flexDirection: 'row',
