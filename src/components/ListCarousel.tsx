@@ -9,8 +9,8 @@ import {
 import CompactPostCard from './CompactPostCard'
 
 const { width } = Dimensions.get('window')
-const CARD_WIDTH = width * 0.95
-const SPACING = 8 // Reduced spacing for wider feel
+const CARD_WIDTH = width
+const SPACING = 0
 const SNAP_INTERVAL = CARD_WIDTH + SPACING * 2
 
 interface ListCarouselProps {

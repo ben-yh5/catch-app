@@ -1,6 +1,6 @@
 import { colors } from '@/theme/colors';
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import CompactPostCard from './CompactPostCard';
 
@@ -21,6 +21,7 @@ export default function MapBottomSheet({
 }: MapBottomSheetProps) {
     const bottomSheetRef = useRef<BottomSheet>(null);
     const snapPoints = useMemo(() => ['15%', '50%'], []);
+    const [sheetIndex, setSheetIndex] = useState(1);
 
     const renderItem = ({ item }: { item: any }) => (
         <CompactPostCard
@@ -65,8 +66,9 @@ export default function MapBottomSheet({
     return (
         <BottomSheet
             ref={bottomSheetRef}
-            index={1}
+            index={sheetIndex}
             snapPoints={snapPoints}
+            onChange={setSheetIndex}
             enablePanDownToClose={false}
             enableDynamicSizing={false}
             backgroundStyle={styles.background}
