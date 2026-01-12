@@ -1,15 +1,17 @@
+import ExploreSection from '@/components/ExploreSection'
+import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
-import { useRouter } from 'expo-router'
-import ThreadModal from '@/components/ThreadModal'
-import ExploreSection from '@/components/ExploreSection'
+import { getPostsInRadius } from '@/utils/geospatialQueries'
+import { Image } from 'expo-image'
 import * as Location from 'expo-location'
+import { useRouter } from 'expo-router'
 import {
     collection,
-    getDocs,
-    getDoc,
     doc,
+    getDoc,
+    getDocs,
     limit,
     orderBy,
     query,
@@ -25,7 +27,6 @@ import {
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { getPostsInRadius } from '@/utils/geospatialQueries'
 
 interface Post {
     id: string
@@ -79,7 +80,7 @@ export default function ExploreScreen() {
 
     // Get user location for "Near You" section
     useEffect(() => {
-        ;(async () => {
+        ; (async () => {
             try {
                 const { status } = await Location.requestForegroundPermissionsAsync()
                 if (status === 'granted') {
@@ -383,9 +384,12 @@ export default function ExploreScreen() {
                                 {[0, 1, 2, 3].map((index) => (
                                     <View key={index} style={styles.listThumbnailItem}>
                                         {list.thumbnails && list.thumbnails[index] ? (
-                                            <View style={styles.listThumbnail}>
-                                                <Text>IMG</Text>
-                                            </View>
+                                            <Image
+                                                source={{ uri: list.thumbnails[index] }}
+                                                style={styles.listThumbnail}
+                                                contentFit="cover"
+                                                transition={200}
+                                            />
                                         ) : (
                                             <View style={[styles.listThumbnail, styles.listThumbnailPlaceholder]} />
                                         )}

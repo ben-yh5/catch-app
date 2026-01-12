@@ -385,7 +385,7 @@ export default function MapScreen() {
                     scaleBarEnabled={false}
                     compassEnabled={true}
                     compassViewPosition={1}
-                    compassViewMargins={{ x: 16, y: 160 }}
+                    compassViewMargins={{ x: 16, y: 158 }}
                     onCameraChanged={(state) => {
                         if (state.gestures.isGestureActive) {
                             setShowSearchButton(true)
