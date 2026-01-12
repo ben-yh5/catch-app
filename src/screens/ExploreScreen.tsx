@@ -338,7 +338,7 @@ export default function ExploreScreen() {
 
     const handleListPress = (listId: string) => {
         router.push({
-            pathname: '/list-detail',
+            pathname: '/(tabs)/map',
             params: { listId },
         })
     }

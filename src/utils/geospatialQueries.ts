@@ -120,6 +120,24 @@ export async function getMapBounds(map: any): Promise<MapBounds> {
 }
 
 /**
+ * Get locations for specific posts by ID
+ */
+export async function getPostLocations(postIds: string[]): Promise<PostLocation[]> {
+    try {
+        const getPostLocationsFn = httpsCallable<
+            { postIds: string[] },
+            { locations: PostLocation[] }
+        >(functions, 'getPostLocations')
+
+        const result = await getPostLocationsFn({ postIds })
+        return result.data.locations
+    } catch (error) {
+        console.error('Error fetching post locations:', error)
+        throw error
+    }
+}
+
+/**
  * Clear the cache (useful for debugging or forcing refresh)
  */
 export function clearCache() {

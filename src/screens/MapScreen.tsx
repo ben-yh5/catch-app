@@ -1,19 +1,21 @@
 import FilterPills, { FilterType } from '@/components/FilterPills'
+import ListCarousel from '@/components/ListCarousel'
 import MapBottomSheet from '@/components/MapBottomSheet'
 import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
-import { getPostsInRadius } from '@/utils/geospatialQueries'
+import { getPostLocations, getPostsInRadius } from '@/utils/geospatialQueries'
 import { Ionicons } from '@expo/vector-icons'
 import Mapbox, { Camera, CircleLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
 import * as Location from 'expo-location'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { doc, getDoc } from 'firebase/firestore'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
+    BackHandler,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -84,6 +86,12 @@ export default function MapScreen() {
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
     const [showSearchButton, setShowSearchButton] = useState(false)
 
+    // List Focus Mode State
+    const { listId } = useLocalSearchParams<{ listId: string }>()
+    const [activeList, setActiveList] = useState<any | null>(null)
+    const [listPosts, setListPosts] = useState<Post[]>([])
+    const [isListMode, setIsListMode] = useState(false)
+
     // Thread modal state
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [showThreadModal, setShowThreadModal] = useState(false)
@@ -126,6 +134,107 @@ export default function MapScreen() {
         })()
     }, [])
 
+    // Handle List Focus Mode
+    useEffect(() => {
+        if (listId) {
+            fetchListDetails(listId)
+        } else {
+            setIsListMode(false)
+            setActiveList(null)
+            setListPosts([])
+        }
+
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+            if (isListMode) {
+                handleListClose()
+                return true
+            }
+            return false
+        })
+
+        return () => backHandler.remove()
+    }, [listId, isListMode])
+
+    const fetchListDetails = async (id: string) => {
+        try {
+            setLoadingPosts(true)
+            const listDoc = await getDoc(doc(db, 'lists', id))
+            if (listDoc.exists()) {
+                const listData = listDoc.data()
+                setActiveList({ id: listDoc.id, ...listData })
+                setIsListMode(true)
+
+                // Fetch posts for the list
+                if (listData.postIds && listData.postIds.length > 0) {
+                    const postIds = listData.postIds
+
+                    // Fetch post documents and locations in parallel
+                    const [postDocs, locations] = await Promise.all([
+                        Promise.all(postIds.map((postId: string) => getDoc(doc(db, 'posts', postId)))),
+                        getPostLocations(postIds)
+                    ])
+
+                    const posts = postDocs
+                        .filter((docSnap) => docSnap.exists())
+                        .map((docSnap) => {
+                            const data = docSnap.data()
+                            const location = locations.find(loc => loc.postId === docSnap.id)
+
+                            return {
+                                id: docSnap.id,
+                                ...data,
+                                latitude: location?.latitude,
+                                longitude: location?.longitude,
+                            } as Post
+                        })
+
+                    console.log(`[ListMode] Loaded ${posts.length} posts for list ${listData.name}`)
+                    const postsWithLocation = posts.filter(p => p.latitude && p.longitude)
+                    console.log(`[ListMode] Posts with valid location: ${postsWithLocation.length}`)
+
+                    setListPosts(posts)
+                    setVisiblePosts(posts) // Show only list posts on map
+
+                    // Fit bounds to show all posts
+                    if (posts.length > 0 && mapRef.current && cameraRef.current) {
+                        const coordinates = posts
+                            .filter(p => p.longitude && p.latitude)
+                            .map(p => [p.longitude!, p.latitude!])
+
+                        if (coordinates.length > 0) {
+                            // Calculate bounds manually or use fitBounds if available on camera
+                            // For simplicity, we'll center on the first post for now, 
+                            // but ideally we'd calculate the bbox
+                            const firstPost = posts[0]
+                            if (firstPost.latitude && firstPost.longitude) {
+                                setTimeout(() => {
+                                    cameraRef.current?.setCamera({
+                                        centerCoordinate: [firstPost.longitude!, firstPost.latitude!],
+                                        zoomLevel: 10,
+                                        animationDuration: 1000,
+                                    })
+                                }, 500)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching list details:', error)
+            Alert.alert('Error', 'Failed to load list details')
+        } finally {
+            setLoadingPosts(false)
+        }
+    }
+
+    const handleListClose = () => {
+        router.setParams({ listId: '' }) // Clear param
+        setIsListMode(false)
+        setActiveList(null)
+        setListPosts([])
+        fetchPostsInViewport() // Reload normal posts
+    }
+
     // Apply sorting based on active filter
     const applySorting = useCallback((posts: Post[], filter: FilterType): Post[] => {
         switch (filter) {
@@ -161,7 +270,7 @@ export default function MapScreen() {
 
     // Fetch posts in current viewport
     const fetchPostsInViewport = useCallback(async () => {
-        if (!mapRef.current) return
+        if (!mapRef.current || isListMode) return
 
         setLoadingPosts(true)
         setShowSearchButton(false)
@@ -221,13 +330,15 @@ export default function MapScreen() {
 
     // Handle map movement
     const handleMapMove = useCallback(() => {
-        // Show search button when map is moved
-        setShowSearchButton(true)
-    }, [])
+        // Show search button when map is moved (only in normal mode)
+        if (!isListMode) {
+            setShowSearchButton(true)
+        }
+    }, [isListMode])
 
     // Initial load when map is ready
     useEffect(() => {
-        if (!locationLoading && mapRef.current) {
+        if (!locationLoading && mapRef.current && !listId) {
             // Small delay to ensure map is fully rendered
             console.log('Map ready, fetching posts...')
             setTimeout(() => {
@@ -263,7 +374,20 @@ export default function MapScreen() {
         const post = sortedVisiblePosts.find((p) => p.id === postId)
         if (post) {
             setSelectedPost(post)
-            setShowThreadModal(true)
+            if (!isListMode) {
+                setShowThreadModal(true)
+            }
+        }
+    }
+
+    const handleCarouselSnap = (post: Post) => {
+        if (post.latitude && post.longitude && cameraRef.current) {
+            setSelectedPostId(post.id)
+            cameraRef.current.setCamera({
+                centerCoordinate: [post.longitude, post.latitude],
+                zoomLevel: 14,
+                animationDuration: 500,
+            })
         }
     }
 
@@ -339,11 +463,19 @@ export default function MapScreen() {
         <View style={styles.container}>
             {/* Compact Header */}
             <View style={[styles.header, { paddingTop: insets.top }]}>
-                <Text style={styles.headerTitle}>Map</Text>
+                {isListMode && (
+                    <TouchableOpacity
+                        onPress={handleListClose}
+                        style={{ position: 'absolute', left: 16, bottom: 12, zIndex: 10 }}
+                    >
+                        <Ionicons name="close" size={24} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                )}
+                <Text style={styles.headerTitle}>{isListMode ? activeList?.name || 'List' : 'Map'}</Text>
             </View>
 
             {/* Floating Filter Pills */}
-            {!locationLoading && (
+            {!locationLoading && !isListMode && (
                 <View style={styles.filterContainer} pointerEvents="box-none">
                     <FilterPills
                         activeFilter={activeFilter}
@@ -504,16 +636,28 @@ export default function MapScreen() {
                 )
             }
 
-            {/* Bottom Sheet */}
+            {/* Bottom Sheet or List Carousel */}
             {
                 !locationLoading && (
-                    <MapBottomSheet
-                        posts={sortedVisiblePosts}
-                        loading={loadingPosts}
-                        onPostPress={handlePostPress}
-                        onJumpToLocation={handleJumpToLocation}
-                        selectedPostId={selectedPostId}
-                    />
+                    isListMode ? (
+                        <ListCarousel
+                            posts={listPosts}
+                            onPostSnap={handleCarouselSnap}
+                            onPostPress={(post) => {
+                                setSelectedPost(post)
+                                setShowThreadModal(true)
+                            }}
+                            selectedPostId={selectedPostId}
+                        />
+                    ) : (
+                        <MapBottomSheet
+                            posts={sortedVisiblePosts}
+                            loading={loadingPosts}
+                            onPostPress={handlePostPress}
+                            onJumpToLocation={handleJumpToLocation}
+                            selectedPostId={selectedPostId}
+                        />
+                    )
                 )
             }
 
