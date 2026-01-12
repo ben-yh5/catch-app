@@ -23,7 +23,7 @@ import {
     startAfter,
     where,
 } from 'firebase/firestore'
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState, useRef } from 'react'
 import {
     ActivityIndicator,
     Alert,
@@ -40,6 +40,7 @@ import {
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FeaturedListSkeleton } from '@/components/Skeleton'
+import PagerView from 'react-native-pager-view'
 
 interface Post {
     id: string
@@ -79,13 +80,13 @@ export default function ExploreScreen() {
     const navigation = useNavigation()
     const isFocused = useIsFocused()
     const insets = useSafeAreaInsets()
-    const [posts, setPosts] = useState<Post[]>([])
-    const [loading, setLoading] = useState(true)
-    const [refreshing, setRefreshing] = useState(false)
-    const [loadingMore, setLoadingMore] = useState(false)
-    const [hasMore, setHasMore] = useState(true)
-    const [lastDoc, setLastDoc] =
-        useState<QueryDocumentSnapshot<DocumentData> | null>(null)
+    // Separate state for each filter to prevent flash on swipe
+    const [trendingPosts, setTrendingPosts] = useState<Post[]>([])
+    const [newPosts, setNewPosts] = useState<Post[]>([])
+    const [nearPosts, setNearPosts] = useState<Post[]>([])
+    const [trendingState, setTrendingState] = useState({ loading: true, refreshing: false, loadingMore: false, hasMore: true, lastDoc: null as QueryDocumentSnapshot<DocumentData> | null })
+    const [newState, setNewState] = useState({ loading: true, refreshing: false, loadingMore: false, hasMore: true, lastDoc: null as QueryDocumentSnapshot<DocumentData> | null })
+    const [nearState, setNearState] = useState({ loading: true, refreshing: false, loadingMore: false, hasMore: true, lastDoc: null as QueryDocumentSnapshot<DocumentData> | null })
     const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set())
     const [showOptionsMenu, setShowOptionsMenu] = useState<string | null>(null) // Store post ID of open menu
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
@@ -100,8 +101,41 @@ export default function ExploreScreen() {
     const [featuredLists, setFeaturedLists] = useState<List[]>([])
     const [loadingLists, setLoadingLists] = useState(true)
     const flatListRef = React.useRef<FlatList>(null)
+    const pagerRef = useRef<PagerView>(null)
     const lastInteractionTimeRef = React.useRef<number>(Date.now())
     const interactionTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+    const [refreshEnabled, setRefreshEnabled] = useState(true)
+
+    // Map filter to page index
+    const getPageIndex = (filter: FilterType): number => {
+        switch (filter) {
+            case 'trending': return 0
+            case 'new': return 1
+            case 'near': return 2
+            default: return 0
+        }
+    }
+
+    const getFilterFromPage = (page: number): FilterType => {
+        switch (page) {
+            case 0: return 'trending'
+            case 1: return 'new'
+            case 2: return 'near'
+            default: return 'trending'
+        }
+    }
+
+    // Helper to get posts and state for a specific filter
+    const getFilterData = (filter: FilterType) => {
+        switch (filter) {
+            case 'trending':
+                return { posts: trendingPosts, setPosts: setTrendingPosts, state: trendingState, setState: setTrendingState }
+            case 'new':
+                return { posts: newPosts, setPosts: setNewPosts, state: newState, setState: setNewState }
+            case 'near':
+                return { posts: nearPosts, setPosts: setNearPosts, state: nearState, setState: setNearState }
+        }
+    }
 
     // Get user location for "Near" filter
     useEffect(() => {
@@ -141,11 +175,11 @@ export default function ExploreScreen() {
         }, 2 * 60 * 1000) // 2 minutes
     }, [isStale, isFocused])
 
-    const fetchSavedStatus = useCallback(async () => {
-        if (!user || posts.length === 0) return
+    const fetchSavedStatus = useCallback(async (postsToCheck: Post[]) => {
+        if (!user || postsToCheck.length === 0) return
         try {
             // Check which posts are saved
-            const postIds = posts.map(p => p.id)
+            const postIds = postsToCheck.map(p => p.id)
             const savedStatuses = await Promise.all(
                 postIds.map(async (postId) => ({
                     postId,
@@ -172,7 +206,7 @@ export default function ExploreScreen() {
         } catch (error) {
             console.error('Error fetching saved status:', error)
         }
-    }, [user, posts])
+    }, [user])
 
     const fetchFeaturedLists = async () => {
         try {
@@ -248,34 +282,38 @@ export default function ExploreScreen() {
         }
     }
 
-    const fetchPosts = async (loadMore = false) => {
-        if (loadMore && (!hasMore || loadingMore)) return
+    const fetchPosts = async (filter: FilterType, loadMore = false) => {
+        const { posts, setPosts, state, setState } = getFilterData(filter)
+
+        if (loadMore && (!state.hasMore || state.loadingMore)) return
 
         try {
             if (loadMore) {
-                setLoadingMore(true)
+                setState(prev => ({ ...prev, loadingMore: true }))
+            } else {
+                setState(prev => ({ ...prev, refreshing: true }))
             }
 
-            // Build query based on active filter
+            // Build query based on filter
             let orderField = 'catchCount' // trending (default)
             let orderDirection: 'desc' | 'asc' = 'desc'
 
-            if (activeFilter === 'new') {
+            if (filter === 'new') {
                 orderField = 'createdAt'
                 orderDirection = 'desc'
-            } else if (activeFilter === 'near') {
+            } else if (filter === 'near') {
                 // For "near" filter, we still use catchCount but will filter/sort by distance client-side
                 orderField = 'catchCount'
                 orderDirection = 'desc'
             }
 
             let postsQuery
-            if (loadMore && lastDoc) {
+            if (loadMore && state.lastDoc) {
                 postsQuery = query(
                     collection(db, 'posts'),
                     where('isOriginal', '==', true),
                     orderBy(orderField, orderDirection),
-                    startAfter(lastDoc),
+                    startAfter(state.lastDoc),
                     limit(POSTS_PER_PAGE)
                 )
             } else {
@@ -298,26 +336,22 @@ export default function ExploreScreen() {
             })
 
             // Update last document for pagination
-            const lastVisible =
-                querySnapshot.docs[querySnapshot.docs.length - 1]
-            setLastDoc(lastVisible || null)
+            const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1]
 
             // Check if there are more posts
-            setHasMore(fetchedPosts.length === POSTS_PER_PAGE)
+            const hasMorePosts = fetchedPosts.length === POSTS_PER_PAGE
 
             if (loadMore) {
                 // Deduplicate posts when loading more
-                setPosts((prev) => {
-                    const existingIds = new Set(prev.map((p) => p.id))
-                    const newPosts = fetchedPosts.filter(
-                        (p) => !existingIds.has(p.id)
-                    )
-                    return [...prev, ...newPosts]
-                })
+                const existingIds = new Set(posts.map((p) => p.id))
+                const newPosts = fetchedPosts.filter((p) => !existingIds.has(p.id))
+                setPosts([...posts, ...newPosts])
+                setState(prev => ({ ...prev, lastDoc: lastVisible || null, hasMore: hasMorePosts }))
             } else {
                 setPosts(fetchedPosts)
+                setState(prev => ({ ...prev, lastDoc: lastVisible || null, hasMore: hasMorePosts }))
                 // Fetch saved status on initial load
-                await fetchSavedStatus()
+                await fetchSavedStatus(fetchedPosts)
                 // Update last fetch time
                 updateLastFetch('explore')
                 setShowStaleIndicator(false)
@@ -325,41 +359,38 @@ export default function ExploreScreen() {
         } catch (error) {
             console.error('Error fetching posts:', error)
         } finally {
-            setLoading(false)
-            setRefreshing(false)
-            setLoadingMore(false)
+            setState(prev => ({ ...prev, loading: false, refreshing: false, loadingMore: false }))
         }
     }
 
+    // Initial load for trending
     useEffect(() => {
-        fetchPosts()
+        fetchPosts('trending', false)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     // Subscribe to post events for granular updates
     usePostEvents((event: PostEvent) => {
         if (event.action === 'create') {
-            // New post created - refresh feed to show it
-            setHasMore(true)
-            setLastDoc(null)
-            fetchPosts(false)
+            // New post created - refresh current filter
+            fetchPosts(activeFilter, false)
         } else if (event.action === 'delete' && event.postId) {
-            // Remove deleted post from local state without re-fetching
-            setPosts(prev => prev.filter(p => p.id !== event.postId))
+            // Remove deleted post from all filters
+            setTrendingPosts(prev => prev.filter(p => p.id !== event.postId))
+            setNewPosts(prev => prev.filter(p => p.id !== event.postId))
+            setNearPosts(prev => prev.filter(p => p.id !== event.postId))
         }
         // Note: 'catch' events don't affect explore feed since it only shows originals
-    }, [])
+    }, [activeFilter])
 
     // Auto-refresh when screen becomes focused after being stale
     useEffect(() => {
         if (isFocused && isStale('explore')) {
-            // Auto refresh if data is stale
-            setHasMore(true)
-            setLastDoc(null)
-            fetchPosts(false)
+            // Auto refresh current filter if data is stale
+            fetchPosts(activeFilter, false)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isFocused])
+    }, [isFocused, activeFilter])
 
     // Start interaction timer on mount and when recordInteraction changes
     useEffect(() => {
@@ -378,25 +409,46 @@ export default function ExploreScreen() {
                 // Already on this tab, scroll to top and refresh
                 e.preventDefault()
                 flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
-                setHasMore(true)
-                setLastDoc(null)
-                fetchPosts(false)
+                fetchPosts(activeFilter, false)
             }
         })
 
         return unsubscribe
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [navigation, isFocused])
+    }, [navigation, isFocused, activeFilter])
 
-    // Refetch when filter changes
+    // Lazy load other filters when user switches to them
     useEffect(() => {
-        setHasMore(true)
-        setLastDoc(null)
-        setPosts([])
-        setLoading(true)
-        fetchPosts(false)
+        const { posts, state } = getFilterData(activeFilter)
+        // If this filter hasn't been loaded yet, load it
+        if (posts.length === 0 && !state.loading) {
+            fetchPosts(activeFilter, false)
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeFilter])
+
+    // Handle page swipe
+    const handlePageSelected = (e: any) => {
+        const position = e.nativeEvent.position
+        const newFilter = getFilterFromPage(position)
+
+        console.log('Page selected:', position, 'Filter:', newFilter, 'Current:', activeFilter)
+
+        // Don't allow swiping to "Near" if location not available
+        if (newFilter === 'near' && !userLocation) {
+            console.log('Blocked swipe to Near - no location')
+            // Snap back to previous page
+            const currentIndex = getPageIndex(activeFilter)
+            setTimeout(() => pagerRef.current?.setPage(currentIndex), 0)
+            return
+        }
+
+        if (newFilter !== activeFilter) {
+            console.log('Changing filter from', activeFilter, 'to', newFilter)
+            setActiveFilter(newFilter)
+            recordInteraction()
+        }
+    }
 
     // Fetch featured lists on mount
     useEffect(() => {
@@ -404,20 +456,18 @@ export default function ExploreScreen() {
     }, [])
 
     const onRefresh = useCallback(() => {
-        setRefreshing(true)
-        setHasMore(true)
-        setLastDoc(null)
         recordInteraction()
-        fetchPosts(false)
+        fetchPosts(activeFilter, false)
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [recordInteraction])
+    }, [recordInteraction, activeFilter])
 
     const loadMorePosts = useCallback(() => {
-        if (!loading && !loadingMore && hasMore) {
-            fetchPosts(true)
+        const { state } = getFilterData(activeFilter)
+        if (!state.loading && !state.loadingMore && state.hasMore) {
+            fetchPosts(activeFilter, true)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loading, loadingMore, hasMore, lastDoc])
+    }, [activeFilter])
 
     const handleToggleSave = async (postId: string) => {
         if (!user) return
@@ -461,8 +511,10 @@ export default function ExploreScreen() {
             // Delete post from Firestore
             await deleteDoc(doc(db, 'posts', postId))
 
-            // Update local state
-            setPosts(posts.filter((post) => post.id !== postId))
+            // Update local state in all filters
+            setTrendingPosts(prev => prev.filter((post) => post.id !== postId))
+            setNewPosts(prev => prev.filter((post) => post.id !== postId))
+            setNearPosts(prev => prev.filter((post) => post.id !== postId))
 
             Alert.alert('Success', 'Post deleted successfully')
         } catch (error) {
@@ -537,49 +589,47 @@ export default function ExploreScreen() {
     )
 
     const renderListHeader = () => {
-        // Show loading state with skeletons
-        if (loadingLists) {
-            return (
-                <View style={styles.featuredListsSection}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>📋 Featured Lists</Text>
-                    </View>
-                    <View style={styles.listCarouselScrollView}>
-                        <FeaturedListSkeleton />
-                        <FeaturedListSkeleton />
-                    </View>
-                </View>
-            )
-        }
-
-        // Don't show section if no lists
-        if (featuredLists.length === 0) {
-            return null
-        }
-
         return (
-            <View style={styles.featuredListsSection}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>📋 Featured Lists</Text>
-                    <TouchableOpacity
-                        onPress={() => {
-                            recordInteraction()
-                            router.push('/(tabs)/lists')
-                        }}
-                    >
-                        <Text style={styles.sectionSeeAll}>See All</Text>
-                    </TouchableOpacity>
-                </View>
-                {/* Use ScrollView instead of nested FlatList to avoid VirtualizedList warning */}
-                <View style={styles.listCarouselScrollView}>
-                    {featuredLists.map(renderFeaturedListItem)}
-                </View>
-            </View>
+            <>
+                {/* Featured Lists Section */}
+                {loadingLists ? (
+                    <View style={styles.featuredListsSection}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>📋 Featured Lists</Text>
+                        </View>
+                        <View style={styles.listCarouselScrollView}>
+                            <FeaturedListSkeleton />
+                            <FeaturedListSkeleton />
+                        </View>
+                    </View>
+                ) : featuredLists.length > 0 ? (
+                    <View style={styles.featuredListsSection}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>📋 Featured Lists</Text>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    recordInteraction()
+                                    router.push('/(tabs)/lists')
+                                }}
+                            >
+                                <Text style={styles.sectionSeeAll}>See All</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.listCarouselScrollView}>
+                            {featuredLists.map(renderFeaturedListItem)}
+                        </View>
+                    </View>
+                ) : null}
+
+                {/* Filter Tabs - now below featured lists */}
+                {renderFilterTabs()}
+            </>
         )
     }
 
-    const renderPost = ({ item }: { item: Post }) => {
+    const PostCard = React.memo(({ item }: { item: Post }) => {
         const isSaved = savedPosts.has(item.id)
+        const showMenu = showOptionsMenu === item.id
 
         return (
             <Pressable
@@ -657,7 +707,7 @@ export default function ExploreScreen() {
                                 />
                             </TouchableOpacity>
 
-                            {showOptionsMenu === item.id && (
+                            {showMenu && (
                                 <View style={styles.optionsMenu}>
                                     <TouchableOpacity
                                         style={styles.optionsMenuItem}
@@ -726,9 +776,13 @@ export default function ExploreScreen() {
                 </View>
             </Pressable>
         )
-    }
+    })
 
-    if (loading) {
+    const renderPost = ({ item }: { item: Post }) => <PostCard item={item} />
+
+    // Show loading only if all filters are loading (initial load)
+    const allLoading = trendingState.loading && newState.loading && nearState.loading
+    if (allLoading && trendingPosts.length === 0) {
         return (
             <View style={styles.centerContainer}>
                 <ActivityIndicator size="large" color={colors.primary} />
@@ -736,6 +790,60 @@ export default function ExploreScreen() {
             </View>
         )
     }
+
+    const renderFilterTabs = () => (
+        <View style={styles.tabContainer}>
+            <TouchableOpacity
+                style={[styles.tab, activeFilter === 'trending' && styles.activeTab]}
+                onPress={() => {
+                    setActiveFilter('trending')
+                    pagerRef.current?.setPage(0)
+                    recordInteraction()
+                }}
+            >
+                <Text style={[styles.tabText, activeFilter === 'trending' && styles.activeTabText]}>
+                    Trending
+                </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                style={[styles.tab, activeFilter === 'new' && styles.activeTab]}
+                onPress={() => {
+                    setActiveFilter('new')
+                    pagerRef.current?.setPage(1)
+                    recordInteraction()
+                }}
+            >
+                <Text style={[styles.tabText, activeFilter === 'new' && styles.activeTabText]}>
+                    New
+                </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                style={[
+                    styles.tab,
+                    activeFilter === 'near' && styles.activeTab,
+                    !userLocation && styles.tabDisabled,
+                ]}
+                onPress={() => {
+                    if (userLocation) {
+                        setActiveFilter('near')
+                        pagerRef.current?.setPage(2)
+                        recordInteraction()
+                    }
+                }}
+                disabled={!userLocation}
+            >
+                <Text style={[
+                    styles.tabText,
+                    activeFilter === 'near' && styles.activeTabText,
+                    !userLocation && styles.tabTextDisabled,
+                ]}>
+                    Near
+                </Text>
+            </TouchableOpacity>
+        </View>
+    )
 
     return (
         <TouchableWithoutFeedback
@@ -745,95 +853,9 @@ export default function ExploreScreen() {
             }}
         >
             <View style={{ flex: 1 }}>
-                {/* Header with Search and Filters */}
+                {/* Header */}
                 <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-                    {/* Search Bar */}
-                    <View style={styles.searchContainer}>
-                        <Ionicons name="search" size={20} color={colors.textTertiary} style={styles.searchIcon} />
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder="Search locations..."
-                            placeholderTextColor={colors.textTertiary}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                        />
-                    </View>
-
-                    {/* Filter Chips */}
-                    <View style={styles.filterChipsContainer}>
-                        <TouchableOpacity
-                            style={[
-                                styles.filterChip,
-                                activeFilter === 'near' && styles.filterChipActive,
-                                !userLocation && activeFilter !== 'near' && styles.filterChipDisabled,
-                            ]}
-                            onPress={() => {
-                                if (userLocation) {
-                                    setActiveFilter('near')
-                                    recordInteraction()
-                                }
-                            }}
-                            disabled={!userLocation && activeFilter !== 'near'}
-                        >
-                            <Ionicons
-                                name="location"
-                                size={16}
-                                color={activeFilter === 'near' ? colors.textPrimary : colors.textSecondary}
-                            />
-                            <Text style={[
-                                styles.filterChipText,
-                                activeFilter === 'near' && styles.filterChipTextActive,
-                            ]}>
-                                Near
-                            </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[
-                                styles.filterChip,
-                                activeFilter === 'trending' && styles.filterChipActive,
-                            ]}
-                            onPress={() => {
-                                setActiveFilter('trending')
-                                recordInteraction()
-                            }}
-                        >
-                            <Ionicons
-                                name="flame"
-                                size={16}
-                                color={activeFilter === 'trending' ? colors.textPrimary : colors.textSecondary}
-                            />
-                            <Text style={[
-                                styles.filterChipText,
-                                activeFilter === 'trending' && styles.filterChipTextActive,
-                            ]}>
-                                Trending
-                            </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[
-                                styles.filterChip,
-                                activeFilter === 'new' && styles.filterChipActive,
-                            ]}
-                            onPress={() => {
-                                setActiveFilter('new')
-                                recordInteraction()
-                            }}
-                        >
-                            <Ionicons
-                                name="sparkles"
-                                size={16}
-                                color={activeFilter === 'new' ? colors.textPrimary : colors.textSecondary}
-                            />
-                            <Text style={[
-                                styles.filterChipText,
-                                activeFilter === 'new' && styles.filterChipTextActive,
-                            ]}>
-                                New
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                    <Text style={styles.title}>Explore</Text>
                 </View>
 
                 {/* Floating Map Button */}
@@ -847,57 +869,214 @@ export default function ExploreScreen() {
                     <Ionicons name="map" size={24} color={colors.textPrimary} />
                 </TouchableOpacity>
 
-                <FlatList
-                    ref={flatListRef}
-                    data={posts}
-                    renderItem={renderPost}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContent}
-                    onScroll={recordInteraction}
-                    scrollEventThrottle={2000}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={refreshing}
-                            onRefresh={onRefresh}
-                            tintColor={colors.primary}
+                {/* Swipeable Pager */}
+                <PagerView
+                    ref={pagerRef}
+                    style={styles.pagerView}
+                    initialPage={0}
+                    onPageSelected={handlePageSelected}
+                    onPageScrollStateChanged={(e) => {
+                        // Disable pull-to-refresh while swiping
+                        if (e.nativeEvent.pageScrollState === 'dragging') {
+                            setRefreshEnabled(false)
+                        } else if (e.nativeEvent.pageScrollState === 'idle') {
+                            setRefreshEnabled(true)
+                        }
+                    }}
+                    scrollEnabled={true}
+                >
+                    {/* Page 0: Trending */}
+                    <View key="0" style={styles.pageContainer}>
+                        <FlatList
+                            ref={activeFilter === 'trending' ? flatListRef : null}
+                            data={trendingPosts}
+                            renderItem={renderPost}
+                            keyExtractor={(item) => item.id}
+                            contentContainerStyle={styles.listContent}
+                            onScroll={recordInteraction}
+                            scrollEventThrottle={2000}
+                            nestedScrollEnabled
+                            refreshControl={
+                                refreshEnabled && activeFilter === 'trending' ? (
+                                    <RefreshControl
+                                        refreshing={trendingState.refreshing}
+                                        onRefresh={onRefresh}
+                                        tintColor={colors.primary}
+                                    />
+                                ) : undefined
+                            }
+                            ListHeaderComponent={renderListHeader}
+                            ListEmptyComponent={
+                                trendingState.loading ? null : (
+                                    <View style={styles.emptyContainer}>
+                                        <Ionicons
+                                            name="images-outline"
+                                            size={80}
+                                            color="#ccc"
+                                        />
+                                        <Text style={styles.emptyTitle}>No Shots Yet</Text>
+                                        <Text style={styles.emptySubtitle}>
+                                            Be the first to share a shot!
+                                        </Text>
+                                    </View>
+                                )
+                            }
+                            onEndReached={activeFilter === 'trending' ? loadMorePosts : undefined}
+                            onEndReachedThreshold={0.5}
+                            ListFooterComponent={
+                                activeFilter === 'trending' && trendingState.loadingMore ? (
+                                    <View style={styles.footerLoader}>
+                                        <ActivityIndicator
+                                            size="small"
+                                            color={colors.primary}
+                                        />
+                                        <Text style={styles.footerText}>
+                                            Loading more posts...
+                                        </Text>
+                                    </View>
+                                ) : activeFilter === 'trending' && !trendingState.hasMore && trendingPosts.length > 0 ? (
+                                    <View style={styles.footerLoader}>
+                                        <Text style={styles.footerText}>
+                                            No more posts
+                                        </Text>
+                                    </View>
+                                ) : null
+                            }
                         />
-                    }
-                    ListHeaderComponent={renderListHeader}
-                    ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <Ionicons
-                                name="images-outline"
-                                size={80}
-                                color="#ccc"
-                            />
-                            <Text style={styles.emptyTitle}>No Shots Yet</Text>
-                            <Text style={styles.emptySubtitle}>
-                                Be the first to share a shot!
-                            </Text>
-                        </View>
-                    }
-                    onEndReached={loadMorePosts}
-                    onEndReachedThreshold={0.5}
-                    ListFooterComponent={
-                        loadingMore ? (
-                            <View style={styles.footerLoader}>
-                                <ActivityIndicator
-                                    size="small"
-                                    color={colors.primary}
-                                />
-                                <Text style={styles.footerText}>
-                                    Loading more posts...
-                                </Text>
-                            </View>
-                        ) : !hasMore && posts.length > 0 ? (
-                            <View style={styles.footerLoader}>
-                                <Text style={styles.footerText}>
-                                    No more posts
-                                </Text>
-                            </View>
-                        ) : null
-                    }
-                />
+                    </View>
+
+                    {/* Page 1: New */}
+                    <View key="1" style={styles.pageContainer}>
+                        <FlatList
+                            ref={activeFilter === 'new' ? flatListRef : null}
+                            data={newPosts}
+                            renderItem={renderPost}
+                            keyExtractor={(item) => item.id}
+                            contentContainerStyle={styles.listContent}
+                            onScroll={recordInteraction}
+                            scrollEventThrottle={2000}
+                            nestedScrollEnabled
+                            refreshControl={
+                                refreshEnabled && activeFilter === 'new' ? (
+                                    <RefreshControl
+                                        refreshing={newState.refreshing}
+                                        onRefresh={onRefresh}
+                                        tintColor={colors.primary}
+                                    />
+                                ) : undefined
+                            }
+                            ListHeaderComponent={renderListHeader}
+                            ListEmptyComponent={
+                                newState.loading ? null : (
+                                    <View style={styles.emptyContainer}>
+                                        <Ionicons
+                                            name="images-outline"
+                                            size={80}
+                                            color="#ccc"
+                                        />
+                                        <Text style={styles.emptyTitle}>No Shots Yet</Text>
+                                        <Text style={styles.emptySubtitle}>
+                                            Be the first to share a shot!
+                                        </Text>
+                                    </View>
+                                )
+                            }
+                            onEndReached={activeFilter === 'new' ? loadMorePosts : undefined}
+                            onEndReachedThreshold={0.5}
+                            ListFooterComponent={
+                                activeFilter === 'new' && newState.loadingMore ? (
+                                    <View style={styles.footerLoader}>
+                                        <ActivityIndicator
+                                            size="small"
+                                            color={colors.primary}
+                                        />
+                                        <Text style={styles.footerText}>
+                                            Loading more posts...
+                                        </Text>
+                                    </View>
+                                ) : activeFilter === 'new' && !newState.hasMore && newPosts.length > 0 ? (
+                                    <View style={styles.footerLoader}>
+                                        <Text style={styles.footerText}>
+                                            No more posts
+                                        </Text>
+                                    </View>
+                                ) : null
+                            }
+                        />
+                    </View>
+
+                    {/* Page 2: Near */}
+                    <View key="2" style={styles.pageContainer}>
+                        <FlatList
+                            ref={activeFilter === 'near' ? flatListRef : null}
+                            data={nearPosts}
+                            renderItem={renderPost}
+                            keyExtractor={(item) => item.id}
+                            contentContainerStyle={styles.listContent}
+                            onScroll={recordInteraction}
+                            scrollEventThrottle={2000}
+                            nestedScrollEnabled
+                            refreshControl={
+                                refreshEnabled && activeFilter === 'near' ? (
+                                    <RefreshControl
+                                        refreshing={nearState.refreshing}
+                                        onRefresh={onRefresh}
+                                        tintColor={colors.primary}
+                                    />
+                                ) : undefined
+                            }
+                            ListHeaderComponent={renderListHeader}
+                            ListEmptyComponent={
+                                nearState.loading ? null : userLocation ? (
+                                    <View style={styles.emptyContainer}>
+                                        <Ionicons
+                                            name="images-outline"
+                                            size={80}
+                                            color="#ccc"
+                                        />
+                                        <Text style={styles.emptyTitle}>No Nearby Shots</Text>
+                                        <Text style={styles.emptySubtitle}>
+                                            No posts found near your location
+                                        </Text>
+                                    </View>
+                                ) : (
+                                    <View style={styles.emptyContainer}>
+                                        <Ionicons
+                                            name="location-outline"
+                                            size={80}
+                                            color="#ccc"
+                                        />
+                                        <Text style={styles.emptyTitle}>Location Required</Text>
+                                        <Text style={styles.emptySubtitle}>
+                                            Enable location to see nearby posts
+                                        </Text>
+                                    </View>
+                                )
+                            }
+                            onEndReached={activeFilter === 'near' ? loadMorePosts : undefined}
+                            onEndReachedThreshold={0.5}
+                            ListFooterComponent={
+                                activeFilter === 'near' && nearState.loadingMore ? (
+                                    <View style={styles.footerLoader}>
+                                        <ActivityIndicator
+                                            size="small"
+                                            color={colors.primary}
+                                        />
+                                        <Text style={styles.footerText}>
+                                            Loading more posts...
+                                        </Text>
+                                    </View>
+                                ) : activeFilter === 'near' && !nearState.hasMore && nearPosts.length > 0 ? (
+                                    <View style={styles.footerLoader}>
+                                        <Text style={styles.footerText}>
+                                            No more posts
+                                        </Text>
+                                    </View>
+                                ) : null
+                            }
+                        />
+                    </View>
+                </PagerView>
 
                 <ThreadModal
                     visible={modalVisible}
@@ -907,14 +1086,16 @@ export default function ExploreScreen() {
                         setSelectedPost(null)
                     }}
                     onPostUpdate={(updatedPost) => {
-                        setPosts(
-                            posts.map((p) =>
-                                p.id === updatedPost.id ? updatedPost : p
-                            )
-                        )
+                        // Update post in all filters
+                        setTrendingPosts(prev => prev.map((p) => p.id === updatedPost.id ? updatedPost : p))
+                        setNewPosts(prev => prev.map((p) => p.id === updatedPost.id ? updatedPost : p))
+                        setNearPosts(prev => prev.map((p) => p.id === updatedPost.id ? updatedPost : p))
                     }}
                     onPostDelete={(postId) => {
-                        setPosts(posts.filter((p) => p.id !== postId))
+                        // Remove from all filters
+                        setTrendingPosts(prev => prev.filter((p) => p.id !== postId))
+                        setNewPosts(prev => prev.filter((p) => p.id !== postId))
+                        setNearPosts(prev => prev.filter((p) => p.id !== postId))
                     }}
                 />
 
@@ -950,9 +1131,7 @@ export default function ExploreScreen() {
                             onPress={async () => {
                                 recordInteraction()
                                 setStaleRefreshing(true)
-                                setHasMore(true)
-                                setLastDoc(null)
-                                await fetchPosts(false)
+                                await fetchPosts(activeFilter, false)
                                 setStaleRefreshing(false)
                             }}
                             disabled={staleRefreshing}
@@ -981,56 +1160,54 @@ const styles = StyleSheet.create({
     header: {
         backgroundColor: colors.background,
         paddingHorizontal: 16,
+        paddingTop: 12,
         paddingBottom: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     },
-    searchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.card,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        marginBottom: 12,
-    },
-    searchIcon: {
-        marginRight: 8,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 16,
+    title: {
+        fontSize: 28,
+        fontWeight: 'bold',
         color: colors.textPrimary,
     },
-    filterChipsContainer: {
+    tabContainer: {
         flexDirection: 'row',
-        gap: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+        backgroundColor: colors.background,
+        paddingHorizontal: 16,
+        marginHorizontal: -10, // Extend to edges of list content
     },
-    filterChip: {
-        flexDirection: 'row',
+    tab: {
+        flex: 1,
+        paddingVertical: 12,
         alignItems: 'center',
-        gap: 6,
-        backgroundColor: colors.card,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'transparent',
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
     },
-    filterChipActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
+    activeTab: {
+        borderBottomColor: colors.primary,
     },
-    filterChipDisabled: {
+    tabDisabled: {
         opacity: 0.5,
     },
-    filterChipText: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: colors.textSecondary,
+    tabText: {
+        fontSize: 16,
+        color: colors.textTertiary,
     },
-    filterChipTextActive: {
-        color: colors.textPrimary,
+    activeTabText: {
+        color: colors.primary,
+        fontWeight: '600',
+    },
+    tabTextDisabled: {
+        color: colors.textTertiary,
+        opacity: 0.5,
+    },
+    pagerView: {
+        flex: 1,
+    },
+    pageContainer: {
+        flex: 1,
     },
     floatingMapButton: {
         position: 'absolute',

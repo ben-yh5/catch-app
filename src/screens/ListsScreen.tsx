@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState, useRef } from 'react'
 import {
     ActivityIndicator,
     FlatList,
@@ -16,6 +16,7 @@ import { useAuth } from '@/context/AuthContext'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { colors } from '@/theme/colors'
+import PagerView from 'react-native-pager-view'
 
 interface List {
     id: string
@@ -34,10 +35,12 @@ export default function ListsScreen() {
     const { user } = useAuth()
     const insets = useSafeAreaInsets()
     const router = useRouter()
+    const pagerRef = useRef<PagerView>(null)
     const [lists, setLists] = useState<List[]>([])
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [activeTab, setActiveTab] = useState<'my' | 'community'>('my')
+    const [refreshEnabled, setRefreshEnabled] = useState(true)
 
     const fetchMyLists = async () => {
         if (!user) return
@@ -106,6 +109,21 @@ export default function ListsScreen() {
             fetchCommunityLists()
         }
     }, [activeTab, user])
+
+    // Handle page swipe
+    const handlePageSelected = (e: any) => {
+        const position = e.nativeEvent.position
+        const newTab = position === 0 ? 'my' : 'community'
+        if (newTab !== activeTab) {
+            setActiveTab(newTab)
+            setLoading(true)
+        }
+    }
+
+    // Don't sync pager automatically - let user swipe control it
+    // useEffect(() => {
+    //     pagerRef.current?.setPage(activeTab === 'my' ? 0 : 1)
+    // }, [activeTab])
 
     useEffect(() => {
         fetchLists()
@@ -176,6 +194,7 @@ export default function ListsScreen() {
                     style={[styles.tab, activeTab === 'my' && styles.activeTab]}
                     onPress={() => {
                         setActiveTab('my')
+                        pagerRef.current?.setPage(0)
                         setLoading(true)
                     }}
                 >
@@ -187,6 +206,7 @@ export default function ListsScreen() {
                     style={[styles.tab, activeTab === 'community' && styles.activeTab]}
                     onPress={() => {
                         setActiveTab('community')
+                        pagerRef.current?.setPage(1)
                         setLoading(true)
                     }}
                 >
@@ -198,22 +218,71 @@ export default function ListsScreen() {
                 </TouchableOpacity>
             </View>
 
-            {loading ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#007AFF" />
-                </View>
-            ) : (
-                <FlatList
-                    data={lists}
-                    renderItem={renderListItem}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContainer}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            {/* Swipeable Pager */}
+            <PagerView
+                ref={pagerRef}
+                style={styles.pagerView}
+                initialPage={0}
+                onPageSelected={handlePageSelected}
+                onPageScrollStateChanged={(e) => {
+                    // Disable pull-to-refresh while swiping
+                    if (e.nativeEvent.pageScrollState === 'dragging') {
+                        setRefreshEnabled(false)
+                    } else if (e.nativeEvent.pageScrollState === 'idle') {
+                        setRefreshEnabled(true)
                     }
-                    ListEmptyComponent={renderEmptyState}
-                />
-            )}
+                }}
+            >
+                {/* Page 0: My Lists */}
+                <View key="0" style={styles.pageContainer}>
+                    {loading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color="#007AFF" />
+                        </View>
+                    ) : (
+                        <FlatList
+                            data={lists}
+                            renderItem={renderListItem}
+                            keyExtractor={(item) => item.id}
+                            contentContainerStyle={styles.listContainer}
+                            refreshControl={
+                                refreshEnabled ? (
+                                    <RefreshControl
+                                        refreshing={refreshing}
+                                        onRefresh={handleRefresh}
+                                    />
+                                ) : undefined
+                            }
+                            ListEmptyComponent={renderEmptyState}
+                        />
+                    )}
+                </View>
+
+                {/* Page 1: Community */}
+                <View key="1" style={styles.pageContainer}>
+                    {loading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color="#007AFF" />
+                        </View>
+                    ) : (
+                        <FlatList
+                            data={lists}
+                            renderItem={renderListItem}
+                            keyExtractor={(item) => item.id}
+                            contentContainerStyle={styles.listContainer}
+                            refreshControl={
+                                refreshEnabled ? (
+                                    <RefreshControl
+                                        refreshing={refreshing}
+                                        onRefresh={handleRefresh}
+                                    />
+                                ) : undefined
+                            }
+                            ListEmptyComponent={renderEmptyState}
+                        />
+                    )}
+                </View>
+            </PagerView>
 
             {/* FAB - only show on "My Lists" tab */}
             {activeTab === 'my' && (
@@ -266,6 +335,12 @@ const styles = StyleSheet.create({
     activeTabText: {
         color: colors.primary,
         fontWeight: '600',
+    },
+    pagerView: {
+        flex: 1,
+    },
+    pageContainer: {
+        flex: 1,
     },
     loadingContainer: {
         flex: 1,
