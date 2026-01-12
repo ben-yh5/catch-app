@@ -1,21 +1,22 @@
+import { useAuth } from '@/context/AuthContext'
+import { db } from '@/services/firebase'
+import { colors } from '@/theme/colors'
+import { Ionicons } from '@expo/vector-icons'
+import { useLocalSearchParams, useRouter } from 'expo-router'
+import { addDoc, collection, doc, getDoc, updateDoc } from 'firebase/firestore'
 import React, { useState } from 'react'
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    StyleSheet,
+    ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
     Platform,
-    ActivityIndicator,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native'
-import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { collection, addDoc, doc, updateDoc, getDoc } from 'firebase/firestore'
-import { db } from '@/services/firebase'
-import { useAuth } from '@/context/AuthContext'
-import { Ionicons } from '@expo/vector-icons'
 
 export default function CreateListModal() {
     const router = useRouter()
@@ -100,7 +101,7 @@ export default function CreateListModal() {
     if (isLoadingList) {
         return (
             <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
-                <ActivityIndicator size="large" color="#007AFF" />
+                <ActivityIndicator size="large" color={colors.primary} />
             </View>
         )
     }
@@ -123,7 +124,7 @@ export default function CreateListModal() {
                     style={styles.saveButton}
                 >
                     {loading ? (
-                        <ActivityIndicator size="small" color="#007AFF" />
+                        <ActivityIndicator size="small" color={colors.primary} />
                     ) : (
                         <Text style={styles.saveText}>Save</Text>
                     )}
@@ -136,6 +137,7 @@ export default function CreateListModal() {
                     <TextInput
                         style={styles.input}
                         placeholder="Enter list name"
+                        placeholderTextColor={colors.textTertiary}
                         value={name}
                         onChangeText={setName}
                         maxLength={50}
@@ -149,6 +151,7 @@ export default function CreateListModal() {
                     <TextInput
                         style={[styles.input, styles.textArea]}
                         placeholder="Describe your list"
+                        placeholderTextColor={colors.textTertiary}
                         value={description}
                         onChangeText={setDescription}
                         maxLength={200}
@@ -160,7 +163,7 @@ export default function CreateListModal() {
                 </View>
 
                 <View style={styles.infoBox}>
-                    <Ionicons name="information-circle" size={20} color="#666" />
+                    <Ionicons name="information-circle" size={20} color={colors.textSecondary} />
                     <Text style={styles.infoText}>
                         Lists are public and can be viewed by anyone
                     </Text>
@@ -173,13 +176,13 @@ export default function CreateListModal() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: colors.background,
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        backgroundColor: colors.background,
     },
     header: {
         flexDirection: 'row',
@@ -188,18 +191,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingBottom: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
+        borderBottomColor: colors.border,
     },
     cancelButton: {
         width: 70,
     },
     cancelText: {
         fontSize: 16,
-        color: '#007AFF',
+        color: colors.primary,
     },
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
+        color: colors.textPrimary,
     },
     saveButton: {
         width: 70,
@@ -208,7 +212,7 @@ const styles = StyleSheet.create({
     saveText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#007AFF',
+        color: colors.primary,
     },
     content: {
         flex: 1,
@@ -221,15 +225,16 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         marginBottom: 8,
-        color: '#333',
+        color: colors.textPrimary,
     },
     input: {
         borderWidth: 1,
-        borderColor: '#ddd',
+        borderColor: colors.border,
         borderRadius: 8,
         padding: 12,
         fontSize: 16,
-        backgroundColor: '#fff',
+        backgroundColor: colors.card,
+        color: colors.textPrimary,
     },
     textArea: {
         height: 100,
@@ -237,21 +242,21 @@ const styles = StyleSheet.create({
     },
     charCount: {
         fontSize: 12,
-        color: '#999',
+        color: colors.textTertiary,
         textAlign: 'right',
         marginTop: 4,
     },
     infoBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f5f5f5',
+        backgroundColor: colors.cardElevated,
         padding: 12,
         borderRadius: 8,
         marginTop: 8,
     },
     infoText: {
         fontSize: 14,
-        color: '#666',
+        color: colors.textSecondary,
         marginLeft: 8,
         flex: 1,
     },

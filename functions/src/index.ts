@@ -10,6 +10,7 @@
 
 import * as functions from 'firebase-functions'
 import * as admin from 'firebase-admin'
+import { geohashForLocation, geohashQueryBounds, distanceBetween } from 'geofire-common'
 
 admin.initializeApp()
 
@@ -634,3 +635,229 @@ export const onUserFollowed = functions.firestore
             }
         }
     })
+
+/**
+ * HTTPS Callable Function: Backfill geohash for existing post_locations
+ * This is a one-time migration function
+ *
+ * @returns Object with success status and number of updated locations
+ */
+export const backfillGeohashes = functions.https.onRequest(async (req, res) => {
+    try {
+        const db = admin.firestore()
+        let batchUpdates: any[] = []
+        let updateCount = 0
+
+        // Get all post_locations without geohash
+        const locationsSnapshot = await db.collection('post_locations').get()
+
+        functions.logger.info(`Found ${locationsSnapshot.size} post_locations to check`)
+
+        for (const doc of locationsSnapshot.docs) {
+            const data = doc.data()
+
+            // Skip if already has geohash
+            if (data.geohash) {
+                continue
+            }
+
+            // Generate geohash from existing coordinates
+            if (data.latitude && data.longitude) {
+                const geohash = geohashForLocation([data.latitude, data.longitude])
+                batchUpdates.push({ ref: doc.ref, geohash })
+                updateCount++
+
+                functions.logger.info(`Adding geohash to ${doc.id}: ${geohash}`)
+            } else {
+                functions.logger.warn(`Missing coordinates for ${doc.id}`)
+            }
+
+            // Firestore batch limit is 500 operations
+            if (batchUpdates.length >= 500) {
+                const batch = db.batch()
+                batchUpdates.forEach(update => {
+                    batch.update(update.ref, { geohash: update.geohash })
+                })
+                await batch.commit()
+                functions.logger.info(`Committed batch of ${batchUpdates.length} updates`)
+                batchUpdates = []
+            }
+        }
+
+        // Commit any remaining updates
+        if (batchUpdates.length > 0) {
+            const batch = db.batch()
+            batchUpdates.forEach(update => {
+                batch.update(update.ref, { geohash: update.geohash })
+            })
+            await batch.commit()
+            functions.logger.info(`Committed final batch of ${batchUpdates.length} updates`)
+        }
+
+        res.status(200).send({
+            success: true,
+            message: `Backfilled ${updateCount} post_locations with geohash`
+        })
+    } catch (error: any) {
+        functions.logger.error('Error backfilling geohashes:', error)
+        res.status(500).send({ success: false, error: error.message })
+    }
+})
+
+/**
+ * HTTPS Callable Function: Get posts within a map viewport or circular radius
+ *
+ * Supports two query modes:
+ * 1. Bounding box (map viewport): north, south, east, west
+ * 2. Circular radius: centerLat, centerLng, radiusInMeters
+ *
+ * @param data.north - Northern latitude (if using bounds)
+ * @param data.south - Southern latitude (if using bounds)
+ * @param data.east - Eastern longitude (if using bounds)
+ * @param data.west - Western longitude (if using bounds)
+ * @param data.centerLat - Center latitude (if using radius)
+ * @param data.centerLng - Center longitude (if using radius)
+ * @param data.radiusInMeters - Radius in meters (if using radius)
+ * @returns Object with posts array and count
+ */
+export const getPostsInArea = functions.https.onCall(async (data, context) => {
+    // Authentication check
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            'unauthenticated',
+            'User must be authenticated to fetch post locations'
+        )
+    }
+
+    const db = admin.firestore()
+
+    try {
+        let postLocations: any[] = []
+
+        // OPTION A: Query by radius (circular area)
+        if (data.centerLat && data.centerLng && data.radiusInMeters) {
+            const center: [number, number] = [data.centerLat, data.centerLng]
+            const radiusInM = data.radiusInMeters
+
+            // Validate radius to prevent abuse
+            if (radiusInM > 100000) {
+                throw new functions.https.HttpsError(
+                    'invalid-argument',
+                    'Radius cannot exceed 100km'
+                )
+            }
+
+            // Get geohash ranges that cover this circular area
+            const bounds = geohashQueryBounds(center, radiusInM)
+
+            functions.logger.info(`Querying ${bounds.length} geohash ranges for radius ${radiusInM}m`)
+
+            // Execute queries in parallel
+            const promises = bounds.map(([start, end]) => {
+                return db.collection('post_locations')
+                    .where('geohash', '>=', start)
+                    .where('geohash', '<=', end)
+                    .get()
+            })
+
+            const snapshots = await Promise.all(promises)
+
+            // Combine all results
+            const allResults: any[] = []
+            snapshots.forEach(snapshot => {
+                snapshot.docs.forEach(doc => {
+                    const locationData = doc.data()
+                    allResults.push({
+                        postId: locationData.postId,
+                        latitude: locationData.latitude,
+                        longitude: locationData.longitude,
+                        geohash: locationData.geohash
+                    })
+                })
+            })
+
+            // Filter to exact distance (geohash gives us a rectangle, we want a circle)
+            postLocations = allResults.filter(location => {
+                const distance = distanceBetween(
+                    center,
+                    [location.latitude, location.longitude]
+                )
+                return distance <= radiusInM
+            })
+
+            functions.logger.info(`Found ${allResults.length} posts in geohash bounds, ${postLocations.length} within exact radius`)
+        }
+
+        // OPTION B: Query by bounding box (map viewport)
+        else if (data.north && data.south && data.east && data.west) {
+            // Calculate center point and approximate radius from bounds
+            const centerLat = (data.north + data.south) / 2
+            const centerLng = (data.east + data.west) / 2
+
+            // Calculate diagonal distance as radius (ensures we cover entire viewport)
+            const radiusInM = distanceBetween(
+                [data.south, data.west],
+                [data.north, data.east]
+            ) / 2
+
+            functions.logger.info(`Viewport center: ${centerLat}, ${centerLng}, radius: ${radiusInM}m`)
+
+            // Use same geohash query approach
+            const center: [number, number] = [centerLat, centerLng]
+            const bounds = geohashQueryBounds(center, radiusInM)
+
+            const promises = bounds.map(([start, end]) => {
+                return db.collection('post_locations')
+                    .where('geohash', '>=', start)
+                    .where('geohash', '<=', end)
+                    .get()
+            })
+
+            const snapshots = await Promise.all(promises)
+
+            const allResults: any[] = []
+            snapshots.forEach(snapshot => {
+                snapshot.docs.forEach(doc => {
+                    const locationData = doc.data()
+                    allResults.push({
+                        postId: locationData.postId,
+                        latitude: locationData.latitude,
+                        longitude: locationData.longitude,
+                        geohash: locationData.geohash
+                    })
+                })
+            })
+
+            // Filter to exact bounding box
+            postLocations = allResults.filter(location => {
+                return (
+                    location.latitude >= data.south &&
+                    location.latitude <= data.north &&
+                    location.longitude >= data.west &&
+                    location.longitude <= data.east
+                )
+            })
+
+            functions.logger.info(`Found ${allResults.length} posts in geohash bounds, ${postLocations.length} within exact viewport`)
+        }
+
+        else {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Must provide either (centerLat, centerLng, radiusInMeters) or (north, south, east, west)'
+            )
+        }
+
+        return {
+            posts: postLocations,
+            count: postLocations.length
+        }
+
+    } catch (error: any) {
+        functions.logger.error('Error querying posts in area:', error)
+        throw new functions.https.HttpsError(
+            'internal',
+            'Error querying posts in area'
+        )
+    }
+})

@@ -13,6 +13,7 @@ import { colors } from '@/theme/colors'
 import UnifiedCameraView from '@/components/UnifiedCameraView'
 import UnifiedPreviewScreen from '@/components/UnifiedPreviewScreen'
 import { cropToSquare } from '@/utils/imageProcessing'
+import { geohashForLocation } from 'geofire-common'
 
 interface LocationData {
     latitude: number
@@ -190,11 +191,13 @@ export default function PostScreen() {
 
             const docRef = await addDoc(collection(db, 'posts'), postData)
 
-            // Store actual location in separate private collection
+            // Store actual location in separate private collection with geohash
+            const geohash = geohashForLocation([location.latitude, location.longitude])
             await addDoc(collection(db, 'post_locations'), {
                 postId: docRef.id,
                 latitude: location.latitude,
                 longitude: location.longitude,
+                geohash: geohash,
                 createdAt: new Date(),
             })
 

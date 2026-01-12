@@ -9,6 +9,7 @@ import { useEffect, useState, useRef } from 'react'
 import 'react-native-reanimated'
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
@@ -208,10 +209,12 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
     return (
-        <AuthProvider>
-            <PostProvider>
-                <RootLayoutNav />
-            </PostProvider>
-        </AuthProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <AuthProvider>
+                <PostProvider>
+                    <RootLayoutNav />
+                </PostProvider>
+            </AuthProvider>
+        </GestureHandlerRootView>
     )
 }

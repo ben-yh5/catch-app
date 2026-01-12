@@ -25,6 +25,7 @@ import { colors } from '@/theme/colors'
 import { validateCatch } from '@/utils/catchValidation'
 import { cropToSquare } from '@/utils/imageProcessing'
 import { isPostSaved } from '@/utils/listUtils'
+import { geohashForLocation } from 'geofire-common'
 import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
@@ -571,10 +572,12 @@ export default function ThreadModal({
                 createdAt: new Date(),
             })
 
+            const geohash = geohashForLocation([location.latitude, location.longitude])
             await addDoc(collection(db, 'post_locations'), {
                 postId: catchPostRef.id,
                 latitude: location.latitude,
                 longitude: location.longitude,
+                geohash: geohash,
                 createdAt: new Date(),
             })
 
