@@ -87,7 +87,7 @@ export default function MapScreen() {
     const [showSearchButton, setShowSearchButton] = useState(false)
 
     // List Focus Mode State
-    const { listId } = useLocalSearchParams<{ listId: string }>()
+    const { listId, postId } = useLocalSearchParams<{ listId: string; postId: string }>()
     const [activeList, setActiveList] = useState<any | null>(null)
     const [listPosts, setListPosts] = useState<Post[]>([])
     const [isListMode, setIsListMode] = useState(false)
@@ -138,6 +138,8 @@ export default function MapScreen() {
     useEffect(() => {
         if (listId) {
             fetchListDetails(listId)
+        } else if (postId) {
+            fetchPostForLocate(postId)
         } else {
             setIsListMode(false)
             setActiveList(null)
@@ -153,7 +155,7 @@ export default function MapScreen() {
         })
 
         return () => backHandler.remove()
-    }, [listId, isListMode])
+    }, [listId, postId, isListMode])
 
     const fetchListDetails = async (id: string) => {
         try {
@@ -227,8 +229,58 @@ export default function MapScreen() {
         }
     }
 
+    const fetchPostForLocate = async (id: string) => {
+        try {
+            setLoadingPosts(true)
+            // Fetch the post
+            const postDoc = await getDoc(doc(db, 'posts', id))
+            if (postDoc.exists()) {
+                const postData = postDoc.data()
+
+                // Fetch location via cloud function
+                const locations = await getPostLocations([id])
+                const location = locations.find(loc => loc.postId === id)
+
+                const post = {
+                    id: postDoc.id,
+                    ...postData,
+                    latitude: location?.latitude,
+                    longitude: location?.longitude,
+                } as Post
+
+                // Set up "fake" list mode
+                setActiveList({
+                    id: 'single-post-view',
+                    name: 'Post Location',
+                    creatorId: 'system',
+                    postIds: [id]
+                })
+                setIsListMode(true)
+                setListPosts([post])
+                setVisiblePosts([post])
+
+                // Focus camera
+                if (post.latitude && post.longitude && cameraRef.current) {
+                    setTimeout(() => {
+                        cameraRef.current?.setCamera({
+                            centerCoordinate: [post.longitude!, post.latitude!],
+                            zoomLevel: 16,
+                            animationDuration: 1000,
+                        })
+                    }, 500)
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching post for locate:', error)
+            Alert.alert('Error', 'Failed to locate post')
+        } finally {
+            setLoadingPosts(false)
+        }
+    }
+
+
     const handleListClose = () => {
-        router.setParams({ listId: '' }) // Clear param
+        router.setParams({ listId: '', postId: '' }) // Clear params
         setIsListMode(false)
         setActiveList(null)
         setListPosts([])

@@ -20,14 +20,14 @@
 
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
-import { db, storage, functions } from '@/services/firebase'
+import { db, functions, storage } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { validateCatch } from '@/utils/catchValidation'
 import { cropToSquare } from '@/utils/imageProcessing'
 import { isPostSaved } from '@/utils/listUtils'
-import { geohashForLocation } from 'geofire-common'
 import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
+import { Image } from 'expo-image'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
 import {
@@ -43,8 +43,9 @@ import {
     updateDoc,
     where,
 } from 'firebase/firestore'
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { httpsCallable } from 'firebase/functions'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { geohashForLocation } from 'geofire-common'
 import React, { useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
@@ -60,11 +61,10 @@ import {
     View,
     ViewToken,
 } from 'react-native'
-import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import ListSelectionBottomSheet from './ListSelectionBottomSheet'
 import UnifiedCameraView from './UnifiedCameraView'
 import UnifiedPreviewScreen from './UnifiedPreviewScreen'
-import ListSelectionBottomSheet from './ListSelectionBottomSheet'
 
 interface Post {
     id: string
@@ -346,6 +346,14 @@ export default function ThreadModal({
             console.error('Error opening directions:', error)
             Alert.alert('Error', 'Could not open maps application.')
         }
+    }
+
+    const handleLocateOnMap = () => {
+        if (!currentPost) return
+
+        onClose()
+        // Navigate to map with postId
+        router.push(`/(tabs)/map?postId=${currentPost.id}` as any)
     }
 
     const handleSavePress = () => {
@@ -870,8 +878,8 @@ export default function ThreadModal({
                                     initialScrollIndex={
                                         initialPostId
                                             ? threadPosts.findIndex(
-                                                  (p) => p.id === initialPostId
-                                              )
+                                                (p) => p.id === initialPostId
+                                            )
                                             : 0
                                     }
                                     onScrollToIndexFailed={(info) => {
@@ -971,6 +979,17 @@ export default function ThreadModal({
                                             <Ionicons name="camera" size={20} color="#fff" />
                                             <Text style={styles.catchButtonText}>Catch This Shot</Text>
                                         </TouchableOpacity>
+
+                                        {/* Locate on Map Button */}
+                                        {threadPosts[0]?.hasLocation && (
+                                            <TouchableOpacity
+                                                style={styles.directionsButton}
+                                                onPress={handleLocateOnMap}
+                                            >
+                                                <Ionicons name="map-outline" size={20} color={colors.primary} />
+                                                <Text style={styles.directionsButtonText}>Locate on Map</Text>
+                                            </TouchableOpacity>
+                                        )}
 
                                         {/* Get Directions Button */}
                                         {threadPosts[0]?.hasLocation && postLocation && (
