@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { getPostsInRadius } from '@/utils/geospatialQueries'
+import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
@@ -406,7 +407,9 @@ export default function ExploreScreen() {
                                                 transition={200}
                                             />
                                         ) : (
-                                            <View style={[styles.listThumbnail, styles.listThumbnailPlaceholder]} />
+                                            <View style={[styles.listThumbnail, styles.listThumbnailPlaceholder]}>
+                                                <Ionicons name="image-outline" size={24} color={colors.textTertiary} />
+                                            </View>
                                         )}
                                     </View>
                                 ))}
