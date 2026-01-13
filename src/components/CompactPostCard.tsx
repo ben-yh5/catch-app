@@ -38,7 +38,7 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation }: Com
 
             <View style={styles.content}>
                 <View style={styles.header}>
-                    <Text style={styles.username}>@{post.authorUsername}</Text>
+                    <Text style={styles.username} numberOfLines={1}>@{post.authorUsername}</Text>
                     <View style={styles.catchBadge}>
                         <Text style={styles.catchIcon}>🏆</Text>
                         <Text style={styles.catchCount}>{post.catchCount}</Text>
@@ -49,7 +49,7 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation }: Com
                     <Text style={styles.caption} numberOfLines={2} ellipsizeMode="tail">
                         {post.caption}
                     </Text>
-                ) : null}
+                ) : <View style={{ flex: 1 }} />}
 
                 <View style={styles.footer}>
                     <Text style={styles.date}>{formatDate(post.createdAt)}</Text>
@@ -62,9 +62,10 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation }: Com
                                 onJumpToLocation();
                             }}
                             activeOpacity={0.7}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
-                            <Ionicons name="navigate-outline" size={16} color={colors.primary} />
-                            <Text style={styles.locationButtonText}>Go to location</Text>
+                            <Ionicons name="location-sharp" size={14} color={colors.primary} />
+                            <Text style={styles.locationButtonText}>Location</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -77,16 +78,24 @@ const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
         backgroundColor: colors.card,
-        borderRadius: 12,
-        marginHorizontal: 12,
-        marginVertical: 6,
+        borderRadius: 16,
+        marginHorizontal: 16,
+        marginVertical: 8,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: colors.border,
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        elevation: 5,
     },
     image: {
-        width: 160,
-        height: 160,
+        width: 120,
+        height: 120,
     },
     content: {
         flex: 1,
@@ -97,53 +106,56 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 4,
+        marginBottom: 6,
     },
     username: {
         fontSize: 15,
-        fontWeight: '600',
+        fontWeight: '700',
         color: colors.textPrimary,
+        flex: 1,
+        marginRight: 8,
     },
     catchBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
         paddingHorizontal: 8,
-        paddingVertical: 4,
-        backgroundColor: colors.background,
+        paddingVertical: 2,
+        backgroundColor: colors.cardElevated,
         borderRadius: 12,
     },
     catchIcon: {
-        fontSize: 12,
+        fontSize: 10,
     },
     catchCount: {
-        fontSize: 13,
-        fontWeight: '600',
+        fontSize: 12,
+        fontWeight: '700',
         color: colors.textPrimary,
     },
     caption: {
         fontSize: 14,
         color: colors.textSecondary,
-        lineHeight: 18,
+        lineHeight: 20,
         flex: 1,
     },
     footer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 4,
+        marginTop: 8,
     },
     date: {
         fontSize: 12,
         color: colors.textTertiary,
+        fontWeight: '500',
     },
     locationButton: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        backgroundColor: colors.background,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        backgroundColor: colors.cardElevated,
         borderRadius: 8,
     },
     locationButtonText: {

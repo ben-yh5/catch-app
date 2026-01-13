@@ -78,7 +78,7 @@ export default function MapBottomSheet({
             <BottomSheetFlatList
                 data={posts}
                 renderItem={renderItem}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item: any) => item.id}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={renderEmpty}
                 windowSize={5}

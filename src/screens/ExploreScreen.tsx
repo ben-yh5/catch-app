@@ -24,6 +24,7 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TouchableOpacity,
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -71,6 +72,7 @@ export default function ExploreScreen() {
     const [loadingTrending, setLoadingTrending] = useState(true)
     const [loadingNew, setLoadingNew] = useState(true)
     const [loadingNear, setLoadingNear] = useState(true)
+    const [isLocating, setIsLocating] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
 
@@ -78,25 +80,38 @@ export default function ExploreScreen() {
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
 
+    const requestLocationPermission = async () => {
+        setIsLocating(true)
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync()
+            if (status === 'granted') {
+                const location = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                })
+                setUserLocation({
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                })
+                // Don't set loadingNear to false here, let fetchNearPosts handle it
+                // loadingNear is already true by default
+            } else {
+                // Permission denied
+                setLoadingNear(false)
+            }
+        } catch (error) {
+            console.error('Error getting location:', error)
+            setLoadingNear(false)
+        } finally {
+            setIsLocating(false)
+        }
+    }
+
     // Get user location for "Near You" section
     useEffect(() => {
-        ; (async () => {
-            try {
-                const { status } = await Location.requestForegroundPermissionsAsync()
-                if (status === 'granted') {
-                    const location = await Location.getCurrentPositionAsync({
-                        accuracy: Location.Accuracy.Balanced,
-                    })
-                    setUserLocation({
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude,
-                    })
-                }
-            } catch (error) {
-                console.error('Error getting location:', error)
-            }
-        })()
+        requestLocationPermission()
     }, [])
+
+
 
     const fetchFeaturedLists = async () => {
         try {
@@ -462,15 +477,45 @@ export default function ExploreScreen() {
                     loading={loadingNew}
                 />
 
-                {userLocation && (
-                    <ExploreSection
-                        title="Near You"
-                        emoji="📍"
-                        posts={nearPosts}
-                        onPostPress={handlePostPress}
-                        onSeeAllPress={handleSeeAllNear}
-                        loading={loadingNear}
-                    />
+                <ExploreSection
+                    title="Near You"
+                    emoji="📍"
+                    posts={nearPosts}
+                    onPostPress={handlePostPress}
+                    onSeeAllPress={handleSeeAllNear}
+                    loading={loadingNear || isLocating}
+                />
+
+                {!loadingNear && !isLocating && !userLocation && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <View style={styles.titleContainer}>
+                                <Text style={styles.emoji}>📍</Text>
+                                <Text style={styles.title}>Near You</Text>
+                            </View>
+                        </View>
+                        <View style={styles.emptyContainer}>
+                            <Text style={styles.emptyText}>Enable location to see catches nearby</Text>
+                            <TouchableOpacity onPress={requestLocationPermission}>
+                                <Text style={styles.seeAll}>Enable Location</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+
+                {!loadingNear && !isLocating && userLocation && nearPosts.length === 0 && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <View style={styles.titleContainer}>
+                                <Text style={styles.emoji}>📍</Text>
+                                <Text style={styles.title}>Near You</Text>
+                            </View>
+                        </View>
+                        <View style={styles.emptyContainer}>
+                            <Text style={styles.emptyText}>No catches found in your area yet.</Text>
+                            <Text style={styles.seeAll} onPress={handleSeeAllNear}>View Map</Text>
+                        </View>
+                    </View>
                 )}
             </ScrollView>
 
@@ -597,5 +642,21 @@ const styles = StyleSheet.create({
     listMeta: {
         fontSize: 12,
         color: colors.textTertiary,
+    },
+    emptyContainer: {
+        padding: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.card,
+        marginHorizontal: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        gap: 8,
+    },
+    emptyText: {
+        color: colors.textSecondary,
+        fontSize: 14,
+        textAlign: 'center',
     },
 })

@@ -1,18 +1,20 @@
 import UnifiedAuthLayout from '@/components/UnifiedAuthLayout'
+import AppButton from '@/components/ui/AppButton'
+import AppInput from '@/components/ui/AppInput'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
+import { isUsernameAvailable, validateUsernameFormat } from '@/utils/usernameValidation'
+import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import {
-    ActivityIndicator,
     Alert,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native'
-import { isUsernameAvailable, validateUsernameFormat } from '@/utils/usernameValidation'
+import Animated, { FadeInDown } from 'react-native-reanimated'
 
 export default function SignupScreen() {
     const [email, setEmail] = useState('')
@@ -84,114 +86,93 @@ export default function SignupScreen() {
 
     return (
         <UnifiedAuthLayout title="Catch" subtitle="Create your account">
-            <TextInput
-                style={styles.input}
-                placeholder="Username"
-                placeholderTextColor={colors.textTertiary}
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-                editable={!loading}
-            />
+            <Animated.View entering={FadeInDown.delay(100).duration(500)}>
+                <AppInput
+                    placeholder="Username"
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                    editable={!loading}
+                    leftIcon={<Ionicons name="person-outline" size={20} color={colors.textTertiary} />}
+                />
 
-            <TextInput
-                style={styles.input}
-                placeholder="Email"
-                placeholderTextColor={colors.textTertiary}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                editable={!loading}
-            />
+                <AppInput
+                    placeholder="Email"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    editable={!loading}
+                    leftIcon={<Ionicons name="mail-outline" size={20} color={colors.textTertiary} />}
+                />
 
-            <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor={colors.textTertiary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                editable={!loading}
-            />
+                <AppInput
+                    placeholder="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    editable={!loading}
+                    leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />}
+                />
 
-            <TextInput
-                style={styles.input}
-                placeholder="Confirm Password"
-                placeholderTextColor={colors.textTertiary}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-                editable={!loading}
-            />
+                <AppInput
+                    placeholder="Confirm Password"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry
+                    editable={!loading}
+                    leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />}
+                />
 
-            <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
-                onPress={handleSignup}
-                disabled={loading}
+                <AppButton
+                    title="Sign Up"
+                    onPress={handleSignup}
+                    loading={loading}
+                    variant="primary"
+                    style={styles.marginTop}
+                />
+            </Animated.View>
+
+            <Animated.View
+                style={styles.dividerContainer}
+                entering={FadeInDown.delay(200).duration(500)}
             >
-                {loading ? (
-                    <ActivityIndicator color="#fff" />
-                ) : (
-                    <Text style={styles.buttonText}>Sign Up</Text>
-                )}
-            </TouchableOpacity>
-
-            <View style={styles.dividerContainer}>
                 <View style={styles.divider} />
                 <Text style={styles.dividerText}>OR</Text>
                 <View style={styles.divider} />
-            </View>
+            </Animated.View>
 
-            <TouchableOpacity
-                style={[styles.googleButton, loading && styles.buttonDisabled]}
-                onPress={handleGoogleSignup}
-                disabled={loading}
+            <Animated.View entering={FadeInDown.delay(300).duration(500)}>
+                <AppButton
+                    title="Continue with Google"
+                    onPress={handleGoogleSignup}
+                    loading={loading}
+                    variant="outline"
+                    icon={<Ionicons name="logo-google" size={18} color={colors.textPrimary} style={{ marginRight: 8 }} />}
+                />
+            </Animated.View>
+
+            <Animated.View
+                style={styles.loginContainer}
+                entering={FadeInDown.delay(400).duration(500)}
             >
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-            </TouchableOpacity>
-
-            <View style={styles.loginContainer}>
                 <Text style={styles.loginText}>Already have an account? </Text>
-                <TouchableOpacity onPress={goToLogin} disabled={loading}>
+                <TouchableOpacity onPress={goToLogin} disabled={loading} activeOpacity={0.7}>
                     <Text style={styles.loginLink}>Log In</Text>
                 </TouchableOpacity>
-            </View>
+            </Animated.View>
         </UnifiedAuthLayout>
     )
 }
 
 const styles = StyleSheet.create({
-    input: {
-        backgroundColor: colors.card,
-        paddingHorizontal: 15,
-        paddingVertical: 12,
-        borderRadius: 10,
-        fontSize: 16,
-        marginBottom: 15,
-        borderWidth: 1,
-        borderColor: colors.border,
-        color: colors.textPrimary,
-    },
-    button: {
-        backgroundColor: colors.primary,
-        paddingVertical: 15,
-        borderRadius: 10,
-        alignItems: 'center',
+    marginTop: {
         marginTop: 10,
-    },
-    buttonDisabled: {
-        opacity: 0.6,
-    },
-    buttonText: {
-        color: colors.textPrimary,
-        fontSize: 16,
-        fontWeight: '600',
     },
     loginContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 20,
+        marginTop: 24,
     },
     loginText: {
         color: colors.textTertiary,
@@ -205,7 +186,7 @@ const styles = StyleSheet.create({
     dividerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginVertical: 20,
+        marginVertical: 24,
     },
     divider: {
         flex: 1,
@@ -214,20 +195,7 @@ const styles = StyleSheet.create({
     },
     dividerText: {
         color: colors.textTertiary,
-        paddingHorizontal: 10,
+        paddingHorizontal: 12,
         fontSize: 14,
-    },
-    googleButton: {
-        backgroundColor: '#fff',
-        paddingVertical: 15,
-        borderRadius: 10,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    googleButtonText: {
-        color: '#000',
-        fontSize: 16,
-        fontWeight: '600',
     },
 })

@@ -1,10 +1,12 @@
 import ThreadModal from '@/components/ThreadModal'
+import AppButton from '@/components/ui/AppButton'
 import { useAuth } from '@/context/AuthContext'
 import { PostEvent, usePost, usePostEvents } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useIsFocused } from '@react-navigation/native'
+import * as Haptics from 'expo-haptics'
 import { useNavigation, useRouter } from 'expo-router'
 import {
     arrayRemove,
@@ -83,8 +85,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         useState<QueryDocumentSnapshot<DocumentData> | null>(null)
     const [lastCatchDoc, setLastCatchDoc] =
         useState<QueryDocumentSnapshot<DocumentData> | null>(null)
-    const [showPosts, setShowPosts] = useState(true)
-    const [showCatches, setShowCatches] = useState(false)
+    const [activeTab, setActiveTab] = useState<'posts' | 'catches'>('posts')
     const [refreshing, setRefreshing] = useState(false)
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
@@ -204,7 +205,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             }
         } else if (event.action === 'catch' && event.userId === userId) {
             // User created a catch - update catches list
-            if (isOwnProfile && showCatches) {
+            if (isOwnProfile && activeTab === 'catches') {
                 setHasMoreCatches(true)
                 setLastCatchDoc(null)
                 fetchUserData()
@@ -214,7 +215,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             setPosts(prev => prev.filter(p => p.id !== event.postId))
             setCatches(prev => prev.filter(p => p.id !== event.postId))
         }
-    }, [userId, isOwnProfile, showCatches])
+    }, [userId, isOwnProfile, activeTab])
 
     // Check for staleness and show indicator (only for own profile)
     useEffect(() => {
@@ -353,11 +354,11 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
 
     const handleEndReached = () => {
         // Load more posts if posts are shown and there are more
-        if (showPosts && hasMorePosts && !loadingMore) {
+        if (activeTab === 'posts' && hasMorePosts && !loadingMore) {
             loadMorePosts()
         }
         // Load more catches if catches are shown and there are more
-        if (showCatches && hasMoreCatches && !loadingMore) {
+        if (activeTab === 'catches' && hasMoreCatches && !loadingMore) {
             loadMoreCatches()
         }
     }
@@ -589,17 +590,8 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
 
     // Combine and sort posts based on what's toggled on
     const displayedPosts = React.useMemo(() => {
-        const combined: Post[] = []
-        if (showPosts) combined.push(...posts)
-        if (showCatches) combined.push(...catches)
-
-        // Sort by createdAt descending
-        return combined.sort((a, b) => {
-            const aTime = a.createdAt?.seconds || 0
-            const bTime = b.createdAt?.seconds || 0
-            return bTime - aTime
-        })
-    }, [showPosts, showCatches, posts, catches])
+        return activeTab === 'posts' ? posts : catches
+    }, [activeTab, posts, catches])
 
     const renderPost = ({ item }: { item: Post }) => (
         <View style={styles.postItemContainer}>
@@ -680,77 +672,55 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             </View>
 
                             {!isOwnProfile && (
-                                <TouchableOpacity
-                                    style={[
-                                        styles.followButton,
-                                        isFollowing && styles.followingButton,
-                                    ]}
+                                <AppButton
+                                    title={isFollowing ? 'Following' : 'Follow'}
                                     onPress={handleFollowToggle}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.followButtonText,
-                                            isFollowing && styles.followingButtonText,
-                                        ]}
-                                    >
-                                        {isFollowing ? 'Following' : 'Follow'}
-                                    </Text>
-                                </TouchableOpacity>
+                                    variant={isFollowing ? 'outline' : 'primary'}
+                                    style={{ marginTop: 20, alignSelf: 'center', width: 140 }}
+                                />
                             )}
 
-                            <View style={styles.toggleContainer}>
+                            <View style={styles.tabContainer}>
                                 <TouchableOpacity
                                     style={[
-                                        styles.toggleButton,
-                                        showPosts && styles.toggleButtonActive,
+                                        styles.tab,
+                                        activeTab === 'posts' && styles.tabActive
                                     ]}
-                                    onPress={() => setShowPosts(!showPosts)}
+                                    onPress={() => {
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                        setActiveTab('posts')
+                                    }}
                                 >
-                                    <Ionicons
-                                        name={showPosts ? 'checkbox' : 'square-outline'}
-                                        size={20}
-                                        color={
-                                            showPosts
-                                                ? colors.primary
-                                                : colors.textTertiary
-                                        }
-                                    />
                                     <Text
                                         style={[
-                                            styles.toggleText,
-                                            showPosts &&
-                                            styles.toggleTextActive,
+                                            styles.tabText,
+                                            activeTab === 'posts' && styles.tabTextActive
                                         ]}
                                     >
                                         Posts
                                     </Text>
+                                    {activeTab === 'posts' && <View style={styles.activeIndicator} />}
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
                                     style={[
-                                        styles.toggleButton,
-                                        showCatches && styles.toggleButtonActive,
+                                        styles.tab,
+                                        activeTab === 'catches' && styles.tabActive
                                     ]}
-                                    onPress={() => setShowCatches(!showCatches)}
+                                    onPress={() => {
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                                        setActiveTab('catches')
+                                    }}
                                 >
-                                    <Ionicons
-                                        name={showCatches ? 'checkbox' : 'square-outline'}
-                                        size={20}
-                                        color={
-                                            showCatches
-                                                ? colors.primary
-                                                : colors.textTertiary
-                                        }
-                                    />
                                     <Text
                                         style={[
-                                            styles.toggleText,
-                                            showCatches &&
-                                            styles.toggleTextActive,
+                                            styles.tabText,
+                                            activeTab === 'catches' && styles.tabTextActive
                                         ]}
                                     >
                                         Catches
                                     </Text>
+                                    {activeTab === 'catches' && <View style={styles.activeIndicator} />}
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -763,13 +733,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                 color={colors.textTertiary}
                             />
                             <Text style={styles.emptyText}>
-                                {!showPosts && !showCatches
-                                    ? 'Select posts or catches to view'
-                                    : showPosts && showCatches
-                                        ? 'No posts or catches yet'
-                                        : showPosts
-                                            ? 'No posts yet'
-                                            : 'No catches yet'}
+                                {activeTab === 'posts'
+                                    ? 'No posts yet'
+                                    : 'No catches yet'}
                             </Text>
                         </View>
                     }
@@ -1276,33 +1242,38 @@ const styles = StyleSheet.create({
     followingButtonText: {
         color: colors.textPrimary,
     },
-    toggleContainer: {
+    tabContainer: {
         flexDirection: 'row',
         marginTop: 24,
-        gap: 12,
+        width: '100%',
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
     },
-    toggleButton: {
-        flexDirection: 'row',
+    tab: {
+        flex: 1,
         alignItems: 'center',
-        paddingVertical: 8,
-        paddingHorizontal: 16,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: colors.border,
-        gap: 6,
+        paddingVertical: 12,
+        position: 'relative',
     },
-    toggleButtonActive: {
-        borderColor: colors.primary,
-        backgroundColor: colors.cardElevated,
+    tabActive: {
+        // 
     },
-    toggleText: {
-        fontSize: 14,
+    tabText: {
+        fontSize: 16,
         color: colors.textTertiary,
         fontWeight: '500',
     },
-    toggleTextActive: {
-        color: colors.primary,
+    tabTextActive: {
+        color: colors.textPrimary,
         fontWeight: '600',
+    },
+    activeIndicator: {
+        position: 'absolute',
+        bottom: -1,
+        left: 0,
+        right: 0,
+        height: 2,
+        backgroundColor: colors.primary,
     },
     emptyContainer: {
         alignItems: 'center',

@@ -1,17 +1,19 @@
 import UnifiedAuthLayout from '@/components/UnifiedAuthLayout'
+import AppButton from '@/components/ui/AppButton'
+import AppInput from '@/components/ui/AppInput'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
+import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import {
-    ActivityIndicator,
     Alert,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native'
+import Animated, { FadeInDown } from 'react-native-reanimated'
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('')
@@ -55,94 +57,75 @@ export default function LoginScreen() {
 
     return (
         <UnifiedAuthLayout title="Catch" subtitle="Welcome back!">
-            <TextInput
-                style={styles.input}
-                placeholder="Email"
-                placeholderTextColor={colors.textTertiary}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                editable={!loading}
-            />
+            <Animated.View entering={FadeInDown.delay(100).duration(500)}>
+                <AppInput
+                    placeholder="Email"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    editable={!loading}
+                    leftIcon={<Ionicons name="mail-outline" size={20} color={colors.textTertiary} />}
+                />
 
-            <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor={colors.textTertiary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                editable={!loading}
-            />
+                <AppInput
+                    placeholder="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    editable={!loading}
+                    leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />}
+                />
 
-            <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
-                onPress={handleLogin}
-                disabled={loading}
+                <AppButton
+                    title="Log In"
+                    onPress={handleLogin}
+                    loading={loading}
+                    variant="primary"
+                    style={styles.marginTop}
+                />
+            </Animated.View>
+
+            <Animated.View
+                style={styles.dividerContainer}
+                entering={FadeInDown.delay(200).duration(500)}
             >
-                {loading ? (
-                    <ActivityIndicator color="#fff" />
-                ) : (
-                    <Text style={styles.buttonText}>Log In</Text>
-                )}
-            </TouchableOpacity>
-
-            <View style={styles.dividerContainer}>
                 <View style={styles.divider} />
                 <Text style={styles.dividerText}>OR</Text>
                 <View style={styles.divider} />
-            </View>
+            </Animated.View>
 
-            <TouchableOpacity
-                style={[styles.googleButton, loading && styles.buttonDisabled]}
-                onPress={handleGoogleLogin}
-                disabled={loading}
+            <Animated.View entering={FadeInDown.delay(300).duration(500)}>
+                <AppButton
+                    title="Continue with Google"
+                    onPress={handleGoogleLogin}
+                    loading={loading}
+                    variant="outline"
+                    icon={<Ionicons name="logo-google" size={18} color={colors.textPrimary} style={{ marginRight: 8 }} />}
+                />
+            </Animated.View>
+
+            <Animated.View
+                style={styles.signupContainer}
+                entering={FadeInDown.delay(400).duration(500)}
             >
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-            </TouchableOpacity>
-
-            <View style={styles.signupContainer}>
-                <Text style={styles.signupText}>Don&apos;t have an account? </Text>
-                <TouchableOpacity onPress={goToSignup} disabled={loading}>
+                <Text style={styles.signupText}>Don't have an account? </Text>
+                <TouchableOpacity onPress={goToSignup} disabled={loading} activeOpacity={0.7}>
                     <Text style={styles.signupLink}>Sign Up</Text>
                 </TouchableOpacity>
-            </View>
+            </Animated.View>
         </UnifiedAuthLayout>
     )
 }
 
 const styles = StyleSheet.create({
-    input: {
-        backgroundColor: colors.card,
-        paddingHorizontal: 15,
-        paddingVertical: 12,
-        borderRadius: 10,
-        fontSize: 16,
-        marginBottom: 15,
-        borderWidth: 1,
-        borderColor: colors.border,
-        color: colors.textPrimary,
-    },
-    button: {
-        backgroundColor: colors.primary,
-        paddingVertical: 15,
-        borderRadius: 10,
-        alignItems: 'center',
+    marginTop: {
         marginTop: 10,
-    },
-    buttonDisabled: {
-        opacity: 0.6,
-    },
-    buttonText: {
-        color: colors.textPrimary,
-        fontSize: 16,
-        fontWeight: '600',
     },
     signupContainer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 20,
+        marginTop: 24,
     },
     signupText: {
         color: colors.textTertiary,
@@ -156,7 +139,7 @@ const styles = StyleSheet.create({
     dividerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginVertical: 20,
+        marginVertical: 24,
     },
     divider: {
         flex: 1,
@@ -165,20 +148,7 @@ const styles = StyleSheet.create({
     },
     dividerText: {
         color: colors.textTertiary,
-        paddingHorizontal: 10,
+        paddingHorizontal: 12,
         fontSize: 14,
-    },
-    googleButton: {
-        backgroundColor: '#fff',
-        paddingVertical: 15,
-        borderRadius: 10,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    googleButtonText: {
-        color: '#000',
-        fontSize: 16,
-        fontWeight: '600',
     },
 })

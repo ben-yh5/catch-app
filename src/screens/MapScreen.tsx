@@ -87,7 +87,12 @@ export default function MapScreen() {
     const [showSearchButton, setShowSearchButton] = useState(false)
 
     // List Focus Mode State
-    const { listId, postId } = useLocalSearchParams<{ listId: string; postId: string }>()
+    const { listId, postId, filter, panToUser } = useLocalSearchParams<{
+        listId: string;
+        postId: string;
+        filter: string;
+        panToUser: string;
+    }>()
     const [activeList, setActiveList] = useState<any | null>(null)
     const [listPosts, setListPosts] = useState<Post[]>([])
     const [isListMode, setIsListMode] = useState(false)
@@ -133,6 +138,22 @@ export default function MapScreen() {
             }
         })()
     }, [])
+
+    // Handle Deep Links (Filter & Location)
+    useEffect(() => {
+        if (filter) {
+            if (['trending', 'new', 'near'].includes(filter as string)) {
+                setActiveFilter(filter as FilterType)
+            }
+        }
+
+        if (panToUser === 'true' && userLocation) {
+            // Small delay to allow map to load if needed, reuse centerOnUserLocation logic
+            setTimeout(() => {
+                centerOnUserLocation()
+            }, 500)
+        }
+    }, [filter, panToUser, userLocation])
 
     // Handle List Focus Mode
     useEffect(() => {
