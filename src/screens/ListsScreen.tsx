@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react'
+import { useAuth } from '@/context/AuthContext'
+import { db } from '@/services/firebase'
+import { colors } from '@/theme/colors'
+import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
+import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     FlatList,
@@ -6,17 +12,10 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
-    Alert,
+    View
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore'
-import { db } from '@/services/firebase'
-import { useAuth } from '@/context/AuthContext'
-import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
-import { colors } from '@/theme/colors'
 import PagerView from 'react-native-pager-view'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface List {
     id: string
@@ -141,7 +140,7 @@ export default function ListsScreen() {
         return (
             <TouchableOpacity
                 style={styles.listItem}
-                onPress={() => router.push(`/list-detail?listId=${item.id}` as any)}
+                onPress={() => router.push(`/(tabs)/map?listId=${item.id}` as any)}
             >
                 <View style={styles.listContent}>
                     <View style={styles.listHeader}>

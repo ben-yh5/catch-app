@@ -472,6 +472,14 @@ export default function MapScreen() {
                     </TouchableOpacity>
                 )}
                 <Text style={styles.headerTitle}>{isListMode ? activeList?.name || 'List' : 'Map'}</Text>
+                {isListMode && activeList?.creatorId === user?.uid && (
+                    <TouchableOpacity
+                        onPress={() => router.push(`/create-list?listId=${activeList.id}` as any)}
+                        style={{ position: 'absolute', right: 16, bottom: 12, zIndex: 10 }}
+                    >
+                        <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Edit</Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
             {/* Floating Filter Pills */}

@@ -1,12 +1,14 @@
 import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
-import { usePost, usePostEvents, PostEvent } from '@/context/PostContext'
+import { PostEvent, usePost, usePostEvents } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useIsFocused } from '@react-navigation/native'
 import { useNavigation, useRouter } from 'expo-router'
 import {
+    arrayRemove,
+    arrayUnion,
     collection,
     doc,
     DocumentData,
@@ -17,10 +19,8 @@ import {
     query,
     QueryDocumentSnapshot,
     startAfter,
-    where,
     updateDoc,
-    arrayUnion,
-    arrayRemove,
+    where,
 } from 'firebase/firestore'
 import React, { useCallback, useEffect, useState } from 'react'
 import {
@@ -36,8 +36,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
-import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import CompactPostCard from './CompactPostCard'
 
 interface Post {
     id: string
@@ -59,9 +59,7 @@ interface ProfileViewProps {
 }
 
 const { width } = Dimensions.get('window')
-const ITEM_SIZE = (width - 3) / 2 // 2 columns with 1px gap
 const POSTS_PER_PAGE = 20
-const THUMBNAIL_SIZE = 400 // Target thumbnail resolution for grid items
 
 export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileViewProps) {
     const { user } = useAuth()
@@ -604,42 +602,15 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     }, [showPosts, showCatches, posts, catches])
 
     const renderPost = ({ item }: { item: Post }) => (
-        <TouchableOpacity
-            style={styles.postItem}
-            onPress={() => handlePostPress(item)}
-            activeOpacity={0.8}
-        >
-            <Image
-                source={{
-                    uri: item.photoURL,
-                    width: THUMBNAIL_SIZE,
-                    height: THUMBNAIL_SIZE,
-                }}
-                style={styles.postImage}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                transition={200}
-                placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
-                placeholderContentFit="cover"
-                recyclingKey={item.id}
-                priority="low"
+        <View style={styles.postItemContainer}>
+            <CompactPostCard
+                post={item}
+                onPress={() => handlePostPress(item)}
             />
-        </TouchableOpacity>
+        </View>
     )
 
-    const getItemLayout = (_data: any, index: number) => ({
-        length: ITEM_SIZE,
-        offset: ITEM_SIZE * Math.floor(index / 2), // 2 columns
-        index,
-    })
-
-    if (loading) {
-        return (
-            <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-            </View>
-        )
-    }
+    // ... existing code
 
     return (
         <>
@@ -649,12 +620,11 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                     data={displayedPosts}
                     renderItem={renderPost}
                     keyExtractor={(item) => item.id}
-                    numColumns={2}
-                    getItemLayout={getItemLayout}
                     contentContainerStyle={[
                         styles.listContent,
                         { paddingTop: insets.top + 56 },
                     ]}
+                    // ... rest of FlatList props
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}
@@ -815,9 +785,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             </View>
                         ) : null
                     }
-                    columnWrapperStyle={
-                        displayedPosts.length > 0 ? styles.row : undefined
-                    }
+
                 />
 
                 <View
@@ -1351,16 +1319,7 @@ const styles = StyleSheet.create({
         paddingVertical: 20,
         alignItems: 'center',
     },
-    row: {
-        gap: 1,
-    },
-    postItem: {
-        width: ITEM_SIZE,
-        height: ITEM_SIZE,
-        backgroundColor: colors.card,
-    },
-    postImage: {
-        width: '100%',
-        height: '100%',
+    postItemContainer: {
+        marginBottom: 0,
     },
 })

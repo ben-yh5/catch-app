@@ -1,6 +1,26 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import CompactPostCard from '@/components/CompactPostCard'
+import ThreadModal from '@/components/ThreadModal'
+import { useAuth } from '@/context/AuthContext'
+import { db } from '@/services/firebase'
+import { colors } from '@/theme/colors'
+import { Ionicons } from '@expo/vector-icons'
+import { useLocalSearchParams, useRouter } from 'expo-router'
+import {
+    arrayRemove,
+    collection,
+    deleteDoc,
+    doc,
+    documentId,
+    getDoc,
+    getDocs,
+    query,
+    updateDoc,
+    where,
+} from 'firebase/firestore'
+import React, { useEffect, useState } from 'react'
 import {
     ActivityIndicator,
+    Alert,
     Dimensions,
     FlatList,
     RefreshControl,
@@ -8,28 +28,8 @@ import {
     Text,
     TouchableOpacity,
     View,
-    Alert,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import {
-    collection,
-    doc,
-    documentId,
-    getDoc,
-    getDocs,
-    query,
-    where,
-    deleteDoc,
-    updateDoc,
-    arrayRemove,
-} from 'firebase/firestore'
-import { db } from '@/services/firebase'
-import { useAuth } from '@/context/AuthContext'
-import { Ionicons } from '@expo/vector-icons'
-import { useRouter, useLocalSearchParams } from 'expo-router'
-import { Image } from 'expo-image'
-import ThreadModal from '@/components/ThreadModal'
-import { colors } from '@/theme/colors'
 
 interface Post {
     id: string
@@ -58,8 +58,6 @@ interface List {
 }
 
 const { width } = Dimensions.get('window')
-const ITEM_SIZE = (width - 3) / 2
-const THUMBNAIL_SIZE = 400
 
 export default function ListDetailScreen() {
     const { user } = useAuth()
@@ -179,9 +177,9 @@ export default function ListDetailScreen() {
                         setList((prev) =>
                             prev
                                 ? {
-                                      ...prev,
-                                      postIds: prev.postIds.filter((id) => id !== postId),
-                                  }
+                                    ...prev,
+                                    postIds: prev.postIds.filter((id) => id !== postId),
+                                }
                                 : null
                         )
                     } catch (error) {
@@ -203,14 +201,10 @@ export default function ListDetailScreen() {
 
         return (
             <View style={styles.postContainer}>
-                <TouchableOpacity onPress={() => handlePostPress(item)}>
-                    <Image
-                        source={{ uri: `${item.photoURL}&w=${THUMBNAIL_SIZE}` }}
-                        style={styles.postImage}
-                        contentFit="cover"
-                        transition={200}
-                    />
-                </TouchableOpacity>
+                <CompactPostCard
+                    post={item}
+                    onPress={() => handlePostPress(item)}
+                />
                 {isOwner && (
                     <TouchableOpacity
                         style={styles.removeButton}
@@ -273,16 +267,14 @@ export default function ListDetailScreen() {
                 )}
             </View>
 
-            {/* Posts Grid */}
+            {/* Posts List */}
             <FlatList
                 data={posts}
                 renderItem={renderPost}
                 keyExtractor={(item) => item.id}
-                numColumns={2}
-                contentContainerStyle={styles.gridContainer}
+                contentContainerStyle={styles.listContent}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
                 ListEmptyComponent={renderEmptyState}
-                columnWrapperStyle={styles.row}
             />
 
             {/* Thread Modal */}
@@ -290,6 +282,7 @@ export default function ListDetailScreen() {
                 <ThreadModal
                     visible={modalVisible}
                     onClose={() => setModalVisible(false)}
+                    post={selectedPost}
                     initialPostId={selectedPost.id}
                 />
             )}
@@ -345,28 +338,19 @@ const styles = StyleSheet.create({
     iconButton: {
         padding: 8,
     },
-    gridContainer: {
-        padding: 1,
-        flexGrow: 1,
-    },
-    row: {
-        gap: 1,
+    listContent: {
+        paddingVertical: 8,
     },
     postContainer: {
-        width: ITEM_SIZE,
-        height: ITEM_SIZE,
         position: 'relative',
-    },
-    postImage: {
-        width: '100%',
-        height: '100%',
     },
     removeButton: {
         position: 'absolute',
-        top: 4,
-        right: 4,
+        top: 12,
+        right: 18,
         backgroundColor: 'rgba(0, 0, 0, 0.7)',
         borderRadius: 12,
+        zIndex: 10,
     },
     emptyContainer: {
         flex: 1,
