@@ -598,6 +598,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             <CompactPostCard
                 post={item}
                 onPress={() => handlePostPress(item)}
+                highlighted={isOwnProfile}
             />
         </View>
     )

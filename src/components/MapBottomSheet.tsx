@@ -1,3 +1,4 @@
+import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme/colors';
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import React, { useMemo, useRef, useState } from 'react';
@@ -19,6 +20,7 @@ export default function MapBottomSheet({
     onJumpToLocation,
     selectedPostId,
 }: MapBottomSheetProps) {
+    const { user } = useAuth();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const snapPoints = useMemo(() => ['15%', '50%'], []);
     const [sheetIndex, setSheetIndex] = useState(1);
@@ -32,6 +34,7 @@ export default function MapBottomSheet({
                     ? () => onJumpToLocation(item.latitude, item.longitude)
                     : undefined
             }
+            highlighted={item.authorId === user?.uid}
         />
     );
 

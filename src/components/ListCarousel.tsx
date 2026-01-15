@@ -1,3 +1,4 @@
+import { useAuth } from '@/context/AuthContext'
 import React, { useEffect, useRef } from 'react'
 import {
     Dimensions,
@@ -26,6 +27,7 @@ export default function ListCarousel({
     onPostPress,
     selectedPostId,
 }: ListCarouselProps) {
+    const { user } = useAuth()
     const flatListRef = useRef<FlatList>(null)
 
     // Scroll to selected post when it changes (e.g. from map pin click)
@@ -54,6 +56,7 @@ export default function ListCarousel({
             <CompactPostCard
                 post={item}
                 onPress={() => onPostPress(item)}
+                highlighted={item.authorId === user?.uid}
             // No "jump to location" button needed in carousel as it's already focused
             />
         </View>

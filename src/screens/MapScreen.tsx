@@ -474,6 +474,7 @@ export default function MapScreen() {
                 properties: {
                     postId: post.id,
                     isSelected: post.id === selectedPostId,
+                    isOwn: post.authorId === user?.uid,
                 },
                 geometry: {
                     type: 'Point' as const,
@@ -691,6 +692,8 @@ export default function MapScreen() {
                                 circleColor: [
                                     'case',
                                     ['get', 'isSelected'],
+                                    MAP_COLORS.selectedPin,
+                                    ['get', 'isOwn'],
                                     MAP_COLORS.selectedPin,
                                     MAP_COLORS.pin,
                                 ],

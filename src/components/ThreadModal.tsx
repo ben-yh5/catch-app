@@ -763,7 +763,13 @@ export default function ThreadModal({
                     ) : (
                         <View style={styles.contentContainer}>
                             {/* Post Card */}
-                            <View style={styles.postCard}>
+                            <View style={[
+                                styles.postCard,
+                                currentPost?.authorId === user?.uid && {
+                                    borderColor: colors.secondary,
+                                    borderWidth: 2,
+                                }
+                            ]}>
                                 {/* Card Header */}
                                 <View style={styles.cardHeader}>
                                     <View style={styles.cardHeaderLeft}>

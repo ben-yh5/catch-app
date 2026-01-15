@@ -17,9 +17,10 @@ interface CompactPostCardProps {
     };
     onPress: () => void;
     onJumpToLocation?: () => void;
+    highlighted?: boolean;
 }
 
-export default function CompactPostCard({ post, onPress, onJumpToLocation }: CompactPostCardProps) {
+export default function CompactPostCard({ post, onPress, onJumpToLocation, highlighted = false }: CompactPostCardProps) {
     const formatDate = (timestamp: any) => {
         if (!timestamp) return '';
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -27,7 +28,14 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation }: Com
     };
 
     return (
-        <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
+        <TouchableOpacity
+            style={[
+                styles.card,
+                highlighted && { borderColor: colors.secondary, borderWidth: 2 }
+            ]}
+            onPress={onPress}
+            activeOpacity={0.9}
+        >
             <Image
                 source={{ uri: post.photoURL }}
                 style={styles.image}

@@ -204,6 +204,7 @@ export default function ListDetailScreen() {
                 <CompactPostCard
                     post={item}
                     onPress={() => handlePostPress(item)}
+                    highlighted={item.authorId === user?.uid}
                 />
                 {isOwner && (
                     <TouchableOpacity
