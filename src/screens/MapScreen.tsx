@@ -1,5 +1,6 @@
 import FilterPills, { FilterType } from '@/components/FilterPills'
 import ListCarousel from '@/components/ListCarousel'
+import LocationSearchBar from '@/components/LocationSearchBar'
 import MapBottomSheet from '@/components/MapBottomSheet'
 import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
@@ -142,7 +143,7 @@ export default function MapScreen() {
     // Handle Deep Links (Filter & Location)
     useEffect(() => {
         if (filter) {
-            if (['trending', 'new', 'near'].includes(filter as string)) {
+            if (['trending', 'new'].includes(filter as string)) {
                 setActiveFilter(filter as FilterType)
             }
         }
@@ -319,27 +320,10 @@ export default function MapScreen() {
                     const bTime = b.createdAt?.toMillis?.() || 0
                     return bTime - aTime
                 })
-            case 'near':
-                if (!userLocation) return posts
-                return [...posts].sort((a, b) => {
-                    const distA = calculateDistance(
-                        userLocation.coords.latitude,
-                        userLocation.coords.longitude,
-                        a.latitude || 0,
-                        a.longitude || 0
-                    )
-                    const distB = calculateDistance(
-                        userLocation.coords.latitude,
-                        userLocation.coords.longitude,
-                        b.latitude || 0,
-                        b.longitude || 0
-                    )
-                    return distA - distB
-                })
             default:
                 return posts
         }
-    }, [userLocation])
+    }, [])
 
     // Fetch posts in current viewport
     const fetchPostsInViewport = useCallback(async () => {
@@ -533,6 +517,32 @@ export default function MapScreen() {
         }
     }
 
+    const handleLocationSelect = (location: any) => {
+        if (!cameraRef.current) return
+
+        if (location.bbox) {
+            // Use fitBounds if bbox is available
+            cameraRef.current.fitBounds(
+                [location.bbox[2], location.bbox[3]], // NE: [maxX, maxY]
+                [location.bbox[0], location.bbox[1]], // SW: [minX, minY]
+                [50, 20, 50, 20], // padding [top, right, bottom, left]
+                1000 // duration
+            )
+        } else {
+            // Fallback to center implementation
+            cameraRef.current.setCamera({
+                centerCoordinate: location.center,
+                zoomLevel: 12, // Default zoom if no bbox
+                animationDuration: 1000,
+            })
+        }
+
+        // Trigger search in this area after animation
+        setTimeout(() => {
+            fetchPostsInViewport()
+        }, 1200)
+    }
+
     return (
         <View style={styles.container}>
             {/* Compact Header */}
@@ -556,13 +566,24 @@ export default function MapScreen() {
                 )}
             </View>
 
+            {/* Search Bar */}
+            {!isListMode && (
+                <LocationSearchBar
+                    onLocationSelect={handleLocationSelect}
+                    containerStyle={{ top: 110 }} // Position below header (approx safe area + header height)
+                    userLocation={userLocation ? {
+                        latitude: userLocation.coords.latitude,
+                        longitude: userLocation.coords.longitude
+                    } : null}
+                />
+            )}
+
             {/* Floating Filter Pills */}
             {!locationLoading && !isListMode && (
                 <View style={styles.filterContainer} pointerEvents="box-none">
                     <FilterPills
                         activeFilter={activeFilter}
                         onFilterChange={handleFilterChange}
-                        nearDisabled={!userLocation}
                     />
                 </View>
             )}
@@ -778,7 +799,7 @@ const styles = StyleSheet.create({
     },
     filterContainer: {
         position: 'absolute',
-        top: 110, // Move down below header
+        top: 170, // Moved down for SearchBar
         left: 0,
         right: 0,
         zIndex: 10,
@@ -786,7 +807,7 @@ const styles = StyleSheet.create({
     },
     searchButtonContainer: {
         position: 'absolute',
-        top: 160, // Move down below filters
+        top: 220, // Moved down for SearchBar
         left: 0,
         right: 0,
         zIndex: 10,
