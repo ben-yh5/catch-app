@@ -1,19 +1,20 @@
-import React, { useState, useRef } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
-import { useCameraPermissions } from 'expo-camera'
-import * as Location from 'expo-location'
-import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { collection, addDoc, doc, getDoc } from 'firebase/firestore'
-import { storage, db } from '@/services/firebase'
-import { useAuth } from '@/context/AuthContext'
-import { usePost } from '@/context/PostContext'
-import { colors } from '@/theme/colors'
 import UnifiedCameraView from '@/components/UnifiedCameraView'
 import UnifiedPreviewScreen from '@/components/UnifiedPreviewScreen'
+import { useAuth } from '@/context/AuthContext'
+import { usePost } from '@/context/PostContext'
+import { db, storage } from '@/services/firebase'
+import { colors } from '@/theme/colors'
 import { cropToSquare } from '@/utils/imageProcessing'
+import { addPostToList } from '@/utils/listUtils'
+import { Ionicons } from '@expo/vector-icons'
+import { useCameraPermissions } from 'expo-camera'
+import * as Location from 'expo-location'
+import { useRouter } from 'expo-router'
+import { addDoc, collection, doc, getDoc } from 'firebase/firestore'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { geohashForLocation } from 'geofire-common'
+import React, { useRef, useState } from 'react'
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 
 interface LocationData {
     latitude: number
@@ -129,7 +130,7 @@ export default function PostScreen() {
         setLoadingLocation(false)
     }
 
-    const handlePost = async (title?: string, caption?: string) => {
+    const handlePost = async (title?: string, caption?: string, listIds?: Set<string>) => {
         if (!user || !capturedImage) {
             Alert.alert('Error', 'User not authenticated or no image captured')
             return
@@ -200,6 +201,19 @@ export default function PostScreen() {
                 geohash: geohash,
                 createdAt: new Date(),
             })
+
+            // Add to selected lists
+            if (listIds && listIds.size > 0) {
+                try {
+                    await Promise.all(
+                        Array.from(listIds).map(listId =>
+                            addPostToList(listId, docRef.id)
+                        )
+                    )
+                } catch (listError) {
+                    console.error('Error adding to lists:', listError)
+                }
+            }
 
             Alert.alert('Success!', 'Your post has been created!')
 

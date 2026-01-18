@@ -14,25 +14,25 @@
  * - Animated slide-up presentation
  */
 
+import { useAuth } from '@/context/AuthContext'
+import { db } from '@/services/firebase'
+import { colors } from '@/theme/colors'
+import { addPostToList, getListsContainingPost, getOrCreateSavedList, removePostFromList } from '@/utils/listUtils'
+import { Ionicons } from '@expo/vector-icons'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useRouter } from 'expo-router'
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import React, { useEffect, useState } from 'react'
 import {
+    ActivityIndicator,
+    Animated,
+    FlatList,
     Modal,
-    View,
+    StyleSheet,
     Text,
     TouchableOpacity,
-    FlatList,
-    ActivityIndicator,
-    StyleSheet,
-    Animated,
+    View,
 } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
-import { db } from '@/services/firebase'
-import { useAuth } from '@/context/AuthContext'
-import { useRouter } from 'expo-router'
-import { getOrCreateSavedList, addPostToList, removePostFromList, getListsContainingPost } from '@/utils/listUtils'
-import { colors } from '@/theme/colors'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 
 interface List {
     id: string
@@ -50,8 +50,10 @@ interface List {
 interface ListSelectionBottomSheetProps {
     visible: boolean
     onClose: () => void
-    postId: string
+    postId?: string
     onSaveStateChange?: (isSaved: boolean) => void
+    initialSelectedIds?: Set<string>
+    onSelectionChange?: (ids: Set<string>) => void
 }
 
 const LAST_USED_LIST_KEY = '@last_used_list_id'
@@ -61,6 +63,8 @@ export default function ListSelectionBottomSheet({
     onClose,
     postId,
     onSaveStateChange,
+    initialSelectedIds,
+    onSelectionChange,
 }: ListSelectionBottomSheetProps) {
     const { user } = useAuth()
     const router = useRouter()
@@ -79,13 +83,18 @@ export default function ListSelectionBottomSheet({
                 friction: 11,
             }).start()
 
+            // Initialize selection from props if provided
+            if (initialSelectedIds) {
+                setSelectedListIds(new Set(initialSelectedIds))
+            }
+
             if (user) {
                 fetchUserLists()
             }
         } else {
             slideAnim.setValue(0)
         }
-    }, [visible, user, slideAnim])
+    }, [visible, user, slideAnim, initialSelectedIds])
 
     const fetchUserLists = async () => {
         if (!user) return
@@ -122,17 +131,17 @@ export default function ListSelectionBottomSheet({
             const sortedLists = myList ? [myList, ...otherLists] : otherLists
             setLists(sortedLists)
 
-            // Get lists containing this post
-            const listsWithPost = await getListsContainingPost(user.uid, postId)
-            setSelectedListIds(new Set(listsWithPost))
+            // If we're in "real" mode (postId exists), fetch current state from DB
+            if (postId) {
+                const listsWithPost = await getListsContainingPost(user.uid, postId)
+                setSelectedListIds(new Set(listsWithPost))
 
-            // Auto-select "My List" (private list) if post is not in any list
-            if (listsWithPost.length === 0 && sortedLists.length > 0) {
-                // Always default to "My List" (the private list)
-                const defaultList = myList || sortedLists[0]
-                if (defaultList) {
-                    // Actually add to the database (not just UI)
-                    await handleToggleList(defaultList.id, false)
+                // Auto-select "My List" if post is not in any list (legacy behavior for existing posts)
+                if (listsWithPost.length === 0 && sortedLists.length > 0) {
+                    const defaultList = myList || sortedLists[0]
+                    if (defaultList) {
+                        await handleToggleList(defaultList.id, false)
+                    }
                 }
             }
         } catch (error) {
@@ -147,7 +156,7 @@ export default function ListSelectionBottomSheet({
 
         const isSelected = selectedListIds.has(listId)
 
-        // Optimistic update
+        // Update local state
         const newSelected = new Set(selectedListIds)
         if (isSelected) {
             newSelected.delete(listId)
@@ -156,6 +165,17 @@ export default function ListSelectionBottomSheet({
         }
         setSelectedListIds(newSelected)
 
+        // Notify parent of selection change (for preview mode)
+        onSelectionChange?.(newSelected)
+
+        // If in "preview mode" (no postId), we don't write to DB yet
+        if (!postId) {
+            const isSaved = newSelected.size > 0
+            onSaveStateChange?.(isSaved)
+            return
+        }
+
+        // Real mode: write to DB
         if (!skipUpdate) {
             setUpdating(listId)
             try {
@@ -163,11 +183,10 @@ export default function ListSelectionBottomSheet({
                     await removePostFromList(listId, postId)
                 } else {
                     await addPostToList(listId, postId)
-                    // Save as last used list
                     await AsyncStorage.setItem(LAST_USED_LIST_KEY, listId)
                 }
 
-                // Update lists to reflect new post count
+                // Update lists UI (post count)
                 setLists(prev => prev.map(list => {
                     if (list.id === listId) {
                         const postIds = isSelected
@@ -186,7 +205,6 @@ export default function ListSelectionBottomSheet({
             }
         }
 
-        // Always notify parent of save state change (even during auto-select)
         const isSaved = newSelected.size > 0
         onSaveStateChange?.(isSaved)
     }

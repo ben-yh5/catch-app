@@ -12,20 +12,20 @@
  * - ThreadModal: Confirming catches
  */
 
+import { colors } from '@/theme/colors'
 import React, { useState } from 'react'
 import {
-    StyleSheet,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
+    StyleSheet,
 } from 'react-native'
-import { colors } from '@/theme/colors'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import ListSelectionBottomSheet from './ListSelectionBottomSheet'
 import PostCard from './PostCard'
-
 interface UnifiedPreviewScreenProps {
     imageUri: string
-    onConfirm: (title?: string, caption?: string) => void
+    onConfirm: (title?: string, caption?: string, listIds?: Set<string>) => void
     onCancel: () => void
     mode: 'post' | 'catch'
     loading?: boolean
@@ -48,10 +48,12 @@ export default function UnifiedPreviewScreen({
 }: UnifiedPreviewScreenProps) {
     const [title, setTitle] = useState('')
     const [caption, setCaption] = useState('')
+    const [showListSelection, setShowListSelection] = useState(false)
+    const [selectedListIds, setSelectedListIds] = useState<Set<string>>(new Set())
     const insets = useSafeAreaInsets()
 
     const handleConfirm = () => {
-        onConfirm(title, caption)
+        onConfirm(title, caption, selectedListIds)
     }
 
     const isPost = mode === 'post'
@@ -117,8 +119,19 @@ export default function UnifiedPreviewScreen({
                     actionButtonDisabled={buttonDisabled}
                     actionButtonLoading={buttonLoading}
                     actionButtonLoadingText={buttonLoadingText}
+
+                    // List Selection
+                    onAddToListPress={() => setShowListSelection(true)}
+                    selectedListCount={selectedListIds.size}
                 />
             </ScrollView>
+
+            <ListSelectionBottomSheet
+                visible={showListSelection}
+                onClose={() => setShowListSelection(false)}
+                initialSelectedIds={selectedListIds}
+                onSelectionChange={setSelectedListIds}
+            />
         </KeyboardAvoidingView>
     )
 }
@@ -130,5 +143,6 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: 10,
+        paddingBottom: 40,
     },
 })

@@ -24,7 +24,7 @@ import { db, functions, storage } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { validateCatch } from '@/utils/catchValidation'
 import { cropToSquare } from '@/utils/imageProcessing'
-import { isPostSaved } from '@/utils/listUtils'
+import { addPostToList, isPostSaved } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
 import { Image } from 'expo-image'
@@ -50,7 +50,6 @@ import React, { useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
-    Dimensions,
     FlatList,
     Linking,
     Modal,
@@ -60,6 +59,7 @@ import {
     TouchableOpacity,
     View,
     ViewToken,
+    useWindowDimensions
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ListSelectionBottomSheet from './ListSelectionBottomSheet'
@@ -90,7 +90,7 @@ interface ThreadModalProps {
     initialPostId?: string // If provided, start the gallery at this post
 }
 
-const { width } = Dimensions.get('window')
+
 
 export default function ThreadModal({
     visible,
@@ -473,7 +473,7 @@ export default function ThreadModal({
         setCatchMode(false)
     }
 
-    const handleCatchConfirm = async (title?: string, caption?: string) => {
+    const handleCatchConfirm = async (title?: string, caption?: string, listIds?: Set<string>) => {
         // Always catch the ROOT post, not the current post
         const rootPost = threadPosts[0]
         if (!rootPost || !catchImageUri) {
@@ -505,7 +505,7 @@ export default function ThreadModal({
                     `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m to catch this location.`
                 )
             } else {
-                await createCatchPost(catchImageUri, catchLocation, caption)
+                await createCatchPost(catchImageUri, catchLocation, caption, listIds)
             }
         } catch (error: any) {
             console.error('Error validating catch:', error)
@@ -539,7 +539,8 @@ export default function ThreadModal({
     const createCatchPost = async (
         photoUri: string,
         location: { latitude: number; longitude: number },
-        caption?: string
+        caption?: string,
+        listIds?: Set<string>
     ) => {
         if (!user) return
 
@@ -588,6 +589,19 @@ export default function ThreadModal({
                 geohash: geohash,
                 createdAt: new Date(),
             })
+
+            // Add to selected lists
+            if (listIds && listIds.size > 0) {
+                try {
+                    await Promise.all(
+                        Array.from(listIds).map(listId =>
+                            addPostToList(listId, catchPostRef.id)
+                        )
+                    )
+                } catch (listError) {
+                    console.error('Error adding catch to lists:', listError)
+                }
+            }
 
             // Increment the ROOT post's catchCount
             const rootPostRef = doc(db, 'posts', rootPost.id)
@@ -670,24 +684,37 @@ export default function ThreadModal({
         itemVisiblePercentThreshold: 50,
     }).current
 
-    const cardWidth = width - 20 // Account for container padding
-    const getItemLayout = (_: any, index: number) => ({
+    const { width } = useWindowDimensions()
+    const cardWidth = width - 20
+
+    const keyExtractor = React.useCallback((item: Post) => item.id, [])
+
+    const onScrollToIndexFailed = React.useCallback((info: any) => {
+        setTimeout(() => {
+            flatListRef.current?.scrollToIndex({
+                index: info.index,
+                animated: false,
+            })
+        }, 100)
+    }, [])
+
+    const getItemLayout = React.useCallback((_: any, index: number) => ({
         length: cardWidth,
         offset: cardWidth * index,
         index,
-    })
+    }), [cardWidth])
 
-    const renderGalleryItem = ({ item }: { item: Post }) => (
-        <View style={styles.galleryItem}>
+    const renderGalleryItem = React.useCallback(({ item }: { item: Post }) => (
+        <View style={[styles.galleryItem, { width: cardWidth, height: cardWidth }]}>
             <Image
                 source={{ uri: item.photoURL }}
                 style={styles.galleryImage}
                 contentFit="cover"
                 cachePolicy="memory-disk"
-                transition={200}
+                priority="high"
             />
         </View>
-    )
+    ), [cardWidth])
 
     if (!post) return null
 
@@ -765,9 +792,10 @@ export default function ThreadModal({
                             {/* Post Card */}
                             <View style={[
                                 styles.postCard,
-                                currentPost?.authorId === user?.uid && {
+                                currentPost?.authorId === user?.uid ? {
                                     borderColor: colors.secondary,
-                                    borderWidth: 2,
+                                } : {
+                                    borderColor: 'transparent',
                                 }
                             ]}>
                                 {/* Card Header */}
@@ -873,14 +901,18 @@ export default function ThreadModal({
                                     ref={flatListRef}
                                     data={threadPosts}
                                     renderItem={renderGalleryItem}
-                                    keyExtractor={(item) => item.id}
+                                    keyExtractor={keyExtractor}
                                     horizontal
                                     pagingEnabled
                                     showsHorizontalScrollIndicator={false}
                                     onViewableItemsChanged={onViewableItemsChanged}
                                     viewabilityConfig={viewabilityConfig}
                                     getItemLayout={getItemLayout}
-                                    style={styles.galleryFlatList}
+                                    style={{
+                                        width: width - 20,
+                                        height: width - 20,
+                                        flexGrow: 0,
+                                    }}
                                     initialScrollIndex={
                                         initialPostId
                                             ? threadPosts.findIndex(
@@ -888,14 +920,7 @@ export default function ThreadModal({
                                             )
                                             : 0
                                     }
-                                    onScrollToIndexFailed={(info) => {
-                                        setTimeout(() => {
-                                            flatListRef.current?.scrollToIndex({
-                                                index: info.index,
-                                                animated: false,
-                                            })
-                                        }, 100)
-                                    }}
+                                    onScrollToIndexFailed={onScrollToIndexFailed}
                                 />
 
                                 {/* Thread Timeline - dots with connecting line */}
@@ -1057,6 +1082,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 4,
         elevation: 3,
+        borderWidth: 2,
+        borderColor: 'transparent',
     },
     cardHeader: {
         flexDirection: 'row',
@@ -1161,12 +1188,10 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     galleryFlatList: {
-        height: width - 20,
         flexGrow: 0,
     },
     galleryItem: {
-        width: width - 20,
-        height: width - 20,
+        // Dimensions set in renderItem
     },
     galleryImage: {
         width: '100%',

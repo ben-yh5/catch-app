@@ -14,26 +14,26 @@
  * - UnifiedPreviewScreen: Post/catch preview
  */
 
-import React, { useState, useRef } from 'react'
+import { colors } from '@/theme/colors'
+import { Ionicons } from '@expo/vector-icons'
+import { Image } from 'expo-image'
+import React, { useRef, useState } from 'react'
 import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    Dimensions,
     ActivityIndicator,
-    TextInput,
+    Dimensions,
     FlatList,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
     ViewToken,
 } from 'react-native'
-import { Image } from 'expo-image'
-import { Ionicons } from '@expo/vector-icons'
-import { colors } from '@/theme/colors'
-import Animated, {
-    useSharedValue,
-    useAnimatedStyle,
-} from 'react-native-reanimated'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+} from 'react-native-reanimated'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -85,6 +85,10 @@ interface PostCardProps {
     actionButtonLoading?: boolean
     actionButtonLoadingText?: string
 
+    // Add to List
+    onAddToListPress?: () => void
+    selectedListCount?: number
+
     // Container style
     containerPadding?: number
 }
@@ -134,6 +138,10 @@ export default function PostCard({
     actionButtonDisabled = false,
     actionButtonLoading = false,
     actionButtonLoadingText = 'Loading...',
+
+    // Add to List
+    onAddToListPress,
+    selectedListCount = 0,
 
     // Container
     containerPadding = 10,
@@ -378,6 +386,39 @@ export default function PostCard({
                                 {currentIndex + 1} of {total}
                             </Text>
                         </View>
+                    )}
+
+                    {onAddToListPress && (
+                        <TouchableOpacity
+                            style={[
+                                styles.actionButton,
+                                {
+                                    backgroundColor: selectedListCount > 0 ? colors.cardElevated : 'transparent',
+                                    borderWidth: 1,
+                                    borderColor: selectedListCount > 0 ? colors.primary : colors.border,
+                                    marginBottom: 8,
+                                }
+                            ]}
+                            onPress={onAddToListPress}
+                        >
+                            <Ionicons
+                                name={selectedListCount > 0 ? 'bookmark' : 'bookmark-outline'}
+                                size={20}
+                                color={selectedListCount > 0 ? colors.primary : colors.textPrimary}
+                            />
+                            <Text
+                                style={[
+                                    styles.actionButtonText,
+                                    {
+                                        color: selectedListCount > 0 ? colors.primary : colors.textPrimary,
+                                    },
+                                ]}
+                            >
+                                {selectedListCount > 0
+                                    ? `Saved to ${selectedListCount} list${selectedListCount === 1 ? '' : 's'}`
+                                    : 'Add to List'}
+                            </Text>
+                        </TouchableOpacity>
                     )}
 
                     {actionButtonText && (
