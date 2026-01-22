@@ -8,6 +8,7 @@ import React, { useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
+    BackHandler,
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
@@ -52,6 +53,16 @@ export default function CreateListModal() {
             loadList()
         }
     }, [isEditing, listId])
+
+    // Handle hardware back button
+    React.useEffect(() => {
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+            router.back()
+            return true
+        })
+
+        return () => backHandler.remove()
+    }, [router])
 
     const handleSave = async () => {
         if (!user) return

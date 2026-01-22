@@ -1,8 +1,10 @@
 import FilterPills, { FilterType } from '@/components/FilterPills'
 import ListCarousel from '@/components/ListCarousel'
+import ListModal from '@/components/ListModal'
 import LocationSearchBar from '@/components/LocationSearchBar'
 import MapBottomSheet from '@/components/MapBottomSheet'
 import ThreadModal from '@/components/ThreadModal'
+import ViewToggle from '@/components/ViewToggle'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
@@ -11,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons'
 import Mapbox, { Camera, CircleLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { doc, getDoc } from 'firebase/firestore'
+import { arrayRemove, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
@@ -97,6 +99,7 @@ export default function MapScreen() {
     const [activeList, setActiveList] = useState<any | null>(null)
     const [listPosts, setListPosts] = useState<Post[]>([])
     const [isListMode, setIsListMode] = useState(false)
+    const [showListModal, setShowListModal] = useState(false)
 
     // Thread modal state
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
@@ -166,6 +169,9 @@ export default function MapScreen() {
             setIsListMode(false)
             setActiveList(null)
             setListPosts([])
+            setActiveList(null)
+            setListPosts([])
+            // setViewMode('map')
         }
 
         const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -242,6 +248,7 @@ export default function MapScreen() {
                         }
                     }
                 }
+                // setShowListModal(true) // Disable auto-open per user request
             }
         } catch (error) {
             console.error('Error fetching list details:', error)
@@ -306,6 +313,9 @@ export default function MapScreen() {
         setIsListMode(false)
         setActiveList(null)
         setListPosts([])
+        setActiveList(null)
+        setListPosts([])
+        // setViewMode('map')
         fetchPostsInViewport() // Reload normal posts
     }
 
@@ -502,6 +512,43 @@ export default function MapScreen() {
         setSelectedPostId(null)
     }
 
+    const handleRemovePostFromList = async (postId: string) => {
+        if (!activeList) return
+
+        try {
+            await updateDoc(doc(db, 'lists', activeList.id), {
+                postIds: arrayRemove(postId),
+            })
+            setListPosts((prev) => prev.filter((p) => p.id !== postId))
+            // Also update the visible posts on the map if in list mode
+            setVisiblePosts((prev) => prev.filter((p) => p.id !== postId))
+
+            // Update active list state locally
+            setActiveList(prev => ({
+                ...prev,
+                postIds: prev.postIds.filter((id: string) => id !== postId)
+            }))
+
+        } catch (error) {
+            console.error('Error removing post from list:', error)
+            Alert.alert('Error', 'Failed to remove post')
+        }
+    }
+
+    const handleDeleteList = async () => {
+        if (!activeList) return
+
+        try {
+            await deleteDoc(doc(db, 'lists', activeList.id))
+            handleListClose()
+        } catch (error) {
+            console.error('Error deleting list:', error)
+            Alert.alert('Error', 'Failed to delete list')
+        }
+    }
+
+
+
     const mapStyle =
         colorScheme === 'dark'
             ? 'mapbox://styles/mapbox/dark-v11'
@@ -543,28 +590,46 @@ export default function MapScreen() {
         }, 1200)
     }
 
+
+
+
     return (
         <View style={styles.container}>
             {/* Compact Header */}
             <View style={[styles.header, { paddingTop: insets.top }]}>
+                <View style={styles.headerTitleContainer}>
+                    <Text style={styles.headerTitle}>{isListMode ? activeList?.name || 'List' : 'Map'}</Text>
+                </View>
+
                 {isListMode && (
                     <TouchableOpacity
                         onPress={handleListClose}
-                        style={{ position: 'absolute', left: 16, bottom: 12, zIndex: 10 }}
+                        style={{ position: 'absolute', left: 16, bottom: 12 + 8, zIndex: 10 }}
                     >
                         <Ionicons name="close" size={24} color={colors.textPrimary} />
                     </TouchableOpacity>
                 )}
-                <Text style={styles.headerTitle}>{isListMode ? activeList?.name || 'List' : 'Map'}</Text>
+
                 {isListMode && activeList?.creatorId === user?.uid && (
                     <TouchableOpacity
                         onPress={() => router.push(`/create-list?listId=${activeList.id}` as any)}
-                        style={{ position: 'absolute', right: 16, bottom: 12, zIndex: 10 }}
+                        style={{ position: 'absolute', right: 16, bottom: 12 + 8, zIndex: 10 }}
                     >
                         <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Edit</Text>
                     </TouchableOpacity>
                 )}
             </View>
+
+            {/* View Toggle - Bottom Center */}
+            {isListMode && (
+                <ViewToggle
+                    activeMode={showListModal ? 'list' : 'map'}
+                    onToggle={(mode) => {
+                        setShowListModal(mode === 'list')
+                    }}
+                    bottomOffset={12}
+                />
+            )}
 
             {/* Search Bar */}
             {!isListMode && (
@@ -625,11 +690,6 @@ export default function MapScreen() {
                         if (state.gestures.isGestureActive) {
                             setShowSearchButton(true)
                         }
-                    }}
-
-                    onMapIdle={() => {
-                        // Optional: Ensure button shows if we missed the gesture end
-                        // But rely on onCameraChanged for interaction detection
                     }}
                 >
                     <Camera
@@ -725,46 +785,43 @@ export default function MapScreen() {
                         />
                     </ShapeSource>
                 </MapView>
-            )
-            }
+            )}
 
             {/* Center on location button */}
-            {
-                userLocation && (
-                    <TouchableOpacity
-                        style={styles.centerButton}
-                        onPress={centerOnUserLocation}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="locate" size={24} color={colors.textPrimary} />
-                    </TouchableOpacity>
-                )
-            }
+            {userLocation && (
+                <TouchableOpacity
+                    style={styles.centerButton}
+                    onPress={centerOnUserLocation}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons name="locate" size={24} color={colors.textPrimary} />
+                </TouchableOpacity>
+            )}
+
 
             {/* Bottom Sheet or List Carousel */}
-            {
-                !locationLoading && (
-                    isListMode ? (
-                        <ListCarousel
-                            posts={listPosts}
-                            onPostSnap={handleCarouselSnap}
-                            onPostPress={(post) => {
-                                setSelectedPost(post)
-                                setShowThreadModal(true)
-                            }}
-                            selectedPostId={selectedPostId}
-                        />
-                    ) : (
-                        <MapBottomSheet
-                            posts={sortedVisiblePosts}
-                            loading={loadingPosts}
-                            onPostPress={handlePostPress}
-                            onJumpToLocation={handleJumpToLocation}
-                            selectedPostId={selectedPostId}
-                        />
-                    )
+            {!locationLoading && (
+                isListMode ? (
+                    <ListCarousel
+                        posts={listPosts}
+                        onPostSnap={handleCarouselSnap}
+                        onPostPress={(post) => {
+                            setSelectedPost(post)
+                            setShowThreadModal(true)
+                        }}
+                        selectedPostId={selectedPostId}
+                        bottomOffset={insets.bottom + 60}
+                    />
+                ) : (
+                    <MapBottomSheet
+                        posts={sortedVisiblePosts}
+                        loading={loadingPosts}
+                        onPostPress={handlePostPress}
+                        onJumpToLocation={handleJumpToLocation}
+                        selectedPostId={selectedPostId}
+                    />
                 )
-            }
+            )}
 
             {/* Thread Modal */}
             <ThreadModal
@@ -773,6 +830,19 @@ export default function MapScreen() {
                 onClose={handleThreadModalClose}
                 onPostUpdate={handlePostUpdate}
                 onPostDelete={handlePostDelete}
+            />
+
+            {/* List Modal */}
+            <ListModal
+                visible={showListModal}
+                onClose={() => setShowListModal(false)}
+                list={activeList}
+                posts={listPosts}
+                loading={loadingPosts}
+                onRemovePost={handleRemovePostFromList}
+                onDeleteList={handleDeleteList}
+                onRefresh={() => activeList?.id && fetchListDetails(activeList.id)}
+                refreshing={loadingPosts}
             />
         </View >
     )
@@ -784,18 +854,62 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
     header: {
-        paddingHorizontal: 20,
-        paddingBottom: 12,
+        backgroundColor: colors.background,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
-        backgroundColor: colors.background,
-        zIndex: 20, // Ensure header is above everything
+        zIndex: 20,
+        paddingBottom: 12, // Ensure space below content
+    },
+    headerTitleContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 44, // Standard toolbar height
+        marginTop: 4,
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '600',
         color: colors.textPrimary,
         textAlign: 'center',
+    },
+    viewToggle: {
+        flexDirection: 'row',
+        backgroundColor: colors.card,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding: 4,
+        position: 'absolute',
+        alignSelf: 'center',
+        zIndex: 30,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    toggleOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        gap: 6,
+    },
+    toggleOptionActive: {
+        backgroundColor: colors.primary,
+    },
+    toggleText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.textSecondary,
+    },
+    toggleTextActive: {
+        color: '#fff',
+    },
+    listViewContainer: {
+        flex: 1,
+        backgroundColor: colors.background,
     },
     filterContainer: {
         position: 'absolute',

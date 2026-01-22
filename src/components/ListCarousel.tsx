@@ -19,6 +19,7 @@ interface ListCarouselProps {
     onPostSnap: (post: any) => void
     onPostPress: (post: any) => void
     selectedPostId?: string | null
+    bottomOffset?: number
 }
 
 export default function ListCarousel({
@@ -26,6 +27,7 @@ export default function ListCarousel({
     onPostSnap,
     onPostPress,
     selectedPostId,
+    bottomOffset = 40,
 }: ListCarouselProps) {
     const { user } = useAuth()
     const flatListRef = useRef<FlatList>(null)
@@ -63,7 +65,7 @@ export default function ListCarousel({
     )
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { bottom: bottomOffset }]}>
             <FlatList
                 ref={flatListRef}
                 data={posts}

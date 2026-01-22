@@ -1,5 +1,6 @@
 import CompactPostCard from '@/components/CompactPostCard'
 import ThreadModal from '@/components/ThreadModal'
+import ViewToggle from '@/components/ViewToggle'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
@@ -287,6 +288,17 @@ export default function ListDetailScreen() {
                     initialPostId={selectedPost.id}
                 />
             )}
+
+            {/* View Toggle */}
+            <ViewToggle
+                activeMode="list"
+                onToggle={(mode) => {
+                    if (mode === 'map') {
+                        // Navigate to MapScreen in list mode
+                        router.push(`/(tabs)/map?listId=${listId}` as any)
+                    }
+                }}
+            />
         </View>
     )
 }
