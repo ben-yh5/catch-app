@@ -50,11 +50,7 @@ export default function ExploreSection({
         return null;
     }
 
-    const { user } = useAuth(); // Assuming useAuth is available for import or passed as prop. 
-    // Wait, ExploreSection is a component. passing prop is cleaner to avoid circular deps or context issues if not wrapped? 
-    // But useAuth is a hook, it's fine.
-
-    // Actually, let's just use the hook.
+    const { user } = useAuth(); 
 
     const renderPostCard = ({ item }: { item: any }) => (
         <TouchableOpacity

@@ -372,7 +372,35 @@ export default function ExploreScreen() {
     }
 
     const renderFeaturedListSection = () => {
-        if (loadingLists || featuredLists.length === 0) return null
+        if (loadingLists) {
+            return (
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <View style={styles.titleContainer}>
+                            <Text style={styles.emoji}>📋</Text>
+                            <Text style={styles.title}>Featured Lists</Text>
+                        </View>
+                    </View>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.listContent}
+                    >
+                        {[1, 2, 3].map((i) => (
+                            <View key={i} style={styles.listCard}>
+                                <View style={[styles.listThumbnailGrid, { backgroundColor: colors.border, opacity: 0.3 }]} />
+                                <View style={styles.listInfo}>
+                                    <View style={{ height: 16, width: '80%', backgroundColor: colors.border, marginBottom: 8, borderRadius: 4, opacity: 0.3 }} />
+                                    <View style={{ height: 12, width: '60%', backgroundColor: colors.border, borderRadius: 4, opacity: 0.3 }} />
+                                </View>
+                            </View>
+                        ))}
+                    </ScrollView>
+                </View>
+            )
+        }
+
+        if (featuredLists.length === 0) return null
 
         return (
             <View style={styles.section}>
