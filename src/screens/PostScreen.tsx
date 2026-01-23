@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
+import { Accelerometer, Magnetometer } from 'expo-sensors'
 import { addDoc, collection, doc, getDoc } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { geohashForLocation } from 'geofire-common'
@@ -23,20 +24,119 @@ interface LocationData {
 
 export default function PostScreen() {
     const [permission, requestPermission] = useCameraPermissions()
+    const [status, requestLocationPermission] = Location.useForegroundPermissions()
     const [showCamera, setShowCamera] = useState(false)
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [location, setLocation] = useState<LocationData | null>(null)
     const [loadingLocation, setLoadingLocation] = useState(false)
     const [uploading, setUploading] = useState(false)
+    const [heading, setHeading] = useState<number | null>(null)
+    const [capturedHeading, setCapturedHeading] = useState<number | null>(null)
     const processingRef = useRef(false)
     const router = useRouter()
     const { user } = useAuth()
     const { notifyPostEvent } = usePost()
+    // Refs to hold latest sensor data
+    // Refs to hold latest sensor data
+    const debugRef = useRef<any>({})
+    const [subscription, setSubscription] = useState<{ remove: () => void } | null>(null)
+
+    // Refs for sensor data
+    const gravityRef = useRef<{ x: number; y: number; z: number } | null>(null)
+    const magRef = useRef<{ x: number; y: number; z: number } | null>(null)
+    const [accelSubscription, setAccelSubscription] = useState<any>(null)
+    const [magSubscription, setMagSubscription] = useState<any>(null)
+
+    const toggleSensors = async (shouldEnable: boolean) => {
+        if (shouldEnable) {
+            if (accelSubscription || magSubscription) return
+
+            const magAvailable = await Magnetometer.isAvailableAsync()
+            const accelAvailable = await Accelerometer.isAvailableAsync()
+
+            if (!magAvailable || !accelAvailable) {
+                console.warn('[PostScreen] Sensors not available')
+                return
+            }
+
+            Magnetometer.setUpdateInterval(100)
+            Accelerometer.setUpdateInterval(100)
+
+            const accelSub = Accelerometer.addListener(data => {
+                gravityRef.current = data
+                calculateHeading()
+            })
+
+            const magSub = Magnetometer.addListener(data => {
+                magRef.current = data
+                calculateHeading()
+            })
+
+            setAccelSubscription(accelSub)
+            setMagSubscription(magSub)
+        } else {
+            accelSubscription && accelSubscription.remove()
+            magSubscription && magSubscription.remove()
+            setAccelSubscription(null)
+            setMagSubscription(null)
+            gravityRef.current = null
+            magRef.current = null
+        }
+    }
+
+    const calculateHeading = () => {
+        if (!gravityRef.current || !magRef.current) return
+
+        const G = gravityRef.current
+        const M = magRef.current
+
+        // 1. Cross product G x M = E (East)
+        const Ex = M.y * G.z - M.z * G.y
+        const Ey = M.z * G.x - M.x * G.z
+        const Ez = M.x * G.y - M.y * G.x
+
+        const E_norm = Math.sqrt(Ex * Ex + Ey * Ey + Ez * Ez)
+        if (E_norm < 0.1) return
+
+        const Ex_n = Ex / E_norm
+        const Ey_n = Ey / E_norm
+        const Ez_n = Ez / E_norm
+
+        // 2. Cross product N = G x E (North)
+        const Nx = G.y * Ez_n - G.z * Ey_n
+        const Ny = G.z * Ex_n - G.x * Ez_n
+        const Nz = G.x * Ey_n - G.y * Ex_n
+
+        const N_norm = Math.sqrt(Nx * Nx + Ny * Ny + Nz * Nz)
+        const Nx_n = Nx / N_norm
+        const Ny_n = Ny / N_norm
+        const Nz_n = Nz / N_norm
+
+        // 3. Adaptive Heading Calculation
+        let angle = 0
+
+        // If Gravity Z is weak (< 0.7g), we are vertical
+        if (Math.abs(G.z) < 0.7) {
+            // Camera Mode (Vertical): Track -Z axis
+            angle = Math.atan2(-Ez_n, -Nz_n) * (180 / Math.PI)
+        } else {
+            // Map Mode (Flat): Track Y axis
+            angle = Math.atan2(Ey_n, Ny_n) * (180 / Math.PI)
+        }
+
+        if (angle < 0) angle += 360
+
+        setHeading(Math.round(angle))
+    }
+    // Cleanup sensors
+    React.useEffect(() => {
+        return () => {
+            subscription && subscription.remove()
+        }
+    }, [])
 
     const handleOpenCamera = async () => {
-        if (!permission) {
-            return
-        }
+        if (!permission) return
 
         if (!permission.granted) {
             const result = await requestPermission()
@@ -49,20 +149,33 @@ export default function PostScreen() {
             }
         }
 
+        // Also request location permission here for the compass
+        if (!status?.granted) {
+            const result = await requestLocationPermission()
+            if (!result.granted) {
+                Alert.alert(
+                    'Location Permission Required',
+                    'Location is required for the compass and to tag your photos.'
+                )
+                return
+            }
+        }
+
         setShowCamera(true)
+        toggleSensors(true)
     }
 
     const getDeviceLocation = async (): Promise<LocationData | null> => {
         try {
-            const { status } =
-                await Location.requestForegroundPermissionsAsync()
-
-            if (status !== 'granted') {
-                Alert.alert(
-                    'Location Required',
-                    'Location permission is required to share locations. Please enable location permissions in your device settings.'
-                )
-                return null
+            if (!status?.granted) {
+                const result = await requestLocationPermission()
+                if (!result.granted) {
+                    Alert.alert(
+                        'Location Required',
+                        'Location permission is required to share locations. Please enable location permissions in your device settings.'
+                    )
+                    return null
+                }
             }
 
             const location = await Location.getCurrentPositionAsync({
@@ -84,6 +197,11 @@ export default function PostScreen() {
     }
 
     const handlePhotoTaken = async (uri: string) => {
+        // Snapshot sensor data
+        console.log('[PostScreen] Capturing photo. Current Heading:', heading)
+        setCapturedHeading(heading)
+        toggleSensors(false)
+
         // Mark as processing
         processingRef.current = true
 
@@ -127,6 +245,7 @@ export default function PostScreen() {
     const handleCameraCancel = () => {
         processingRef.current = false
         setShowCamera(false)
+        toggleSensors(false)
         setLoadingLocation(false)
     }
 
@@ -198,6 +317,7 @@ export default function PostScreen() {
                 postId: docRef.id,
                 latitude: location.latitude,
                 longitude: location.longitude,
+                heading: capturedHeading,
                 geohash: geohash,
                 createdAt: new Date(),
             })
@@ -244,13 +364,29 @@ export default function PostScreen() {
         setLoadingLocation(false)
     }
 
+
     // Camera View
     if (showCamera) {
         return (
-            <UnifiedCameraView
-                onPhotoTaken={handlePhotoTaken}
-                onCancel={handleCameraCancel}
-            />
+            <View style={{ flex: 1 }}>
+                <UnifiedCameraView
+                    onPhotoTaken={handlePhotoTaken}
+                    onCancel={handleCameraCancel}
+                />
+                <View style={{
+                    position: 'absolute',
+                    top: 100,
+                    left: 20,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    padding: 10,
+                    borderRadius: 8
+                }}>
+                    <Text style={{ color: 'white' }}>Mag: {heading}°</Text>
+                    <Text style={{ color: 'white' }}>
+                        a: {debugRef.current?.alpha?.toFixed(2)} b: {debugRef.current?.beta?.toFixed(2)} g: {debugRef.current?.gamma?.toFixed(2)}
+                    </Text>
+                </View>
+            </View>
         )
     }
 

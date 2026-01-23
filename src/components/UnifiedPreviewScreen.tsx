@@ -60,13 +60,13 @@ export default function UnifiedPreviewScreen({
     const isCatch = mode === 'catch'
 
     // Determine button state
-    const buttonDisabled = loading || (isPost && loadingLocation) || (isPost && !title.trim())
+    const buttonDisabled = loading || loadingLocation || (isPost && !title.trim())
     const buttonLoading = loading
 
     let buttonText = isPost ? 'Post' : 'Catch This Shot'
     let buttonLoadingText = loadingText
 
-    if (isPost && loadingLocation) {
+    if ((isPost || isCatch) && loadingLocation) {
         buttonText = 'Fetching location...'
     }
 
@@ -101,9 +101,9 @@ export default function UnifiedPreviewScreen({
                     originalImageUrl={originalPhotoUrl}
 
                     // Footer
-                    titleInputMode={isPost}
+                    titleInputMode={true}
                     captionInputMode={true}
-                    titlePlaceholder="Add a title (required)..."
+                    titlePlaceholder={isPost ? "Add a title (required)..." : "Add a title (optional)..."}
                     captionPlaceholder="Add a caption (optional)..."
                     onTitleChange={setTitle}
                     onCaptionChange={setCaption}

@@ -1,0 +1,34 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper to check if user is the owner of the path
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Posts: Allow uploading to own folder, reading all
+    match /posts/{userId}/{imageId} {
+      allow read: if true;
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Training Data: Allow uploading for authorized users (opted-in)
+    // For now, we just check if they are authenticated to avoid complex firestore lookups in storage rules
+    match /training_data/{pairId}/{imageId} {
+      allow read: if isAuthenticated(); // Must be readable to getDownloadURL
+      allow write: if isAuthenticated();
+    }
+    
+    // Profile pictures (if applicable)
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+  }
+}

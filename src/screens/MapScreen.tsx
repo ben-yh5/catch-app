@@ -35,6 +35,7 @@ interface Post {
     authorId: string
     authorUsername: string
     photoURL: string
+    title?: string
     caption: string
     hasLocation: boolean
     catchCount: number

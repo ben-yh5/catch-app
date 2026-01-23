@@ -8,9 +8,9 @@
  * - Push notifications for social features
  */
 
-import * as functions from 'firebase-functions'
 import * as admin from 'firebase-admin'
-import { geohashForLocation, geohashQueryBounds, distanceBetween } from 'geofire-common'
+import * as functions from 'firebase-functions'
+import { distanceBetween, geohashForLocation, geohashQueryBounds } from 'geofire-common'
 
 admin.initializeApp()
 
@@ -116,6 +116,8 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
             isValid,
             distance: Math.round(distance),
             requiredDistance: CATCH_RADIUS_METERS,
+            heading: locationData.heading, // Optional
+            pitch: locationData.pitch,     // Optional
         }
     } catch (error: any) {
         functions.logger.error('Error validating catch:', error)
@@ -190,6 +192,8 @@ export const getPostLocation = functions.https.onCall(async (data, context) => {
             postId,
             latitude,
             longitude,
+            heading: locationData.heading, // Optional
+            pitch: locationData.pitch,     // Optional
         }
     } catch (error: any) {
         functions.logger.error('Error getting post location:', error)
@@ -242,6 +246,8 @@ export const getPostLocations = functions.https.onCall(async (data, context) => 
             postId: string
             latitude: number
             longitude: number
+            heading?: number
+            pitch?: number
         }[] = []
 
         // Firestore 'in' queries are limited to 10 items, so batch the requests
@@ -261,6 +267,8 @@ export const getPostLocations = functions.https.onCall(async (data, context) => 
                     postId: locationData.postId,
                     latitude: locationData.latitude,
                     longitude: locationData.longitude,
+                    heading: locationData.heading, // Optional
+                    pitch: locationData.pitch,     // Optional
                 })
             })
         }
@@ -771,7 +779,9 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
                         postId: locationData.postId,
                         latitude: locationData.latitude,
                         longitude: locationData.longitude,
-                        geohash: locationData.geohash
+                        geohash: locationData.geohash,
+                        heading: locationData.heading, // Optional
+                        pitch: locationData.pitch      // Optional
                     })
                 })
             })

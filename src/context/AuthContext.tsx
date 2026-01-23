@@ -11,20 +11,20 @@
  * and redirect users to username setup when needed.
  */
 
-import React, { createContext, useState, useEffect, useContext } from 'react'
+import { auth, db } from '@/services/firebase'
+import { GoogleSignin } from '@react-native-google-signin/google-signin'
 import {
-    onAuthStateChanged,
-    signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
+    fetchSignInMethodsForEmail,
+    GoogleAuthProvider,
+    onAuthStateChanged,
+    signInWithCredential,
+    signInWithEmailAndPassword,
     signOut,
     User,
-    GoogleAuthProvider,
-    signInWithCredential,
-    fetchSignInMethodsForEmail,
 } from 'firebase/auth'
-import { auth, db } from '@/services/firebase'
-import { doc, setDoc} from 'firebase/firestore'
-import { GoogleSignin } from '@react-native-google-signin/google-signin'
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import React, { createContext, useContext, useEffect, useState } from 'react'
 
 interface AuthContextType {
     user: User | null
@@ -33,6 +33,8 @@ interface AuthContextType {
     signup: (email: string, password: string, username: string) => Promise<void>
     loginWithGoogle: () => Promise<void>
     logout: () => Promise<void>
+    dataContributionEnabled: boolean
+    toggleDataContribution: (enabled: boolean) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -42,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
+    const [dataContributionEnabled, setDataContributionEnabled] = useState(false)
 
     useEffect(() => {
         // Configure Google Sign-In
@@ -50,8 +53,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         })
 
         // Listen for auth state changes
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setUser(user)
+            if (user) {
+                // Fetch user settings
+                try {
+                    const userDoc = await getDoc(doc(db, 'users', user.uid))
+                    if (userDoc.exists()) {
+                        const data = userDoc.data()
+                        setDataContributionEnabled(data.dataContributionEnabled || false)
+                    }
+                } catch (error) {
+                    console.error('Error fetching user settings:', error)
+                }
+            } else {
+                setDataContributionEnabled(false)
+            }
             setLoading(false)
         })
 
@@ -94,6 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 followers: [],
                 following: [],
                 pushToken: null,
+                dataContributionEnabled: false,
                 createdAt: new Date(),
             })
         } catch (error: any) {
@@ -155,8 +173,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }
 
+    /**
+     * Update data contribution setting
+     */
+    const toggleDataContribution = async (enabled: boolean) => {
+        if (!user) return
+
+        try {
+            await updateDoc(doc(db, 'users', user.uid), {
+                dataContributionEnabled: enabled
+            })
+            setDataContributionEnabled(enabled)
+        } catch (error: any) {
+            console.error("Error updating data contribution setting", error)
+            throw new Error(error.message)
+        }
+    }
+
     return (
-        <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout }}>
+        <AuthContext.Provider value={{
+            user,
+            loading,
+            login,
+            signup,
+            loginWithGoogle,
+            logout,
+            dataContributionEnabled,
+            toggleDataContribution
+        }}>
             {children}
         </AuthContext.Provider>
     )

@@ -11,6 +11,7 @@ export const colors = {
     card: '#1c1c1e', // Dark gray
     cardBackground: '#1c1c1e', // Alias for card
     cardElevated: '#2c2c2e', // Slightly lighter gray for badges/buttons
+    surface: '#1c1c1e', // Standard surface color
 
     // Accents
     primary: '#007AFF', // iOS blue for primary actions
@@ -21,6 +22,7 @@ export const colors = {
     textPrimary: '#ffffff', // White
     textSecondary: '#e5e5e7', // Light gray
     textTertiary: '#98989f', // Medium gray
+    inverseTextPrimary: '#000000', // Black text for light backgrounds
 
     // Borders
     border: '#2c2c2e',

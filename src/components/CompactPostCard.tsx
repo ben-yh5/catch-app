@@ -9,6 +9,7 @@ interface CompactPostCardProps {
         id: string;
         photoURL: string;
         authorUsername: string;
+        title?: string;
         caption?: string;
         catchCount: number;
         createdAt: any;
@@ -52,6 +53,12 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation, highl
                         <Text style={styles.catchCount}>{post.catchCount}</Text>
                     </View>
                 </View>
+
+                {post.title && (
+                    <Text style={styles.title} numberOfLines={1}>
+                        {post.title}
+                    </Text>
+                )}
 
                 {post.caption ? (
                     <Text style={styles.caption} numberOfLines={2} ellipsizeMode="tail">
@@ -139,6 +146,12 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '700',
         color: colors.textPrimary,
+    },
+    title: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        marginBottom: 2,
     },
     caption: {
         fontSize: 14,

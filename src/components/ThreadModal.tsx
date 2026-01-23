@@ -21,15 +21,18 @@
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
 import { db, functions, storage } from '@/services/firebase'
+import { ImageMetadata, uploadTrainingPair } from '@/services/trainingData'
 import { colors } from '@/theme/colors'
 import { validateCatch } from '@/utils/catchValidation'
 import { cropToSquare } from '@/utils/imageProcessing'
+import { checkBrightness } from '@/utils/imageValidation'
 import { addPostToList, isPostSaved } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
 import { Image } from 'expo-image'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
+import { Accelerometer, Magnetometer } from 'expo-sensors'
 import {
     addDoc,
     collection,
@@ -100,7 +103,7 @@ export default function ThreadModal({
     onPostDelete,
     initialPostId,
 }: ThreadModalProps) {
-    const { user } = useAuth()
+    const { user, dataContributionEnabled } = useAuth()
     const { notifyPostEvent } = usePost()
     const router = useRouter()
     const insets = useSafeAreaInsets()
@@ -117,7 +120,7 @@ export default function ThreadModal({
     const [showAddToListModal, setShowAddToListModal] = useState(false)
 
     // Location state
-    const [postLocation, setPostLocation] = useState<{ latitude: number; longitude: number } | null>(null)
+    const [postLocation, setPostLocation] = useState<{ latitude: number; longitude: number; heading?: number } | null>(null)
     const [distance, setDistance] = useState<number | null>(null)
 
     // Catch flow states
@@ -131,6 +134,111 @@ export default function ThreadModal({
     const [cameraPermission, requestCameraPermission] = useCameraPermissions()
     const [uploading, setUploading] = useState(false)
     const [fetchingLocation, setFetchingLocation] = useState(false)
+
+    // Sensor state
+    const [heading, setHeading] = useState<number | null>(null)
+    const [pitch, setPitch] = useState<number | null>(null)
+    const [accelSubscription, setAccelSubscription] = useState<any>(null)
+    const [magSubscription, setMagSubscription] = useState<any>(null)
+    const [capturedHeading, setCapturedHeading] = useState<number | null>(null)
+
+    // Refs for sensor data to avoid closure staleness and frequent re-renders
+    const gravityRef = useRef<{ x: number; y: number; z: number } | null>(null)
+    const magRef = useRef<{ x: number; y: number; z: number } | null>(null)
+
+    // Toggle sensors
+    const toggleSensors = async (shouldEnable: boolean) => {
+        if (shouldEnable) {
+            const magAvailable = await Magnetometer.isAvailableAsync()
+            const accelAvailable = await Accelerometer.isAvailableAsync()
+
+            if (!magAvailable || !accelAvailable) {
+                console.warn('[ThreadModal] Sensors not available')
+                return
+            }
+
+            if (accelSubscription || magSubscription) return
+
+            Magnetometer.setUpdateInterval(100)
+            Accelerometer.setUpdateInterval(100)
+
+            const accelSub = Accelerometer.addListener(data => {
+                gravityRef.current = data
+                calculateHeading()
+            })
+
+            const magSub = Magnetometer.addListener(data => {
+                magRef.current = data
+                calculateHeading()
+            })
+
+            setAccelSubscription(accelSub)
+            setMagSubscription(magSub)
+        } else {
+            accelSubscription && accelSubscription.remove()
+            magSubscription && magSubscription.remove()
+            setAccelSubscription(null)
+            setMagSubscription(null)
+            gravityRef.current = null
+            magRef.current = null
+        }
+    }
+
+    const calculateHeading = () => {
+        if (!gravityRef.current || !magRef.current) return
+
+        const G = gravityRef.current
+        const M = magRef.current
+
+        // 1. Cross product G x M = E (East)
+        const Ex = M.y * G.z - M.z * G.y
+        const Ey = M.z * G.x - M.x * G.z
+        const Ez = M.x * G.y - M.y * G.x
+
+        const E_norm = Math.sqrt(Ex * Ex + Ey * Ey + Ez * Ez)
+        if (E_norm < 0.1) return
+
+        const Ex_n = Ex / E_norm
+        const Ey_n = Ey / E_norm
+        const Ez_n = Ez / E_norm
+
+        // 2. Cross product N = G x E (North)
+        const Nx = G.y * Ez_n - G.z * Ey_n
+        const Ny = G.z * Ex_n - G.x * Ez_n
+        const Nz = G.x * Ey_n - G.y * Ex_n
+
+        const N_norm = Math.sqrt(Nx * Nx + Ny * Ny + Nz * Nz)
+        const Nx_n = Nx / N_norm
+        const Ny_n = Ny / N_norm
+        const Nz_n = Nz / N_norm
+
+        // 3. Adaptive Heading Calculation
+        let angle = 0
+
+        // If Gravity Z is weak (< 0.7g), we are vertical
+        if (Math.abs(G.z) < 0.7) {
+            // Camera Mode (Vertical): Track -Z axis
+            angle = Math.atan2(-Ez_n, -Nz_n) * (180 / Math.PI)
+        } else {
+            // Map Mode (Flat): Track Y axis
+            angle = Math.atan2(Ey_n, Ny_n) * (180 / Math.PI)
+        }
+
+        if (angle < 0) angle += 360
+
+        setHeading(Math.round(angle))
+    }
+
+
+
+
+    // Cleanup sensors
+    useEffect(() => {
+        return () => {
+            accelSubscription && accelSubscription.remove()
+            magSubscription && magSubscription.remove()
+        }
+    }, [])
 
     // Get the currently displayed post
     const currentPost = threadPosts[currentIndex] || null
@@ -149,11 +257,14 @@ export default function ThreadModal({
             if (index >= 0 && flatListRef.current) {
                 // Small delay to ensure FlatList is ready
                 setTimeout(() => {
-                    flatListRef.current?.scrollToIndex({
-                        index,
-                        animated: false,
-                    })
-                    setCurrentIndex(index)
+                    const validIndex = index >= 0 ? index : 0
+                    if (validIndex < threadPosts.length) {
+                        flatListRef.current?.scrollToIndex({
+                            index: validIndex,
+                            animated: false,
+                        })
+                        setCurrentIndex(validIndex)
+                    }
                 }, 100)
             }
         }
@@ -236,7 +347,8 @@ export default function ThreadModal({
             // Set initial index
             const startPostId = initialPostId || post.id
             const index = posts.findIndex((p) => p.id === startPostId)
-            setCurrentIndex(index >= 0 ? index : 0)
+            const validIndex = index >= 0 ? index : 0
+            setCurrentIndex(validIndex)
         } catch (error) {
             console.error('Error fetching thread:', error)
             Alert.alert('Error', 'Failed to load shot details')
@@ -283,11 +395,12 @@ export default function ThreadModal({
             // Fetch post location from Cloud Function
             const getPostLocation = httpsCallable(functions, 'getPostLocation')
             const result = await getPostLocation({ postId })
-            const locationData = result.data as { latitude: number; longitude: number; postId: string }
+            const locationData = result.data as { latitude: number; longitude: number; postId: string; heading?: number }
 
             setPostLocation({
                 latitude: locationData.latitude,
                 longitude: locationData.longitude,
+                heading: locationData.heading
             })
 
             // Get user's current location
@@ -441,9 +554,14 @@ export default function ThreadModal({
         }
 
         setCatchMode(true)
+        toggleSensors(true)
     }
 
     const handleCatchPhotoTaken = async (photoUri: string) => {
+        // Snapshot sensor data
+        setCapturedHeading(heading)
+        toggleSensors(false)
+
         try {
             const processedUri = await cropToSquare(photoUri)
 
@@ -465,12 +583,14 @@ export default function ThreadModal({
         } catch (error) {
             console.error('Error processing catch photo:', error)
             setCatchMode(false)
+            toggleSensors(false)
             Alert.alert('Error', 'Failed to process photo. Please try again.')
         }
     }
 
     const handleCatchCameraCancel = () => {
         setCatchMode(false)
+        toggleSensors(false)
     }
 
     const handleCatchConfirm = async (title?: string, caption?: string, listIds?: Set<string>) => {
@@ -505,7 +625,52 @@ export default function ThreadModal({
                     `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m to catch this location.`
                 )
             } else {
-                await createCatchPost(catchImageUri, catchLocation, caption, listIds)
+                // 1. Nighttime/Darkness Guard
+                const isBrightEnough = await checkBrightness(catchImageUri)
+                if (!isBrightEnough) {
+                    setUploading(false)
+                    Alert.alert(
+                        'Too Dark',
+                        'Your photo is too dark. Please try again with better lighting.'
+                    )
+                    return
+                }
+
+
+
+                // Data Collection Logic
+                if (dataContributionEnabled && capturedHeading !== null && user) {
+                    // We need the original metadata.
+                    // Since we don't store original heading yet, we just assume 0 or skip
+                    // For the "Data Flywheel", we assume the "Catch" is a Positive label if the user confirms it.
+                    const originalMeta: ImageMetadata = {
+                        latitude: postLocation?.latitude || 0,
+                        longitude: postLocation?.longitude || 0,
+                        heading: postLocation?.heading,
+                        date: rootPost.createdAt?.toDate ? rootPost.createdAt.toDate() : new Date()
+                    }
+
+                    const catchMeta: ImageMetadata = {
+                        latitude: catchLocation.latitude,
+                        longitude: catchLocation.longitude,
+                        heading: capturedHeading,
+                        date: new Date()
+                    }
+
+                    // Background upload (don't await)
+                    uploadTrainingPair(
+                        rootPost.id,
+                        null, // Will be filled with catchID if we had it, but for simplicity upload now
+                        rootPost.photoURL,
+                        catchImageUri,
+                        originalMeta,
+                        catchMeta,
+                        'POSITIVE',
+                        user.uid
+                    ).then(() => console.log('Data contribution uploaded'))
+                }
+
+                await createCatchPost(catchImageUri, catchLocation, title, caption, listIds)
             }
         } catch (error: any) {
             console.error('Error validating catch:', error)
@@ -539,6 +704,7 @@ export default function ThreadModal({
     const createCatchPost = async (
         photoUri: string,
         location: { latitude: number; longitude: number },
+        title?: string,
         caption?: string,
         listIds?: Set<string>
     ) => {
@@ -572,6 +738,7 @@ export default function ThreadModal({
                 authorId: user.uid,
                 authorUsername: username,
                 photoURL: downloadURL,
+                title: title?.trim(),
                 caption: finalCaption,
                 hasLocation: true,
                 catchCount: 0,
@@ -615,6 +782,7 @@ export default function ThreadModal({
                 authorId: user.uid,
                 authorUsername: username,
                 photoURL: downloadURL,
+                title: title?.trim(),
                 caption: finalCaption,
                 hasLocation: true,
                 catchCount: 0,
@@ -914,11 +1082,14 @@ export default function ThreadModal({
                                         flexGrow: 0,
                                     }}
                                     initialScrollIndex={
-                                        initialPostId
-                                            ? threadPosts.findIndex(
-                                                (p) => p.id === initialPostId
-                                            )
-                                            : 0
+                                        (() => {
+                                            const index = initialPostId
+                                                ? threadPosts.findIndex(
+                                                    (p) => p.id === initialPostId
+                                                )
+                                                : 0
+                                            return index >= 0 ? index : 0
+                                        })()
                                     }
                                     onScrollToIndexFailed={onScrollToIndexFailed}
                                 />

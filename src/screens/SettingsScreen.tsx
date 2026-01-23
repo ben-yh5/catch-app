@@ -3,11 +3,11 @@ import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import React from 'react'
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Alert, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export default function SettingsScreen() {
-    const { logout } = useAuth()
+    const { logout, dataContributionEnabled, toggleDataContribution } = useAuth()
     const router = useRouter()
     const insets = useSafeAreaInsets()
 
@@ -46,6 +46,24 @@ export default function SettingsScreen() {
             </View>
 
             <View style={styles.content}>
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Privacy & Data</Text>
+                    <View style={styles.settingItem}>
+                        <View style={styles.settingTextContainer}>
+                            <Text style={styles.settingLabel}>Improve Catch AI</Text>
+                            <Text style={styles.settingDescription}>
+                                Allow Catch to use your matches to train our view verification model. Photos are anonymized.
+                            </Text>
+                        </View>
+                        <Switch
+                            value={dataContributionEnabled}
+                            onValueChange={toggleDataContribution}
+                            trackColor={{ false: colors.border, true: colors.primary }}
+                            thumbColor={colors.inverseTextPrimary}
+                        />
+                    </View>
+                </View>
+
                 <TouchableOpacity
                     style={styles.logoutButton}
                     onPress={handleLogout}
@@ -106,5 +124,41 @@ const styles = StyleSheet.create({
         color: colors.textPrimary,
         fontSize: 16,
         fontWeight: '600',
+    },
+    section: {
+        marginBottom: 30,
+    },
+    sectionTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.textTertiary,
+        marginBottom: 10,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+    },
+    settingItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: colors.surface,
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    settingTextContainer: {
+        flex: 1,
+        paddingRight: 16,
+    },
+    settingLabel: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.textPrimary,
+        marginBottom: 4,
+    },
+    settingDescription: {
+        fontSize: 13,
+        color: colors.textSecondary,
+        lineHeight: 18,
     },
 })

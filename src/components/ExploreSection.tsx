@@ -50,7 +50,7 @@ export default function ExploreSection({
         return null;
     }
 
-    const { user } = useAuth(); 
+    const { user } = useAuth();
 
     const renderPostCard = ({ item }: { item: any }) => (
         <TouchableOpacity
@@ -69,9 +69,16 @@ export default function ExploreSection({
                 priority="normal"
             />
             <View style={styles.cardInfo}>
-                <Text style={styles.username} numberOfLines={1}>
-                    @{item.authorUsername}
-                </Text>
+                <View style={styles.textContainer}>
+                    {item.title && (
+                        <Text style={styles.cardTitle} numberOfLines={1}>
+                            {item.title}
+                        </Text>
+                    )}
+                    <Text style={styles.username} numberOfLines={1}>
+                        @{item.authorUsername}
+                    </Text>
+                </View>
                 <View style={styles.catchBadge}>
                     <Text style={styles.catchIcon}>🏆</Text>
                     <Text style={styles.catchCount}>{item.catchCount}</Text>
@@ -160,12 +167,20 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
     },
-    username: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: colors.textPrimary,
+    textContainer: {
         flex: 1,
         marginRight: 8,
+    },
+    cardTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        marginBottom: 2,
+    },
+    username: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.textSecondary,
     },
     catchBadge: {
         flexDirection: 'row',
