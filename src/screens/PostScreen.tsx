@@ -31,12 +31,13 @@ export default function PostScreen() {
     const [loadingLocation, setLoadingLocation] = useState(false)
     const [uploading, setUploading] = useState(false)
     const [heading, setHeading] = useState<number | null>(null)
+    const [pitch, setPitch] = useState<number | null>(null)
     const [capturedHeading, setCapturedHeading] = useState<number | null>(null)
+    const [capturedPitch, setCapturedPitch] = useState<number | null>(null)
     const processingRef = useRef(false)
     const router = useRouter()
     const { user } = useAuth()
     const { notifyPostEvent } = usePost()
-    // Refs to hold latest sensor data
     // Refs to hold latest sensor data
     const debugRef = useRef<any>({})
     const [subscription, setSubscription] = useState<{ remove: () => void } | null>(null)
@@ -44,6 +45,10 @@ export default function PostScreen() {
     // Refs for sensor data
     const gravityRef = useRef<{ x: number; y: number; z: number } | null>(null)
     const magRef = useRef<{ x: number; y: number; z: number } | null>(null)
+    // Smoothing refs for low-pass filter
+    const smoothedHeadingRef = useRef<number | null>(null)
+    const smoothedPitchRef = useRef<number | null>(null)
+    const SMOOTHING_ALPHA = 0.2 // Lower = smoother but slower response
     const [accelSubscription, setAccelSubscription] = useState<any>(null)
     const [magSubscription, setMagSubscription] = useState<any>(null)
 
@@ -113,20 +118,43 @@ export default function PostScreen() {
         const Nz_n = Nz / N_norm
 
         // 3. Adaptive Heading Calculation
-        let angle = 0
+        let rawAngle = 0
 
         // If Gravity Z is weak (< 0.7g), we are vertical
         if (Math.abs(G.z) < 0.7) {
             // Camera Mode (Vertical): Track -Z axis
-            angle = Math.atan2(-Ez_n, -Nz_n) * (180 / Math.PI)
+            rawAngle = Math.atan2(-Ez_n, -Nz_n) * (180 / Math.PI)
         } else {
             // Map Mode (Flat): Track Y axis
-            angle = Math.atan2(Ey_n, Ny_n) * (180 / Math.PI)
+            rawAngle = Math.atan2(Ey_n, Ny_n) * (180 / Math.PI)
         }
 
-        if (angle < 0) angle += 360
+        if (rawAngle < 0) rawAngle += 360
 
-        setHeading(Math.round(angle))
+        // 4. Calculate Pitch (vertical angle of camera)
+        // When phone is vertical, G.z indicates how much camera tilts up/down
+        // Pitch: -90° (looking down) to +90° (looking up), 0° = level
+        const rawPitch = Math.asin(Math.max(-1, Math.min(1, G.z))) * (180 / Math.PI)
+
+        // 5. Apply low-pass filter for smoothing
+        if (smoothedHeadingRef.current === null) {
+            smoothedHeadingRef.current = rawAngle
+        } else {
+            // Handle wraparound at 0°/360°
+            let delta = rawAngle - smoothedHeadingRef.current
+            if (delta > 180) delta -= 360
+            if (delta < -180) delta += 360
+            smoothedHeadingRef.current = (smoothedHeadingRef.current + SMOOTHING_ALPHA * delta + 360) % 360
+        }
+
+        if (smoothedPitchRef.current === null) {
+            smoothedPitchRef.current = rawPitch
+        } else {
+            smoothedPitchRef.current = smoothedPitchRef.current + SMOOTHING_ALPHA * (rawPitch - smoothedPitchRef.current)
+        }
+
+        setHeading(Math.round(smoothedHeadingRef.current))
+        setPitch(Math.round(smoothedPitchRef.current))
     }
     // Cleanup sensors
     React.useEffect(() => {
@@ -197,10 +225,14 @@ export default function PostScreen() {
     }
 
     const handlePhotoTaken = async (uri: string) => {
-        // Snapshot sensor data
-        console.log('[PostScreen] Capturing photo. Current Heading:', heading)
+        // Snapshot sensor data at capture moment
+        console.log('[PostScreen] Capturing photo. Heading:', heading, 'Pitch:', pitch)
         setCapturedHeading(heading)
+        setCapturedPitch(pitch)
         toggleSensors(false)
+        // Reset smoothing refs for next session
+        smoothedHeadingRef.current = null
+        smoothedPitchRef.current = null
 
         // Mark as processing
         processingRef.current = true
@@ -318,6 +350,7 @@ export default function PostScreen() {
                 latitude: location.latitude,
                 longitude: location.longitude,
                 heading: capturedHeading,
+                pitch: capturedPitch,
                 geohash: geohash,
                 createdAt: new Date(),
             })

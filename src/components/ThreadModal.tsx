@@ -120,7 +120,7 @@ export default function ThreadModal({
     const [showAddToListModal, setShowAddToListModal] = useState(false)
 
     // Location state
-    const [postLocation, setPostLocation] = useState<{ latitude: number; longitude: number; heading?: number } | null>(null)
+    const [postLocation, setPostLocation] = useState<{ latitude: number; longitude: number; heading?: number; pitch?: number } | null>(null)
     const [distance, setDistance] = useState<number | null>(null)
 
     // Catch flow states
@@ -141,10 +141,15 @@ export default function ThreadModal({
     const [accelSubscription, setAccelSubscription] = useState<any>(null)
     const [magSubscription, setMagSubscription] = useState<any>(null)
     const [capturedHeading, setCapturedHeading] = useState<number | null>(null)
+    const [capturedPitch, setCapturedPitch] = useState<number | null>(null)
 
     // Refs for sensor data to avoid closure staleness and frequent re-renders
     const gravityRef = useRef<{ x: number; y: number; z: number } | null>(null)
     const magRef = useRef<{ x: number; y: number; z: number } | null>(null)
+    // Smoothing refs for low-pass filter
+    const smoothedHeadingRef = useRef<number | null>(null)
+    const smoothedPitchRef = useRef<number | null>(null)
+    const SMOOTHING_ALPHA = 0.2 // Lower = smoother but slower response
 
     // Toggle sensors
     const toggleSensors = async (shouldEnable: boolean) => {
@@ -213,20 +218,43 @@ export default function ThreadModal({
         const Nz_n = Nz / N_norm
 
         // 3. Adaptive Heading Calculation
-        let angle = 0
+        let rawAngle = 0
 
         // If Gravity Z is weak (< 0.7g), we are vertical
         if (Math.abs(G.z) < 0.7) {
             // Camera Mode (Vertical): Track -Z axis
-            angle = Math.atan2(-Ez_n, -Nz_n) * (180 / Math.PI)
+            rawAngle = Math.atan2(-Ez_n, -Nz_n) * (180 / Math.PI)
         } else {
             // Map Mode (Flat): Track Y axis
-            angle = Math.atan2(Ey_n, Ny_n) * (180 / Math.PI)
+            rawAngle = Math.atan2(Ey_n, Ny_n) * (180 / Math.PI)
         }
 
-        if (angle < 0) angle += 360
+        if (rawAngle < 0) rawAngle += 360
 
-        setHeading(Math.round(angle))
+        // 4. Calculate Pitch (vertical angle of camera)
+        // When phone is vertical, G.z indicates how much camera tilts up/down
+        // Pitch: -90° (looking down) to +90° (looking up), 0° = level
+        const rawPitch = Math.asin(Math.max(-1, Math.min(1, G.z))) * (180 / Math.PI)
+
+        // 5. Apply low-pass filter for smoothing
+        if (smoothedHeadingRef.current === null) {
+            smoothedHeadingRef.current = rawAngle
+        } else {
+            // Handle wraparound at 0°/360°
+            let delta = rawAngle - smoothedHeadingRef.current
+            if (delta > 180) delta -= 360
+            if (delta < -180) delta += 360
+            smoothedHeadingRef.current = (smoothedHeadingRef.current + SMOOTHING_ALPHA * delta + 360) % 360
+        }
+
+        if (smoothedPitchRef.current === null) {
+            smoothedPitchRef.current = rawPitch
+        } else {
+            smoothedPitchRef.current = smoothedPitchRef.current + SMOOTHING_ALPHA * (rawPitch - smoothedPitchRef.current)
+        }
+
+        setHeading(Math.round(smoothedHeadingRef.current))
+        setPitch(Math.round(smoothedPitchRef.current))
     }
 
 
@@ -395,12 +423,13 @@ export default function ThreadModal({
             // Fetch post location from Cloud Function
             const getPostLocation = httpsCallable(functions, 'getPostLocation')
             const result = await getPostLocation({ postId })
-            const locationData = result.data as { latitude: number; longitude: number; postId: string; heading?: number }
+            const locationData = result.data as { latitude: number; longitude: number; postId: string; heading?: number; pitch?: number }
 
             setPostLocation({
                 latitude: locationData.latitude,
                 longitude: locationData.longitude,
-                heading: locationData.heading
+                heading: locationData.heading,
+                pitch: locationData.pitch
             })
 
             // Get user's current location
@@ -558,9 +587,13 @@ export default function ThreadModal({
     }
 
     const handleCatchPhotoTaken = async (photoUri: string) => {
-        // Snapshot sensor data
+        // Snapshot sensor data at capture moment
         setCapturedHeading(heading)
+        setCapturedPitch(pitch)
         toggleSensors(false)
+        // Reset smoothing refs for next session
+        smoothedHeadingRef.current = null
+        smoothedPitchRef.current = null
 
         try {
             const processedUri = await cropToSquare(photoUri)
@@ -636,17 +669,52 @@ export default function ThreadModal({
                     return
                 }
 
+                // 2. Direction Verification (heading and pitch)
+                const HEADING_THRESHOLD = 75 // Degrees of tolerance for heading (lenient for now)
+                const PITCH_THRESHOLD = 75   // Degrees of tolerance for pitch (lenient for now)
+
+                const originalHeading = validation.heading
+                const originalPitch = validation.pitch
+
+                if (originalHeading !== undefined && capturedHeading !== null) {
+                    // Calculate heading difference (handle wraparound at 0°/360°)
+                    let headingDiff = Math.abs(originalHeading - capturedHeading)
+                    if (headingDiff > 180) headingDiff = 360 - headingDiff
+
+                    if (headingDiff > HEADING_THRESHOLD) {
+                        setUploading(false)
+                        Alert.alert(
+                            'Wrong Direction',
+                            `You're facing a different direction. Try to match the original view (off by ${Math.round(headingDiff)}°).`
+                        )
+                        return
+                    }
+                }
+
+                if (originalPitch !== undefined && capturedPitch !== null) {
+                    const pitchDiff = Math.abs(originalPitch - capturedPitch)
+
+                    if (pitchDiff > PITCH_THRESHOLD) {
+                        setUploading(false)
+                        const direction = capturedPitch > originalPitch ? 'too high' : 'too low'
+                        Alert.alert(
+                            'Wrong Angle',
+                            `Your camera angle is ${direction}. Try to match the original view (off by ${Math.round(pitchDiff)}°).`
+                        )
+                        return
+                    }
+                }
+
 
 
                 // Data Collection Logic
                 if (dataContributionEnabled && capturedHeading !== null && user) {
-                    // We need the original metadata.
-                    // Since we don't store original heading yet, we just assume 0 or skip
-                    // For the "Data Flywheel", we assume the "Catch" is a Positive label if the user confirms it.
+                    // Collect original metadata for training the view verification model
                     const originalMeta: ImageMetadata = {
                         latitude: postLocation?.latitude || 0,
                         longitude: postLocation?.longitude || 0,
                         heading: postLocation?.heading,
+                        pitch: postLocation?.pitch,
                         date: rootPost.createdAt?.toDate ? rootPost.createdAt.toDate() : new Date()
                     }
 
@@ -654,6 +722,7 @@ export default function ThreadModal({
                         latitude: catchLocation.latitude,
                         longitude: catchLocation.longitude,
                         heading: capturedHeading,
+                        pitch: capturedPitch ?? undefined,
                         date: new Date()
                     }
 
@@ -753,6 +822,8 @@ export default function ThreadModal({
                 postId: catchPostRef.id,
                 latitude: location.latitude,
                 longitude: location.longitude,
+                heading: capturedHeading,
+                pitch: capturedPitch,
                 geohash: geohash,
                 createdAt: new Date(),
             })

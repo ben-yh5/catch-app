@@ -21,6 +21,8 @@ interface ValidateCatchResponse {
     isValid: boolean
     distance: number
     requiredDistance: number
+    heading?: number  // Original post's heading (0-360)
+    pitch?: number    // Original post's pitch (-90 to 90)
 }
 
 /**
