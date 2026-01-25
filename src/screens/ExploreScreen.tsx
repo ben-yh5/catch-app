@@ -3,7 +3,8 @@ import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
-import { getPostsInRadius } from '@/utils/geospatialQueries'
+import { List, Post } from '@/types'
+import { calculateDistance, getPostsInRadius } from '@/utils/geospatialQueries'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import * as Location from 'expo-location'
@@ -29,32 +30,6 @@ import {
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-
-interface Post {
-    id: string
-    authorId: string
-    authorUsername: string
-    photoURL: string
-    caption: string
-    hasLocation: boolean
-    catchCount: number
-    parentPostId: string | null
-    rootPostId: string | null
-    isOriginal: boolean
-    createdAt: any
-}
-
-interface List {
-    id: string
-    name: string
-    creatorId: string
-    creatorUsername?: string
-    postIds: string[]
-    isPublic: boolean
-    createdAt: any
-    updatedAt: any
-    thumbnails?: string[]
-}
 
 const POSTS_LIMIT = 5  // Limit carousels to 5 posts each
 const NEARBY_RADIUS_METERS = 10000 // 10km
@@ -272,21 +247,6 @@ export default function ExploreScreen() {
         } finally {
             setLoadingNear(false)
         }
-    }
-
-    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-        const R = 6371e3
-        const φ1 = (lat1 * Math.PI) / 180
-        const φ2 = (lat2 * Math.PI) / 180
-        const Δφ = ((lat2 - lat1) * Math.PI) / 180
-        const Δλ = ((lon2 - lon1) * Math.PI) / 180
-
-        const a =
-            Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-        return R * c
     }
 
     // Initial data load

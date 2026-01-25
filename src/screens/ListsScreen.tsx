@@ -1,6 +1,7 @@
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
+import { List } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
@@ -16,19 +17,6 @@ import {
 } from 'react-native'
 import PagerView from 'react-native-pager-view'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-
-interface List {
-    id: string
-    name: string
-    description: string
-    creatorId: string
-    creatorUsername: string
-    postIds: string[]
-    isPublic: boolean
-    isSavedList?: boolean
-    createdAt: any
-    updatedAt: any
-}
 
 export default function ListsScreen() {
     const { user } = useAuth()

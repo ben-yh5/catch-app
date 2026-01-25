@@ -1,49 +1,41 @@
 import { colors } from '@/theme/colors';
+import { Post } from '@/types';
+import { formatPostDate } from '@/utils/dateUtils';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface CompactPostCardProps {
-    post: {
-        id: string;
-        photoURL: string;
-        authorUsername: string;
-        title?: string;
-        caption?: string;
-        catchCount: number;
-        createdAt: any;
-        latitude?: number;
-        longitude?: number;
-    };
+    post: Pick<Post, 'id' | 'photoURL' | 'authorUsername' | 'title' | 'caption' | 'catchCount' | 'createdAt' | 'latitude' | 'longitude'>;
     onPress: () => void;
     onJumpToLocation?: () => void;
     highlighted?: boolean;
 }
 
 export default function CompactPostCard({ post, onPress, onJumpToLocation, highlighted = false }: CompactPostCardProps) {
-    const formatDate = (timestamp: any) => {
-        if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    };
+
 
     return (
         <TouchableOpacity
-            style={[
-                styles.card,
-                highlighted && { borderColor: colors.secondary, borderWidth: 2 }
-            ]}
+            style={styles.card}
             onPress={onPress}
             activeOpacity={0.9}
         >
-            <Image
-                source={{ uri: post.photoURL }}
-                style={styles.image}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                priority="normal"
-            />
+            <View style={styles.imageContainer}>
+                <Image
+                    source={{ uri: post.photoURL }}
+                    style={styles.image}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    priority="normal"
+                />
+                {highlighted && (
+                    <View style={styles.caughtBadge}>
+                        <Ionicons name="checkmark" size={12} color={colors.caughtBadgeText} />
+                    </View>
+                )}
+            </View>
 
             <View style={styles.content}>
                 <View style={styles.header}>
@@ -67,7 +59,7 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation, highl
                 ) : <View style={{ flex: 1 }} />}
 
                 <View style={styles.footer}>
-                    <Text style={styles.date}>{formatDate(post.createdAt)}</Text>
+                    <Text style={styles.date}>{formatPostDate(post.createdAt)}</Text>
 
                     {onJumpToLocation && (
                         <TouchableOpacity
@@ -108,9 +100,28 @@ const styles = StyleSheet.create({
         shadowRadius: 3.84,
         elevation: 5,
     },
+    imageContainer: {
+        position: 'relative',
+    },
     image: {
         width: 120,
         height: 120,
+    },
+    caughtBadge: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: colors.caughtBadge,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
+        elevation: 3,
     },
     content: {
         flex: 1,

@@ -17,6 +17,7 @@
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
+import { List } from '@/types'
 import { addPostToList, getListsContainingPost, getOrCreateSavedList, removePostFromList } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -33,19 +34,6 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
-
-interface List {
-    id: string
-    name: string
-    description: string
-    creatorId: string
-    creatorUsername: string
-    postIds: string[]
-    isPublic: boolean
-    isSavedList?: boolean
-    createdAt: any
-    updatedAt: any
-}
 
 interface ListSelectionBottomSheetProps {
     visible: boolean

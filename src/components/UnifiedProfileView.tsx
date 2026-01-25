@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import { PostEvent, usePost, usePostEvents } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
+import { Post } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { useIsFocused } from '@react-navigation/native'
 import * as Haptics from 'expo-haptics'
@@ -40,21 +41,6 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import CompactPostCard from './CompactPostCard'
-
-interface Post {
-    id: string
-    authorId: string
-    authorUsername: string
-    photoURL: string
-    title?: string
-    caption: string
-    hasLocation: boolean
-    catchCount: number
-    parentPostId: string | null
-    rootPostId: string | null
-    isOriginal: boolean
-    createdAt: any
-}
 
 interface ProfileViewProps {
     userId: string

@@ -2,6 +2,7 @@ import CompactPostCard from '@/components/CompactPostCard'
 import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
+import { List, Post } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
@@ -16,32 +17,6 @@ import {
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-
-interface Post {
-    id: string
-    authorId: string
-    authorUsername: string
-    photoURL: string
-    caption: string
-    hasLocation: boolean
-    catchCount: number
-    parentPostId: string | null
-    rootPostId: string | null
-    isOriginal: boolean
-    createdAt: any
-}
-
-interface List {
-    id: string
-    name: string
-    description: string
-    creatorId: string
-    creatorUsername: string
-    postIds: string[]
-    isPublic: boolean
-    createdAt: any
-    updatedAt: any
-}
 
 interface ListModalProps {
     visible: boolean

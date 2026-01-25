@@ -11,8 +11,8 @@
  * - Toggle quick save/unsave
  */
 
-import { collection, query, where, getDocs, addDoc, doc, updateDoc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore'
 import { db } from '@/services/firebase'
+import { addDoc, arrayRemove, arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore'
 
 const SAVED_LIST_NAME = 'My List'
 
@@ -133,40 +133,5 @@ export async function getListsContainingPost(userId: string, postId: string): Pr
     } catch (error) {
         console.error('Error getting lists containing post:', error)
         return []
-    }
-}
-
-/**
- * Toggle post in the Saved list (quick save/unsave)
- */
-export async function toggleSavedPost(
-    userId: string,
-    username: string,
-    postId: string
-): Promise<{ saved: boolean; listId: string }> {
-    try {
-        const savedListId = await getOrCreateSavedList(userId, username)
-        const listDoc = await getDoc(doc(db, 'lists', savedListId))
-
-        if (!listDoc.exists()) {
-            throw new Error('Saved list not found')
-        }
-
-        const listData = listDoc.data()
-        const postIds = listData.postIds || []
-        const isSaved = postIds.includes(postId)
-
-        if (isSaved) {
-            // Remove from Saved list
-            await removePostFromList(savedListId, postId)
-            return { saved: false, listId: savedListId }
-        } else {
-            // Add to Saved list
-            await addPostToList(savedListId, postId)
-            return { saved: true, listId: savedListId }
-        }
-    } catch (error) {
-        console.error('Error toggling saved post:', error)
-        throw error
     }
 }

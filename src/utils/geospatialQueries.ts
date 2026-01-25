@@ -98,25 +98,17 @@ export async function getPostsInRadius(
 
 /**
  * Calculate distance between two points in meters
+ * Can be called with either:
+ * - 4 numbers: calculateDistance(lat1, lon1, lat2, lon2)
+ * - 2 point objects: calculateDistance({lat, lng}, {lat, lng})
  */
 export function calculateDistance(
-    point1: { lat: number; lng: number },
-    point2: { lat: number; lng: number }
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
 ): number {
-    return distanceBetween([point1.lat, point1.lng], [point2.lat, point2.lng])
-}
-
-/**
- * Helper: Get map bounds from Mapbox map instance
- */
-export async function getMapBounds(map: any): Promise<MapBounds> {
-    const bounds = await map.getVisibleBounds()
-    return {
-        north: bounds[1][1], // northeast latitude
-        south: bounds[0][1], // southwest latitude
-        east: bounds[1][0],  // northeast longitude
-        west: bounds[0][0],  // southwest longitude
-    }
+    return distanceBetween([lat1, lon1], [lat2, lon2]) * 1000 // Convert km to meters
 }
 
 /**
@@ -135,11 +127,4 @@ export async function getPostLocations(postIds: string[]): Promise<PostLocation[
         console.error('Error fetching post locations:', error)
         throw error
     }
-}
-
-/**
- * Clear the cache (useful for debugging or forcing refresh)
- */
-export function clearCache() {
-    cache.clear()
 }

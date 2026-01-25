@@ -84,23 +84,3 @@ export async function cropToSquare(uri: string): Promise<string> {
         return result.uri
     }
 }
-
-/**
- * Prepares image for preview - simple resize
- */
-export async function prepareImageForPreview(uri: string): Promise<string> {
-    try {
-        const resized = await ImageManipulator.manipulateAsync(
-            uri,
-            [{ resize: { width: 1080 } }],
-            {
-                compress: 0.8,
-                format: ImageManipulator.SaveFormat.JPEG,
-            }
-        )
-        return resized.uri
-    } catch (error) {
-        console.error('Error preparing image:', error)
-        return uri
-    }
-}

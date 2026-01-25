@@ -8,6 +8,7 @@ import ViewToggle from '@/components/ViewToggle'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
+import { Post } from '@/types'
 import { getPostLocations, getPostsInRadius } from '@/utils/geospatialQueries'
 import { Ionicons } from '@expo/vector-icons'
 import Mapbox, { Camera, CircleLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
@@ -30,45 +31,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 // Set Mapbox access token
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '')
 
-interface Post {
-    id: string
-    authorId: string
-    authorUsername: string
-    photoURL: string
-    title?: string
-    caption: string
-    hasLocation: boolean
-    catchCount: number
-    parentPostId: string | null
-    rootPostId: string | null
-    isOriginal: boolean
-    createdAt: any
-    latitude?: number
-    longitude?: number
-}
-
-// Map marker colors
+// Map marker colors (using theme colors)
 const MAP_COLORS = {
-    userLocation: '#34C759',
-    pin: '#007AFF',
-    selectedPin: '#CF2CF6',
-    stroke: '#FFFFFF',
-}
-
-// Calculate distance between two points
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371e3
-    const φ1 = (lat1 * Math.PI) / 180
-    const φ2 = (lat2 * Math.PI) / 180
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180
-
-    const a =
-        Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-        Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-    return R * c
+    userLocation: colors.userLocation,  // Light pink - matches accent
+    pin: colors.pinDefault,             // Blue - uncaught posts
+    pinCaught: colors.pinCaught,        // Pink - caught by user
+    selectedPin: colors.pinSelected,    // Light pink - currently selected
+    stroke: colors.white,
 }
 
 export default function MapScreen() {
@@ -525,7 +494,7 @@ export default function MapScreen() {
             setVisiblePosts((prev) => prev.filter((p) => p.id !== postId))
 
             // Update active list state locally
-            setActiveList(prev => ({
+            setActiveList((prev: any) => ({
                 ...prev,
                 postIds: prev.postIds.filter((id: string) => id !== postId)
             }))

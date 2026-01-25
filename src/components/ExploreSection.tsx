@@ -1,5 +1,6 @@
 import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme/colors';
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import React from 'react';
 import { Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -54,10 +55,7 @@ export default function ExploreSection({
 
     const renderPostCard = ({ item }: { item: any }) => (
         <TouchableOpacity
-            style={[
-                styles.card,
-                item.authorId === user?.uid && { borderColor: colors.secondary, borderWidth: 2 }
-            ]}
+            style={styles.card}
             onPress={() => onPostPress(item.id)}
             activeOpacity={0.9}
         >
@@ -68,6 +66,11 @@ export default function ExploreSection({
                 cachePolicy="memory-disk"
                 priority="normal"
             />
+            {item.authorId === user?.uid && (
+                <View style={styles.cornerBadge}>
+                    <Ionicons name="checkmark" size={12} color={colors.caughtBadgeText} />
+                </View>
+            )}
             <View style={styles.cardInfo}>
                 <View style={styles.textContainer}>
                     {item.title && (
@@ -201,5 +204,21 @@ const styles = StyleSheet.create({
     },
     skeleton: {
         backgroundColor: colors.border,
+    },
+    cornerBadge: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: colors.caughtBadge,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
+        elevation: 3,
     },
 });

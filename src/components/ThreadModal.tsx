@@ -20,9 +20,11 @@
 
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
+import { useDeviceSensors } from '@/hooks/useDeviceSensors'
 import { db, functions, storage } from '@/services/firebase'
 import { ImageMetadata, uploadTrainingPair } from '@/services/trainingData'
 import { colors } from '@/theme/colors'
+import { Post } from '@/types'
 import { validateCatch } from '@/utils/catchValidation'
 import { cropToSquare } from '@/utils/imageProcessing'
 import { checkBrightness } from '@/utils/imageValidation'
@@ -32,7 +34,6 @@ import { useCameraPermissions } from 'expo-camera'
 import { Image } from 'expo-image'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
-import { Accelerometer, Magnetometer } from 'expo-sensors'
 import {
     addDoc,
     collection,
@@ -68,21 +69,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ListSelectionBottomSheet from './ListSelectionBottomSheet'
 import UnifiedCameraView from './UnifiedCameraView'
 import UnifiedPreviewScreen from './UnifiedPreviewScreen'
-
-interface Post {
-    id: string
-    authorId: string
-    authorUsername: string
-    photoURL: string
-    title?: string
-    caption: string
-    hasLocation: boolean
-    catchCount: number
-    parentPostId: string | null
-    rootPostId: string | null
-    isOriginal: boolean
-    createdAt: any
-}
 
 interface ThreadModalProps {
     visible: boolean
@@ -135,138 +121,17 @@ export default function ThreadModal({
     const [uploading, setUploading] = useState(false)
     const [fetchingLocation, setFetchingLocation] = useState(false)
 
-    // Sensor state
-    const [heading, setHeading] = useState<number | null>(null)
-    const [pitch, setPitch] = useState<number | null>(null)
-    const [accelSubscription, setAccelSubscription] = useState<any>(null)
-    const [magSubscription, setMagSubscription] = useState<any>(null)
-    const [capturedHeading, setCapturedHeading] = useState<number | null>(null)
-    const [capturedPitch, setCapturedPitch] = useState<number | null>(null)
-
-    // Refs for sensor data to avoid closure staleness and frequent re-renders
-    const gravityRef = useRef<{ x: number; y: number; z: number } | null>(null)
-    const magRef = useRef<{ x: number; y: number; z: number } | null>(null)
-    // Smoothing refs for low-pass filter
-    const smoothedHeadingRef = useRef<number | null>(null)
-    const smoothedPitchRef = useRef<number | null>(null)
-    const SMOOTHING_ALPHA = 0.2 // Lower = smoother but slower response
-
-    // Toggle sensors
-    const toggleSensors = async (shouldEnable: boolean) => {
-        if (shouldEnable) {
-            const magAvailable = await Magnetometer.isAvailableAsync()
-            const accelAvailable = await Accelerometer.isAvailableAsync()
-
-            if (!magAvailable || !accelAvailable) {
-                console.warn('[ThreadModal] Sensors not available')
-                return
-            }
-
-            if (accelSubscription || magSubscription) return
-
-            Magnetometer.setUpdateInterval(100)
-            Accelerometer.setUpdateInterval(100)
-
-            const accelSub = Accelerometer.addListener(data => {
-                gravityRef.current = data
-                calculateHeading()
-            })
-
-            const magSub = Magnetometer.addListener(data => {
-                magRef.current = data
-                calculateHeading()
-            })
-
-            setAccelSubscription(accelSub)
-            setMagSubscription(magSub)
-        } else {
-            accelSubscription && accelSubscription.remove()
-            magSubscription && magSubscription.remove()
-            setAccelSubscription(null)
-            setMagSubscription(null)
-            gravityRef.current = null
-            magRef.current = null
-        }
-    }
-
-    const calculateHeading = () => {
-        if (!gravityRef.current || !magRef.current) return
-
-        const G = gravityRef.current
-        const M = magRef.current
-
-        // 1. Cross product G x M = E (East)
-        const Ex = M.y * G.z - M.z * G.y
-        const Ey = M.z * G.x - M.x * G.z
-        const Ez = M.x * G.y - M.y * G.x
-
-        const E_norm = Math.sqrt(Ex * Ex + Ey * Ey + Ez * Ez)
-        if (E_norm < 0.1) return
-
-        const Ex_n = Ex / E_norm
-        const Ey_n = Ey / E_norm
-        const Ez_n = Ez / E_norm
-
-        // 2. Cross product N = G x E (North)
-        const Nx = G.y * Ez_n - G.z * Ey_n
-        const Ny = G.z * Ex_n - G.x * Ez_n
-        const Nz = G.x * Ey_n - G.y * Ex_n
-
-        const N_norm = Math.sqrt(Nx * Nx + Ny * Ny + Nz * Nz)
-        const Nx_n = Nx / N_norm
-        const Ny_n = Ny / N_norm
-        const Nz_n = Nz / N_norm
-
-        // 3. Adaptive Heading Calculation
-        let rawAngle = 0
-
-        // If Gravity Z is weak (< 0.7g), we are vertical
-        if (Math.abs(G.z) < 0.7) {
-            // Camera Mode (Vertical): Track -Z axis
-            rawAngle = Math.atan2(-Ez_n, -Nz_n) * (180 / Math.PI)
-        } else {
-            // Map Mode (Flat): Track Y axis
-            rawAngle = Math.atan2(Ey_n, Ny_n) * (180 / Math.PI)
-        }
-
-        if (rawAngle < 0) rawAngle += 360
-
-        // 4. Calculate Pitch (vertical angle of camera)
-        // When phone is vertical, G.z indicates how much camera tilts up/down
-        // Pitch: -90° (looking down) to +90° (looking up), 0° = level
-        const rawPitch = Math.asin(Math.max(-1, Math.min(1, G.z))) * (180 / Math.PI)
-
-        // 5. Apply low-pass filter for smoothing
-        if (smoothedHeadingRef.current === null) {
-            smoothedHeadingRef.current = rawAngle
-        } else {
-            // Handle wraparound at 0°/360°
-            let delta = rawAngle - smoothedHeadingRef.current
-            if (delta > 180) delta -= 360
-            if (delta < -180) delta += 360
-            smoothedHeadingRef.current = (smoothedHeadingRef.current + SMOOTHING_ALPHA * delta + 360) % 360
-        }
-
-        if (smoothedPitchRef.current === null) {
-            smoothedPitchRef.current = rawPitch
-        } else {
-            smoothedPitchRef.current = smoothedPitchRef.current + SMOOTHING_ALPHA * (rawPitch - smoothedPitchRef.current)
-        }
-
-        setHeading(Math.round(smoothedHeadingRef.current))
-        setPitch(Math.round(smoothedPitchRef.current))
-    }
-
-
-
-
-    // Cleanup sensors
-    useEffect(() => {
-        return () => {
-            accelSubscription && accelSubscription.remove()
-            magSubscription && magSubscription.remove()
-        }
-    }, [])
+    // Use shared device sensor hook
+    const {
+        heading,
+        pitch,
+        capturedHeading,
+        capturedPitch,
+        startSensors,
+        stopSensors,
+        captureAndStop,
+        resetCapture,
+    } = useDeviceSensors()
 
     // Get the currently displayed post
     const currentPost = threadPosts[currentIndex] || null
@@ -583,17 +448,12 @@ export default function ThreadModal({
         }
 
         setCatchMode(true)
-        toggleSensors(true)
+        startSensors()
     }
 
     const handleCatchPhotoTaken = async (photoUri: string) => {
-        // Snapshot sensor data at capture moment
-        setCapturedHeading(heading)
-        setCapturedPitch(pitch)
-        toggleSensors(false)
-        // Reset smoothing refs for next session
-        smoothedHeadingRef.current = null
-        smoothedPitchRef.current = null
+        // Snapshot sensor data at capture moment and stop sensors
+        captureAndStop()
 
         try {
             const processedUri = await cropToSquare(photoUri)
@@ -616,14 +476,14 @@ export default function ThreadModal({
         } catch (error) {
             console.error('Error processing catch photo:', error)
             setCatchMode(false)
-            toggleSensors(false)
+            stopSensors()
             Alert.alert('Error', 'Failed to process photo. Please try again.')
         }
     }
 
     const handleCatchCameraCancel = () => {
         setCatchMode(false)
-        toggleSensors(false)
+        stopSensors()
     }
 
     const handleCatchConfirm = async (title?: string, caption?: string, listIds?: Set<string>) => {

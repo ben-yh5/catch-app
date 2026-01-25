@@ -4,6 +4,7 @@ import ViewToggle from '@/components/ViewToggle'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
+import { List, Post } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -31,32 +32,6 @@ import {
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-
-interface Post {
-    id: string
-    authorId: string
-    authorUsername: string
-    photoURL: string
-    caption: string
-    hasLocation: boolean
-    catchCount: number
-    parentPostId: string | null
-    rootPostId: string | null
-    isOriginal: boolean
-    createdAt: any
-}
-
-interface List {
-    id: string
-    name: string
-    description: string
-    creatorId: string
-    creatorUsername: string
-    postIds: string[]
-    isPublic: boolean
-    createdAt: any
-    updatedAt: any
-}
 
 const { width } = Dimensions.get('window')
 

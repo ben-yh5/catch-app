@@ -2,6 +2,7 @@ import UnifiedCameraView from '@/components/UnifiedCameraView'
 import UnifiedPreviewScreen from '@/components/UnifiedPreviewScreen'
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
+import { useDeviceSensors } from '@/hooks/useDeviceSensors'
 import { db, storage } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { cropToSquare } from '@/utils/imageProcessing'
@@ -10,7 +11,6 @@ import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
-import { Accelerometer, Magnetometer } from 'expo-sensors'
 import { addDoc, collection, doc, getDoc } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { geohashForLocation } from 'geofire-common'
@@ -30,138 +30,20 @@ export default function PostScreen() {
     const [location, setLocation] = useState<LocationData | null>(null)
     const [loadingLocation, setLoadingLocation] = useState(false)
     const [uploading, setUploading] = useState(false)
-    const [heading, setHeading] = useState<number | null>(null)
-    const [pitch, setPitch] = useState<number | null>(null)
-    const [capturedHeading, setCapturedHeading] = useState<number | null>(null)
-    const [capturedPitch, setCapturedPitch] = useState<number | null>(null)
     const processingRef = useRef(false)
     const router = useRouter()
     const { user } = useAuth()
     const { notifyPostEvent } = usePost()
-    // Refs to hold latest sensor data
-    const debugRef = useRef<any>({})
-    const [subscription, setSubscription] = useState<{ remove: () => void } | null>(null)
 
-    // Refs for sensor data
-    const gravityRef = useRef<{ x: number; y: number; z: number } | null>(null)
-    const magRef = useRef<{ x: number; y: number; z: number } | null>(null)
-    // Smoothing refs for low-pass filter
-    const smoothedHeadingRef = useRef<number | null>(null)
-    const smoothedPitchRef = useRef<number | null>(null)
-    const SMOOTHING_ALPHA = 0.2 // Lower = smoother but slower response
-    const [accelSubscription, setAccelSubscription] = useState<any>(null)
-    const [magSubscription, setMagSubscription] = useState<any>(null)
-
-    const toggleSensors = async (shouldEnable: boolean) => {
-        if (shouldEnable) {
-            if (accelSubscription || magSubscription) return
-
-            const magAvailable = await Magnetometer.isAvailableAsync()
-            const accelAvailable = await Accelerometer.isAvailableAsync()
-
-            if (!magAvailable || !accelAvailable) {
-                console.warn('[PostScreen] Sensors not available')
-                return
-            }
-
-            Magnetometer.setUpdateInterval(100)
-            Accelerometer.setUpdateInterval(100)
-
-            const accelSub = Accelerometer.addListener(data => {
-                gravityRef.current = data
-                calculateHeading()
-            })
-
-            const magSub = Magnetometer.addListener(data => {
-                magRef.current = data
-                calculateHeading()
-            })
-
-            setAccelSubscription(accelSub)
-            setMagSubscription(magSub)
-        } else {
-            accelSubscription && accelSubscription.remove()
-            magSubscription && magSubscription.remove()
-            setAccelSubscription(null)
-            setMagSubscription(null)
-            gravityRef.current = null
-            magRef.current = null
-        }
-    }
-
-    const calculateHeading = () => {
-        if (!gravityRef.current || !magRef.current) return
-
-        const G = gravityRef.current
-        const M = magRef.current
-
-        // 1. Cross product G x M = E (East)
-        const Ex = M.y * G.z - M.z * G.y
-        const Ey = M.z * G.x - M.x * G.z
-        const Ez = M.x * G.y - M.y * G.x
-
-        const E_norm = Math.sqrt(Ex * Ex + Ey * Ey + Ez * Ez)
-        if (E_norm < 0.1) return
-
-        const Ex_n = Ex / E_norm
-        const Ey_n = Ey / E_norm
-        const Ez_n = Ez / E_norm
-
-        // 2. Cross product N = G x E (North)
-        const Nx = G.y * Ez_n - G.z * Ey_n
-        const Ny = G.z * Ex_n - G.x * Ez_n
-        const Nz = G.x * Ey_n - G.y * Ex_n
-
-        const N_norm = Math.sqrt(Nx * Nx + Ny * Ny + Nz * Nz)
-        const Nx_n = Nx / N_norm
-        const Ny_n = Ny / N_norm
-        const Nz_n = Nz / N_norm
-
-        // 3. Adaptive Heading Calculation
-        let rawAngle = 0
-
-        // If Gravity Z is weak (< 0.7g), we are vertical
-        if (Math.abs(G.z) < 0.7) {
-            // Camera Mode (Vertical): Track -Z axis
-            rawAngle = Math.atan2(-Ez_n, -Nz_n) * (180 / Math.PI)
-        } else {
-            // Map Mode (Flat): Track Y axis
-            rawAngle = Math.atan2(Ey_n, Ny_n) * (180 / Math.PI)
-        }
-
-        if (rawAngle < 0) rawAngle += 360
-
-        // 4. Calculate Pitch (vertical angle of camera)
-        // When phone is vertical, G.z indicates how much camera tilts up/down
-        // Pitch: -90° (looking down) to +90° (looking up), 0° = level
-        const rawPitch = Math.asin(Math.max(-1, Math.min(1, G.z))) * (180 / Math.PI)
-
-        // 5. Apply low-pass filter for smoothing
-        if (smoothedHeadingRef.current === null) {
-            smoothedHeadingRef.current = rawAngle
-        } else {
-            // Handle wraparound at 0°/360°
-            let delta = rawAngle - smoothedHeadingRef.current
-            if (delta > 180) delta -= 360
-            if (delta < -180) delta += 360
-            smoothedHeadingRef.current = (smoothedHeadingRef.current + SMOOTHING_ALPHA * delta + 360) % 360
-        }
-
-        if (smoothedPitchRef.current === null) {
-            smoothedPitchRef.current = rawPitch
-        } else {
-            smoothedPitchRef.current = smoothedPitchRef.current + SMOOTHING_ALPHA * (rawPitch - smoothedPitchRef.current)
-        }
-
-        setHeading(Math.round(smoothedHeadingRef.current))
-        setPitch(Math.round(smoothedPitchRef.current))
-    }
-    // Cleanup sensors
-    React.useEffect(() => {
-        return () => {
-            subscription && subscription.remove()
-        }
-    }, [])
+    // Use shared sensor hook
+    const {
+        heading,
+        capturedHeading,
+        capturedPitch,
+        startSensors,
+        stopSensors,
+        captureAndStop,
+    } = useDeviceSensors()
 
     const handleOpenCamera = async () => {
         if (!permission) return
@@ -190,7 +72,7 @@ export default function PostScreen() {
         }
 
         setShowCamera(true)
-        toggleSensors(true)
+        startSensors()
     }
 
     const getDeviceLocation = async (): Promise<LocationData | null> => {
@@ -225,14 +107,9 @@ export default function PostScreen() {
     }
 
     const handlePhotoTaken = async (uri: string) => {
-        // Snapshot sensor data at capture moment
-        console.log('[PostScreen] Capturing photo. Heading:', heading, 'Pitch:', pitch)
-        setCapturedHeading(heading)
-        setCapturedPitch(pitch)
-        toggleSensors(false)
-        // Reset smoothing refs for next session
-        smoothedHeadingRef.current = null
-        smoothedPitchRef.current = null
+        // Snapshot sensor data at capture moment and stop sensors
+        console.log('[PostScreen] Capturing photo. Heading:', heading)
+        captureAndStop()
 
         // Mark as processing
         processingRef.current = true
@@ -277,7 +154,7 @@ export default function PostScreen() {
     const handleCameraCancel = () => {
         processingRef.current = false
         setShowCamera(false)
-        toggleSensors(false)
+        stopSensors()
         setLoadingLocation(false)
     }
 
@@ -414,10 +291,7 @@ export default function PostScreen() {
                     padding: 10,
                     borderRadius: 8
                 }}>
-                    <Text style={{ color: 'white' }}>Mag: {heading}°</Text>
-                    <Text style={{ color: 'white' }}>
-                        a: {debugRef.current?.alpha?.toFixed(2)} b: {debugRef.current?.beta?.toFixed(2)} g: {debugRef.current?.gamma?.toFixed(2)}
-                    </Text>
+                    <Text style={{ color: 'white' }}>Heading: {heading}°</Text>
                 </View>
             </View>
         )
