@@ -1,11 +1,9 @@
 import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme/colors';
-import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import React from 'react';
-import { Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import FeaturedPostCard from './FeaturedPostCard';
 
-const { width } = Dimensions.get('window');
 const CARD_SIZE = 240;
 const CARD_MARGIN = 12;
 
@@ -54,40 +52,12 @@ export default function ExploreSection({
     const { user } = useAuth();
 
     const renderPostCard = ({ item }: { item: any }) => (
-        <TouchableOpacity
-            style={styles.card}
+        <FeaturedPostCard
+            post={item}
             onPress={() => onPostPress(item.id)}
-            activeOpacity={0.9}
-        >
-            <Image
-                source={{ uri: item.photoURL }}
-                style={styles.cardImage}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                priority="normal"
-            />
-            {item.authorId === user?.uid && (
-                <View style={styles.cornerBadge}>
-                    <Ionicons name="checkmark" size={12} color={colors.caughtBadgeText} />
-                </View>
-            )}
-            <View style={styles.cardInfo}>
-                <View style={styles.textContainer}>
-                    {item.caption && (
-                        <Text style={styles.cardTitle} numberOfLines={2} ellipsizeMode="tail">
-                            {item.caption}
-                        </Text>
-                    )}
-                    <Text style={styles.username} numberOfLines={1}>
-                        @{item.authorUsername}
-                    </Text>
-                </View>
-                <View style={styles.catchBadge}>
-                    <Text style={styles.catchIcon}>🏆</Text>
-                    <Text style={styles.catchCount}>{item.catchCount}</Text>
-                </View>
-            </View>
-        </TouchableOpacity>
+            size={CARD_SIZE}
+            isOwnPost={item.authorId === user?.uid}
+        />
     );
 
     return (

@@ -18,38 +18,30 @@
  * - Catches: isOriginal=false, rootPostId=<root_id>
  */
 
+import CatchBadge from '@/components/ui/CatchBadge'
+import CaughtBadge from '@/components/ui/CaughtBadge'
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
-import { useDeviceSensors } from '@/hooks/useDeviceSensors'
-import { db, functions, storage } from '@/services/firebase'
-import { ImageMetadata, uploadTrainingPair } from '@/services/trainingData'
+import { useCatchFlow } from '@/hooks/useCatchFlow'
+import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
-import { validateCatch } from '@/utils/catchValidation'
-import { cropToSquare } from '@/utils/imageProcessing'
-import { checkBrightness } from '@/utils/imageValidation'
-import { addPostToList, isPostSaved } from '@/utils/listUtils'
+import { isPostSaved } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
-import { useCameraPermissions } from 'expo-camera'
 import { Image } from 'expo-image'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
 import {
-    addDoc,
     collection,
     deleteDoc,
     doc,
     getDoc,
     getDocs,
-    increment,
     orderBy,
     query,
-    updateDoc,
-    where,
+    where
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
-import { geohashForLocation } from 'geofire-common'
 import React, { useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
@@ -109,29 +101,46 @@ export default function ThreadModal({
     const [postLocation, setPostLocation] = useState<{ latitude: number; longitude: number; heading?: number; pitch?: number } | null>(null)
     const [distance, setDistance] = useState<number | null>(null)
 
-    // Catch flow states
-    const [catchMode, setCatchMode] = useState(false)
-    const [catchPreviewMode, setCatchPreviewMode] = useState(false)
-    const [catchImageUri, setCatchImageUri] = useState<string | null>(null)
-    const [catchLocation, setCatchLocation] = useState<{
-        latitude: number
-        longitude: number
-    } | null>(null)
-    const [cameraPermission, requestCameraPermission] = useCameraPermissions()
-    const [uploading, setUploading] = useState(false)
-    const [fetchingLocation, setFetchingLocation] = useState(false)
-
-    // Use shared device sensor hook
+    // Hook-based catch flow
     const {
+        catchMode,
+        catchPreviewMode,
+        catchImageUri,
+        fetchingLocation,
+        uploading,
         heading,
-        pitch,
-        capturedHeading,
-        capturedPitch,
-        startSensors,
-        stopSensors,
-        captureAndStop,
-        resetCapture,
-    } = useDeviceSensors()
+        handleCatchPress,
+        handlePhotoTaken,
+        handleCameraCancel,
+        handleConfirmCatch,
+        handlePreviewCancel,
+    } = useCatchFlow({
+        rootPost: threadPosts[0] || null,
+        postLocation,
+        onSuccess: (newPost) => {
+            const updatedThreadPosts = threadPosts.map((p, i) =>
+                i === 0 ? { ...p, catchCount: (p.catchCount || 0) + 1 } : p
+            )
+            updatedThreadPosts.push(newPost)
+            setThreadPosts(updatedThreadPosts)
+
+            // Update parent state
+            onPostUpdate?.({
+                ...threadPosts[0],
+                catchCount: (threadPosts[0].catchCount || 0) + 1,
+            })
+
+            // Navigate to new catch
+            setTimeout(() => {
+                const newIndex = updatedThreadPosts.length - 1
+                setCurrentIndex(newIndex)
+                flatListRef.current?.scrollToIndex({
+                    index: newIndex,
+                    animated: true,
+                })
+            }, 100)
+        }
+    })
 
     // Get the currently displayed post
     const currentPost = threadPosts[currentIndex] || null
@@ -435,329 +444,6 @@ export default function ThreadModal({
         }
     }
 
-    const handleCatchPress = async () => {
-        if (!cameraPermission?.granted) {
-            const { granted } = await requestCameraPermission()
-            if (!granted) {
-                Alert.alert(
-                    'Permission Required',
-                    'Camera permission is required to catch this location.'
-                )
-                return
-            }
-        }
-
-        setCatchMode(true)
-        startSensors()
-    }
-
-    const handleCatchPhotoTaken = async (photoUri: string) => {
-        // Snapshot sensor data at capture moment and stop sensors
-        captureAndStop()
-
-        try {
-            const processedUri = await cropToSquare(photoUri)
-
-            setCatchImageUri(processedUri)
-            setCatchMode(false)
-            setCatchPreviewMode(true)
-
-            setFetchingLocation(true)
-            const { status } =
-                await Location.requestForegroundPermissionsAsync()
-            if (status === 'granted') {
-                const location = await Location.getCurrentPositionAsync({})
-                setCatchLocation({
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                })
-            }
-            setFetchingLocation(false)
-        } catch (error) {
-            console.error('Error processing catch photo:', error)
-            setCatchMode(false)
-            stopSensors()
-            Alert.alert('Error', 'Failed to process photo. Please try again.')
-        }
-    }
-
-    const handleCatchCameraCancel = () => {
-        setCatchMode(false)
-        stopSensors()
-    }
-
-    const handleCatchConfirm = async (caption?: string, listIds?: Set<string>) => {
-        // Always catch the ROOT post, not the current post
-        const rootPost = threadPosts[0]
-        if (!rootPost || !catchImageUri) {
-            Alert.alert('Error', 'Post or image not found. Please try again.')
-            return
-        }
-
-        if (!catchLocation) {
-            Alert.alert(
-                'Permission Required',
-                'Location permission is required to validate your catch.'
-            )
-            return
-        }
-
-        setUploading(true)
-        try {
-            // Validate against the ROOT post's location
-            const validation = await validateCatch(
-                rootPost.id,
-                catchLocation.latitude,
-                catchLocation.longitude
-            )
-
-            if (!validation.isValid) {
-                setUploading(false)
-                Alert.alert(
-                    'Too Far Away',
-                    `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m to catch this location.`
-                )
-            } else {
-                // 1. Nighttime/Darkness Guard
-                const isBrightEnough = await checkBrightness(catchImageUri)
-                if (!isBrightEnough) {
-                    setUploading(false)
-                    Alert.alert(
-                        'Too Dark',
-                        'Your photo is too dark. Please try again with better lighting.'
-                    )
-                    return
-                }
-
-                // 2. Direction Verification (heading and pitch)
-                const HEADING_THRESHOLD = 75 // Degrees of tolerance for heading (lenient for now)
-                const PITCH_THRESHOLD = 75   // Degrees of tolerance for pitch (lenient for now)
-
-                const originalHeading = validation.heading
-                const originalPitch = validation.pitch
-
-                if (originalHeading !== undefined && capturedHeading !== null) {
-                    // Calculate heading difference (handle wraparound at 0°/360°)
-                    let headingDiff = Math.abs(originalHeading - capturedHeading)
-                    if (headingDiff > 180) headingDiff = 360 - headingDiff
-
-                    if (headingDiff > HEADING_THRESHOLD) {
-                        setUploading(false)
-                        Alert.alert(
-                            'Wrong Direction',
-                            `You're facing a different direction. Try to match the original view (off by ${Math.round(headingDiff)}°).`
-                        )
-                        return
-                    }
-                }
-
-                if (originalPitch !== undefined && capturedPitch !== null) {
-                    const pitchDiff = Math.abs(originalPitch - capturedPitch)
-
-                    if (pitchDiff > PITCH_THRESHOLD) {
-                        setUploading(false)
-                        const direction = capturedPitch > originalPitch ? 'too high' : 'too low'
-                        Alert.alert(
-                            'Wrong Angle',
-                            `Your camera angle is ${direction}. Try to match the original view (off by ${Math.round(pitchDiff)}°).`
-                        )
-                        return
-                    }
-                }
-
-
-
-                // Data Collection Logic
-                if (dataContributionEnabled && capturedHeading !== null && user) {
-                    // Collect original metadata for training the view verification model
-                    const originalMeta: ImageMetadata = {
-                        latitude: postLocation?.latitude || 0,
-                        longitude: postLocation?.longitude || 0,
-                        heading: postLocation?.heading,
-                        pitch: postLocation?.pitch,
-                        date: rootPost.createdAt?.toDate ? rootPost.createdAt.toDate() : new Date()
-                    }
-
-                    const catchMeta: ImageMetadata = {
-                        latitude: catchLocation.latitude,
-                        longitude: catchLocation.longitude,
-                        heading: capturedHeading,
-                        pitch: capturedPitch ?? undefined,
-                        date: new Date()
-                    }
-
-                    // Background upload (don't await)
-                    uploadTrainingPair(
-                        rootPost.id,
-                        null, // Will be filled with catchID if we had it, but for simplicity upload now
-                        rootPost.photoURL,
-                        catchImageUri,
-                        originalMeta,
-                        catchMeta,
-                        'POSITIVE',
-                        user.uid
-                    ).then(() => console.log('Data contribution uploaded'))
-                }
-
-                await createCatchPost(catchImageUri, catchLocation, caption, listIds)
-            }
-        } catch (error: any) {
-            console.error('Error validating catch:', error)
-            setUploading(false)
-
-            if (error.code === 'functions/not-found') {
-                Alert.alert(
-                    'Error',
-                    'This post no longer exists or has no location data.'
-                )
-            } else if (error.code === 'functions/unauthenticated') {
-                Alert.alert(
-                    'Authentication Required',
-                    'You must be logged in to catch posts.'
-                )
-            } else {
-                Alert.alert(
-                    'Error',
-                    'Error validating your location. Please try again.'
-                )
-            }
-        }
-    }
-
-    const handleCatchPreviewCancel = () => {
-        setCatchPreviewMode(false)
-        setCatchImageUri(null)
-        setCatchLocation(null)
-    }
-
-    const createCatchPost = async (
-        photoUri: string,
-        location: { latitude: number; longitude: number },
-        caption?: string,
-        listIds?: Set<string>
-    ) => {
-        if (!user) return
-
-        // Always add to the ROOT post's thread
-        const rootPost = threadPosts[0]
-        if (!rootPost) return
-
-        try {
-            const response = await fetch(photoUri)
-            const blob = await response.blob()
-
-            const timestamp = Date.now()
-            const storageRef = ref(
-                storage,
-                `posts/${user.uid}/${timestamp}.jpg`
-            )
-            await uploadBytes(storageRef, blob)
-            const downloadURL = await getDownloadURL(storageRef)
-
-            const userDoc = await getDoc(doc(db, 'users', user.uid))
-            const username = userDoc.exists()
-                ? userDoc.data().username
-                : 'Unknown'
-
-            const defaultCaption = `Caught @${rootPost.authorUsername}'s location!`
-            const finalCaption = caption?.trim() || defaultCaption
-
-            const catchPostRef = await addDoc(collection(db, 'posts'), {
-                authorId: user.uid,
-                authorUsername: username,
-                photoURL: downloadURL,
-                caption: finalCaption,
-                hasLocation: true,
-                catchCount: 0,
-                isOriginal: false,
-                parentPostId: rootPost.id,
-                rootPostId: rootPost.id,
-                createdAt: new Date(),
-            })
-
-            const geohash = geohashForLocation([location.latitude, location.longitude])
-            await addDoc(collection(db, 'post_locations'), {
-                postId: catchPostRef.id,
-                latitude: location.latitude,
-                longitude: location.longitude,
-                heading: capturedHeading,
-                pitch: capturedPitch,
-                geohash: geohash,
-                createdAt: new Date(),
-            })
-
-            // Add to selected lists
-            if (listIds && listIds.size > 0) {
-                try {
-                    await Promise.all(
-                        Array.from(listIds).map(listId =>
-                            addPostToList(listId, catchPostRef.id)
-                        )
-                    )
-                } catch (listError) {
-                    console.error('Error adding catch to lists:', listError)
-                }
-            }
-
-            // Increment the ROOT post's catchCount
-            const rootPostRef = doc(db, 'posts', rootPost.id)
-            await updateDoc(rootPostRef, {
-                catchCount: increment(1),
-            })
-
-            // Update local thread state
-            const newCatchPost: Post = {
-                id: catchPostRef.id,
-                authorId: user.uid,
-                authorUsername: username,
-                photoURL: downloadURL,
-                caption: finalCaption,
-                hasLocation: true,
-                catchCount: 0,
-                isOriginal: false,
-                parentPostId: rootPost.id,
-                rootPostId: rootPost.id,
-                createdAt: { toDate: () => new Date() },
-            }
-
-            // Update root post's catch count locally
-            const updatedThreadPosts = threadPosts.map((p, i) =>
-                i === 0 ? { ...p, catchCount: p.catchCount + 1 } : p
-            )
-            updatedThreadPosts.push(newCatchPost)
-            setThreadPosts(updatedThreadPosts)
-
-            // Navigate to the new catch
-            setCurrentIndex(updatedThreadPosts.length - 1)
-            setTimeout(() => {
-                flatListRef.current?.scrollToIndex({
-                    index: updatedThreadPosts.length - 1,
-                    animated: true,
-                })
-            }, 100)
-
-            // Notify parent of update
-            onPostUpdate?.({
-                ...rootPost,
-                catchCount: rootPost.catchCount + 1,
-            })
-
-            Alert.alert('Success', 'Great catch! Your post has been added to the thread.')
-
-            // Reset catch states
-            setCatchPreviewMode(false)
-            setCatchImageUri(null)
-            setCatchLocation(null)
-
-            notifyPostEvent('catch', catchPostRef.id, user.uid)
-        } catch (error) {
-            console.error('Error creating catch post:', error)
-            Alert.alert('Error', 'Error creating catch post. Please try again.')
-        } finally {
-            setUploading(false)
-        }
-    }
-
     const formatDate = (timestamp: any) => {
         if (!timestamp) return 'Unknown date'
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
@@ -810,9 +496,7 @@ export default function ThreadModal({
                 priority="high"
             />
             {item.authorId === user?.uid && (
-                <View style={styles.caughtBadgeOverlay}>
-                    <Ionicons name="checkmark" size={12} color={colors.caughtBadgeText} />
-                </View>
+                <CaughtBadge containerStyle={styles.caughtBadgeOverlay} size={24} />
             )}
         </View>
     ), [cardWidth, user?.uid])
@@ -828,13 +512,13 @@ export default function ThreadModal({
                 animationType="fade"
                 transparent={true}
                 onRequestClose={() => {
-                    setCatchMode(false)
+                    handleCameraCancel()
                     onClose()
                 }}
             >
                 <UnifiedCameraView
-                    onPhotoTaken={handleCatchPhotoTaken}
-                    onCancel={handleCatchCameraCancel}
+                    onPhotoTaken={handlePhotoTaken}
+                    onCancel={handleCameraCancel}
                     originalPhotoUrl={rootPost?.photoURL}
                 />
             </Modal>
@@ -850,25 +534,24 @@ export default function ThreadModal({
                 animationType="fade"
                 transparent={true}
                 onRequestClose={() => {
-                    setCatchPreviewMode(false)
+                    handlePreviewCancel()
                     onClose()
                 }}
             >
                 <UnifiedPreviewScreen
                     imageUri={catchImageUri}
-                    onConfirm={handleCatchConfirm}
-                    onCancel={handleCatchPreviewCancel}
+                    onConfirm={handleConfirmCatch}
+                    onCancel={handlePreviewCancel}
                     mode="catch"
                     loading={uploading}
                     loadingText="Creating catch..."
                     originalPhotoUrl={rootPost?.photoURL}
-                    hasLocation={!!catchLocation}
+                    hasLocation={true} // useCatchFlow ensures we have location before preview
                     loadingLocation={fetchingLocation}
                 />
             </Modal>
         )
     }
-
     return (
         <Modal
             visible={visible}
@@ -925,16 +608,10 @@ export default function ThreadModal({
                                         </TouchableOpacity>
                                     </View>
                                     <View style={styles.cardHeaderRight}>
-                                        <View style={styles.catchBadge}>
-                                            <Ionicons
-                                                name="trophy"
-                                                size={16}
-                                                color={colors.secondary}
-                                            />
-                                            <Text style={styles.catchCount}>
-                                                {threadPosts[0]?.catchCount || 0}
-                                            </Text>
-                                        </View>
+                                        <CatchBadge
+                                            count={threadPosts[0]?.catchCount || 0}
+                                            containerStyle={styles.catchBadge}
+                                        />
                                         <TouchableOpacity
                                             onPress={handleSavePress}
                                             style={styles.headerIconButton}
@@ -1203,18 +880,7 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     catchBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.cardElevated,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 12,
-        gap: 5,
-    },
-    catchCount: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: colors.secondary,
+        // Positioning details
     },
     headerIconButton: {
         padding: 4,
@@ -1406,16 +1072,6 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 10,
         right: 10,
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: colors.caughtBadge,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.3,
-        shadowRadius: 2,
-        elevation: 3,
+        zIndex: 1,
     },
-})
+});

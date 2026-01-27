@@ -31,7 +31,7 @@ export default function LocationSearchBar({ onLocationSelect, containerStyle, us
     const [results, setResults] = useState<LocationResult[]>([])
     const [loading, setLoading] = useState(false)
     const [showResults, setShowResults] = useState(false)
-    const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
+    const [searchTimeout, setSearchTimeout] = useState<any>(null)
 
     const searchPlaces = useCallback(async (text: string) => {
         setQuery(text)

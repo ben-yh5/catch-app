@@ -28,8 +28,8 @@ Notifications.setNotificationHandler({
 })
 
 export const unstable_settings = {
-    anchor: '(tabs)',
-}
+  initialRouteName: '(tabs)',
+};
 
 async function registerForPushNotificationsAsync() {
     let token

@@ -9,8 +9,8 @@ import {
 } from 'react-native'
 import CompactPostCard from './CompactPostCard'
 
-const { width } = Dimensions.get('window')
-const CARD_WIDTH = width
+const { width: SCREEN_WIDTH } = Dimensions.get('window')
+const CARD_WIDTH = SCREEN_WIDTH
 const SPACING = 0
 const SNAP_INTERVAL = CARD_WIDTH + SPACING * 2
 
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
         height: 180, // Adjust based on CompactPostCard height
     },
     contentContainer: {
-        paddingHorizontal: (width - CARD_WIDTH) / 2 - SPACING,
+        paddingHorizontal: (SCREEN_WIDTH - CARD_WIDTH) / 2 - SPACING,
     },
     cardContainer: {
         width: CARD_WIDTH,

@@ -1,3 +1,5 @@
+import CatchBadge from '@/components/ui/CatchBadge';
+import CaughtBadge from '@/components/ui/CaughtBadge';
 import { colors } from '@/theme/colors';
 import { Post } from '@/types';
 import { formatPostDate } from '@/utils/dateUtils';
@@ -31,19 +33,14 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation, highl
                     priority="normal"
                 />
                 {highlighted && (
-                    <View style={styles.caughtBadge}>
-                        <Ionicons name="checkmark" size={12} color={colors.caughtBadgeText} />
-                    </View>
+                    <CaughtBadge containerStyle={styles.caughtBadge} size={20} />
                 )}
             </View>
 
             <View style={styles.content}>
                 <View style={styles.header}>
                     <Text style={styles.username} numberOfLines={1}>@{post.authorUsername}</Text>
-                    <View style={styles.catchBadge}>
-                        <Text style={styles.catchIcon}>🏆</Text>
-                        <Text style={styles.catchCount}>{post.catchCount}</Text>
-                    </View>
+                    <CatchBadge count={post.catchCount} />
                 </View>
 
 
@@ -107,17 +104,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 6,
         right: 6,
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        backgroundColor: colors.caughtBadge,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.3,
-        shadowRadius: 2,
-        elevation: 3,
+        zIndex: 1,
     },
     content: {
         flex: 1,
@@ -136,29 +123,6 @@ const styles = StyleSheet.create({
         color: colors.textPrimary,
         flex: 1,
         marginRight: 8,
-    },
-    catchBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        backgroundColor: colors.cardElevated,
-        borderRadius: 12,
-    },
-    catchIcon: {
-        fontSize: 10,
-    },
-    catchCount: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: colors.textPrimary,
-    },
-    title: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: colors.textPrimary,
-        marginBottom: 2,
     },
     caption: {
         fontSize: 14,

@@ -14,6 +14,7 @@
  * - UnifiedPreviewScreen: Post/catch preview
  */
 
+import CatchBadge from '@/components/ui/CatchBadge'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
@@ -137,7 +138,6 @@ export default function PostCard({
     // Container
     containerPadding = 10,
 }: PostCardProps) {
-    const [captionText, setCaptionText] = useState('')
     const flatListRef = useRef<FlatList>(null)
 
     const cardWidth = SCREEN_WIDTH - containerPadding * 2
@@ -177,6 +177,7 @@ export default function PostCard({
         offset: imageSize * index,
         index,
     })
+    const [captionText, setCaptionText] = useState(caption || '')
 
     const handleCaptionChange = (text: string) => {
         setCaptionText(text)
@@ -215,10 +216,7 @@ export default function PostCard({
                         </View>
                     )}
                     {showCatchBadge && (
-                        <View style={styles.catchBadge}>
-                            <Ionicons name="trophy" size={16} color={colors.secondary} />
-                            <Text style={styles.catchCount}>{catchCount}</Text>
-                        </View>
+                        <CatchBadge count={catchCount} containerStyle={styles.catchBadge} />
                     )}
                     {showBookmark && (
                         <TouchableOpacity onPress={onBookmarkPress} style={styles.headerIconButton}>
@@ -316,7 +314,7 @@ export default function PostCard({
 
             {/* Card Footer */}
             <View style={styles.cardFooter}>
-                {/* Title and Caption section */}
+                {/* Caption section */}
                 <View style={styles.captionSection}>
                     {captionInputMode ? (
                         <TextInput
@@ -468,18 +466,7 @@ const styles = StyleSheet.create({
         color: colors.primary,
     },
     catchBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.cardElevated,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 12,
-        gap: 5,
-    },
-    catchCount: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: colors.secondary,
+        // Just positioning if needed, internal styles handled by component
     },
     headerIconButton: {
         padding: 4,
@@ -558,13 +545,6 @@ const styles = StyleSheet.create({
     },
     captionSection: {
         minHeight: 40,
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: colors.textPrimary,
-        lineHeight: 24,
-        marginBottom: 4,
     },
 
     caption: {
