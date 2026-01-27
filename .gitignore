@@ -49,3 +49,7 @@ app-example
 
 CLAUDE.md
 firebase-debug.log
+
+*.md
+*.MD
+!README.md
