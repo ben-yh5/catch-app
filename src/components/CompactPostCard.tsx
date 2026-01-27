@@ -46,11 +46,7 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation, highl
                     </View>
                 </View>
 
-                {post.title && (
-                    <Text style={styles.title} numberOfLines={1}>
-                        {post.title}
-                    </Text>
-                )}
+
 
                 {post.caption ? (
                     <Text style={styles.caption} numberOfLines={2} ellipsizeMode="tail">

@@ -25,7 +25,7 @@ import ListSelectionBottomSheet from './ListSelectionBottomSheet'
 import PostCard from './PostCard'
 interface UnifiedPreviewScreenProps {
     imageUri: string
-    onConfirm: (title?: string, caption?: string, listIds?: Set<string>) => void
+    onConfirm: (caption?: string, listIds?: Set<string>) => void
     onCancel: () => void
     mode: 'post' | 'catch'
     loading?: boolean
@@ -46,21 +46,20 @@ export default function UnifiedPreviewScreen({
     loadingLocation = false,
     originalPhotoUrl,
 }: UnifiedPreviewScreenProps) {
-    const [title, setTitle] = useState('')
     const [caption, setCaption] = useState('')
     const [showListSelection, setShowListSelection] = useState(false)
     const [selectedListIds, setSelectedListIds] = useState<Set<string>>(new Set())
     const insets = useSafeAreaInsets()
 
     const handleConfirm = () => {
-        onConfirm(title, caption, selectedListIds)
+        onConfirm(caption, selectedListIds)
     }
 
     const isPost = mode === 'post'
     const isCatch = mode === 'catch'
 
     // Determine button state
-    const buttonDisabled = loading || loadingLocation || (isPost && !title.trim())
+    const buttonDisabled = loading || loadingLocation
     const buttonLoading = loading
 
     let buttonText = isPost ? 'Post' : 'Catch This Shot'
@@ -101,11 +100,8 @@ export default function UnifiedPreviewScreen({
                     originalImageUrl={originalPhotoUrl}
 
                     // Footer
-                    titleInputMode={true}
                     captionInputMode={true}
-                    titlePlaceholder={isPost ? "Add a title (required)..." : "Add a title (optional)..."}
                     captionPlaceholder="Add a caption (optional)..."
-                    onTitleChange={setTitle}
                     onCaptionChange={setCaption}
                     date={today}
 

@@ -33,7 +33,7 @@ Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '')
 
 // Map marker colors (using theme colors)
 const MAP_COLORS = {
-    userLocation: colors.userLocation,  // Light pink - matches accent
+    userLocation: colors.white,         // White - user's location puck
     pin: colors.pinDefault,             // Blue - uncaught posts
     pinCaught: colors.pinCaught,        // Pink - caught by user
     selectedPin: colors.pinSelected,    // Light pink - currently selected

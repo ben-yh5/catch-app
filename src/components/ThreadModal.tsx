@@ -486,7 +486,7 @@ export default function ThreadModal({
         stopSensors()
     }
 
-    const handleCatchConfirm = async (title?: string, caption?: string, listIds?: Set<string>) => {
+    const handleCatchConfirm = async (caption?: string, listIds?: Set<string>) => {
         // Always catch the ROOT post, not the current post
         const rootPost = threadPosts[0]
         if (!rootPost || !catchImageUri) {
@@ -599,7 +599,7 @@ export default function ThreadModal({
                     ).then(() => console.log('Data contribution uploaded'))
                 }
 
-                await createCatchPost(catchImageUri, catchLocation, title, caption, listIds)
+                await createCatchPost(catchImageUri, catchLocation, caption, listIds)
             }
         } catch (error: any) {
             console.error('Error validating catch:', error)
@@ -633,7 +633,6 @@ export default function ThreadModal({
     const createCatchPost = async (
         photoUri: string,
         location: { latitude: number; longitude: number },
-        title?: string,
         caption?: string,
         listIds?: Set<string>
     ) => {
@@ -667,7 +666,6 @@ export default function ThreadModal({
                 authorId: user.uid,
                 authorUsername: username,
                 photoURL: downloadURL,
-                title: title?.trim(),
                 caption: finalCaption,
                 hasLocation: true,
                 catchCount: 0,
@@ -713,7 +711,6 @@ export default function ThreadModal({
                 authorId: user.uid,
                 authorUsername: username,
                 photoURL: downloadURL,
-                title: title?.trim(),
                 caption: finalCaption,
                 hasLocation: true,
                 catchCount: 0,
@@ -812,8 +809,13 @@ export default function ThreadModal({
                 cachePolicy="memory-disk"
                 priority="high"
             />
+            {item.authorId === user?.uid && (
+                <View style={styles.caughtBadgeOverlay}>
+                    <Ionicons name="checkmark" size={12} color={colors.caughtBadgeText} />
+                </View>
+            )}
         </View>
-    ), [cardWidth])
+    ), [cardWidth, user?.uid])
 
     if (!post) return null
 
@@ -889,14 +891,7 @@ export default function ThreadModal({
                     ) : (
                         <View style={styles.contentContainer}>
                             {/* Post Card */}
-                            <View style={[
-                                styles.postCard,
-                                currentPost?.authorId === user?.uid ? {
-                                    borderColor: colors.secondary,
-                                } : {
-                                    borderColor: 'transparent',
-                                }
-                            ]}>
+                            <View style={styles.postCard}>
                                 {/* Card Header */}
                                 <View style={styles.cardHeader}>
                                     <View style={styles.cardHeaderLeft}>
@@ -1067,11 +1062,7 @@ export default function ThreadModal({
                                 <View style={styles.cardFooter}>
                                     {/* Title and Caption section */}
                                     <View style={styles.captionSection}>
-                                        {currentPost?.title && (
-                                            <Text style={styles.postTitle} numberOfLines={1}>
-                                                {currentPost.title}
-                                            </Text>
-                                        )}
+
 
                                         {currentPost?.caption && (
                                             <Text style={styles.caption} numberOfLines={2}>
@@ -1410,5 +1401,21 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: colors.primary,
+    },
+    caughtBadgeOverlay: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: colors.caughtBadge,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
+        elevation: 3,
     },
 })

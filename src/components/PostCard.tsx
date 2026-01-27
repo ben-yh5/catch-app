@@ -62,15 +62,10 @@ interface PostCardProps {
     originalImageUrl?: string
 
     // Footer
-    title?: string
     caption?: string
     date?: string
-    // Input modes (for preview screens)
-    titleInputMode?: boolean
     captionInputMode?: boolean
-    titlePlaceholder?: string
     captionPlaceholder?: string
-    onTitleChange?: (text: string) => void
     onCaptionChange?: (text: string) => void
 
     // Progress bar
@@ -117,14 +112,10 @@ export default function PostCard({
     originalImageUrl,
 
     // Footer
-    title,
     caption,
     date,
-    titleInputMode = false,
     captionInputMode = false,
-    titlePlaceholder = 'Add a title...',
     captionPlaceholder = 'Add a caption (optional)...',
-    onTitleChange,
     onCaptionChange,
 
     // Progress bar
@@ -146,7 +137,6 @@ export default function PostCard({
     // Container
     containerPadding = 10,
 }: PostCardProps) {
-    const [titleText, setTitleText] = useState('')
     const [captionText, setCaptionText] = useState('')
     const flatListRef = useRef<FlatList>(null)
 
@@ -187,11 +177,6 @@ export default function PostCard({
         offset: imageSize * index,
         index,
     })
-
-    const handleTitleChange = (text: string) => {
-        setTitleText(text)
-        onTitleChange?.(text)
-    }
 
     const handleCaptionChange = (text: string) => {
         setCaptionText(text)
@@ -333,21 +318,6 @@ export default function PostCard({
             <View style={styles.cardFooter}>
                 {/* Title and Caption section */}
                 <View style={styles.captionSection}>
-                    {titleInputMode ? (
-                        <TextInput
-                            style={styles.titleInput}
-                            placeholder={titlePlaceholder}
-                            placeholderTextColor={colors.textTertiary}
-                            value={titleText}
-                            onChangeText={handleTitleChange}
-                            maxLength={60}
-                        />
-                    ) : title ? (
-                        <Text style={styles.title} numberOfLines={1}>
-                            {title}
-                        </Text>
-                    ) : null}
-
                     {captionInputMode ? (
                         <TextInput
                             style={styles.captionInput}
@@ -596,13 +566,7 @@ const styles = StyleSheet.create({
         lineHeight: 24,
         marginBottom: 4,
     },
-    titleInput: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: colors.textPrimary,
-        padding: 0,
-        marginBottom: 8,
-    },
+
     caption: {
         fontSize: 14,
         color: colors.textSecondary,

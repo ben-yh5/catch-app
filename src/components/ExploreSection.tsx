@@ -73,9 +73,9 @@ export default function ExploreSection({
             )}
             <View style={styles.cardInfo}>
                 <View style={styles.textContainer}>
-                    {item.title && (
-                        <Text style={styles.cardTitle} numberOfLines={1}>
-                            {item.title}
+                    {item.caption && (
+                        <Text style={styles.cardTitle} numberOfLines={2} ellipsizeMode="tail">
+                            {item.caption}
                         </Text>
                     )}
                     <Text style={styles.username} numberOfLines={1}>
