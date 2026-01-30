@@ -152,7 +152,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
             // 4. Visual Verification ("The Judge")
             try {
                 const similarity = await verifyViewSimilarity(rootPost.photoURL, catchImageUri);
-                const SIMILARITY_THRESHOLD = 0.70; // Adjust based on testing
+                const SIMILARITY_THRESHOLD = 0.65; // Adjusted based on MobileNetV2 testing (Secure: 0.60-0.70)
 
                 if (similarity < SIMILARITY_THRESHOLD) {
                     setUploading(false);
