@@ -62,5 +62,13 @@ service cloud.firestore {
       allow update, delete: if request.auth != null &&
                             request.auth.uid == resource.data.creatorId;
     }
+
+    // Training pairs collection
+    match /training_pairs/{pairId} {
+      // Allow authenticated users to contribute data
+      allow create: if request.auth != null;
+      // No client-side read/update/delete
+      allow read, update, delete: if false;
+    }
   }
 }

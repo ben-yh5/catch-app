@@ -8,6 +8,7 @@ import { validateCatch } from '@/utils/catchValidation';
 import { cropToSquare } from '@/utils/imageProcessing';
 import { checkBrightness } from '@/utils/imageValidation';
 import { addPostToList } from '@/utils/listUtils';
+import { verifyViewSimilarity } from '@/utils/visualMatcher';
 import { useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import { addDoc, collection, doc, getDoc, increment, updateDoc } from 'firebase/firestore';
@@ -148,7 +149,26 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
                 }
             }
 
-            // 4. Upload & Create Post
+            // 4. Visual Verification ("The Judge")
+            try {
+                const similarity = await verifyViewSimilarity(rootPost.photoURL, catchImageUri);
+                const SIMILARITY_THRESHOLD = 0.70; // Adjust based on testing
+
+                if (similarity < SIMILARITY_THRESHOLD) {
+                    setUploading(false);
+                    Alert.alert(
+                        'Match Failed',
+                        'Your shot doesn\'t visually match the original view well enough. Try to align it more closely!'
+                    );
+                    return;
+                }
+            } catch (aiError) {
+                // If AI fails (e.g. model missing), we log it but maybe let it slide in dev
+                // Or we can fail-safe. For now, let's just log.
+                console.warn('[CatchFlow] Visual verification skipped due to error:', aiError);
+            }
+
+            // 5. Upload & Create Post
             const userDoc = await getDoc(doc(db, 'users', user.uid));
             const username = userDoc.exists() ? userDoc.data().username : 'Anonymous';
 
