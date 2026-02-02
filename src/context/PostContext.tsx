@@ -16,12 +16,14 @@
 
 import React, {
     createContext,
-    useState,
+    useCallback,
     useContext,
     useEffect,
     useRef,
-    useCallback,
+    useState
 } from 'react'
+
+import { Post } from '@/types'
 
 type PostAction = 'create' | 'delete' | 'update' | 'catch'
 type PostEvent = {
@@ -39,6 +41,9 @@ interface PostContextType {
     updateLastFetch: (screen: 'explore' | 'profile' | 'saved') => void
     getLastFetch: (screen: 'explore' | 'profile' | 'saved') => number
     isStale: (screen: 'explore' | 'profile' | 'saved') => boolean
+    // Data Caching
+    getCachedPosts: (ids: string[]) => { found: Post[], missing: string[] }
+    cachePosts: (posts: Post[]) => void
 }
 
 const PostContext = createContext<PostContextType | undefined>(undefined)
@@ -59,6 +64,12 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
         profile: Date.now(),
         saved: Date.now(),
     })
+
+
+
+    // In-memory post cache
+    const postCacheRef = useRef<Map<string, { data: Post, timestamp: number }>>(new Map())
+    const CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
     // Use ref to avoid re-renders when listeners change
     const eventListenersRef = useRef<Set<(event: PostEvent) => void>>(new Set())
@@ -127,7 +138,41 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
             return Date.now() - lastFetch > STALE_THRESHOLD
         },
         [lastFetchTimes]
+
     )
+
+    /**
+     * Retrieve posts from cache, filtering out stale items
+     */
+    const getCachedPosts = useCallback((ids: string[]) => {
+        const found: Post[] = []
+        const missing: string[] = []
+        const now = Date.now()
+
+        ids.forEach(id => {
+            const cached = postCacheRef.current.get(id)
+            if (cached && (now - cached.timestamp < CACHE_TTL)) {
+                found.push(cached.data)
+            } else {
+                missing.push(id)
+            }
+        })
+
+        return { found, missing }
+    }, [])
+
+    /**
+     * Add or update posts in the cache
+     */
+    const cachePosts = useCallback((posts: Post[]) => {
+        const now = Date.now()
+        posts.forEach(post => {
+            postCacheRef.current.set(post.id, {
+                data: post,
+                timestamp: now
+            })
+        })
+    }, [])
 
     // Auto-clear the refresh flag after a short delay to allow all screens to process it
     useEffect(() => {
@@ -149,6 +194,8 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
                 updateLastFetch,
                 getLastFetch,
                 isStale,
+                getCachedPosts,
+                cachePosts,
             }}
         >
             {children}
@@ -156,17 +203,6 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
     )
 }
 
-/**
- * Hook to access post context
- * Must be used within a PostProvider
- */
-export const usePost = () => {
-    const context = useContext(PostContext)
-    if (context === undefined) {
-        throw new Error('usePost must be used within a PostProvider')
-    }
-    return context
-}
 
 /**
  * Hook to subscribe to post events without causing re-renders
@@ -183,6 +219,18 @@ export const usePost = () => {
  * @param callback Function to call when a post event occurs
  * @param deps Dependencies array for the callback
  */
+/**
+ * Hook to access post context
+ * Must be used within a PostProvider
+ */
+export const usePost = () => {
+    const context = useContext(PostContext)
+    if (context === undefined) {
+        throw new Error('usePost must be used within a PostProvider')
+    }
+    return context
+}
+
 export const usePostEvents = (
     callback: (event: PostEvent) => void,
     deps: React.DependencyList = []
@@ -196,4 +244,5 @@ export const usePostEvents = (
     }, [subscribeToPostEvents, ...deps])
 }
 
-export type { PostEvent, PostAction }
+export type { PostAction, PostEvent }
+

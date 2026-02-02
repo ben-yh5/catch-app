@@ -29,7 +29,7 @@ const cache = new Map<string, { data: PostLocation[]; timestamp: number }>()
 
 function getCacheKey(bounds: MapBounds): string {
     // Round to 3 decimal places (~100m precision) for cache key
-    return `${bounds.north.toFixed(3)},${bounds.south.toFixed(3)},${bounds.east.toFixed(3)},${bounds.west.toFixed(3)}`
+    return `v2:${bounds.north.toFixed(3)},${bounds.south.toFixed(3)},${bounds.east.toFixed(3)},${bounds.west.toFixed(3)}`
 }
 
 /**
@@ -48,16 +48,39 @@ export async function getPostsInViewport(
     }
 
     try {
-        const getPostsInArea = httpsCallable<
-            MapBounds,
-            { posts: PostLocation[]; count: number }
-        >(functions, 'getPostsInArea')
+        // Calculate center and radius from bounds to use the radius-based query
+        // This ensures compatibility even if the cloud function doesn't support bounds natively yet
+        const centerLat = (bounds.north + bounds.south) / 2
+        const centerLng = (bounds.east + bounds.west) / 2
 
-        const result = await getPostsInArea(bounds)
+        // Calculate radius (distance from center to corner)
+        // We use the simpler radius query which is known to be stable
+        const radiusInMeters = calculateDistance(
+            centerLat, centerLng,
+            bounds.north, bounds.east
+        )
+
+        // Add a small buffer to radius to ensure we cover the corners
+        const bufferRadius = radiusInMeters * 1.1
+
+        const results = await getPostsInRadius({
+            centerLat,
+            centerLng,
+            radiusInMeters: bufferRadius
+        })
+
+        // Optional: Filter results to strictly match the rectangular bounds
+        // This removes points that are in the circle but outside the rectangle
+        const filteredResults = results.filter(loc =>
+            loc.latitude <= bounds.north &&
+            loc.latitude >= bounds.south &&
+            loc.longitude <= bounds.east &&
+            loc.longitude >= bounds.west
+        )
 
         // Cache the result
         cache.set(cacheKey, {
-            data: result.data.posts,
+            data: filteredResults,
             timestamp: Date.now(),
         })
 
@@ -69,7 +92,7 @@ export async function getPostsInViewport(
             toDelete.forEach(([key]) => cache.delete(key))
         }
 
-        return result.data.posts
+        return filteredResults
     } catch (error) {
         console.error('Error fetching posts in viewport:', error)
         throw error

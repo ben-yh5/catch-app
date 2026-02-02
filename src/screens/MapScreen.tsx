@@ -6,10 +6,12 @@ import MapBottomSheet from '@/components/MapBottomSheet'
 import ThreadModal from '@/components/ThreadModal'
 import ViewToggle from '@/components/ViewToggle'
 import { useAuth } from '@/context/AuthContext'
+import { usePost } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
-import { getPostLocations, getPostsInRadius } from '@/utils/geospatialQueries'
+import { getPostsInViewport as fetchViewportPosts, getPostLocations } from '@/utils/geospatialQueries'
+import { batchGetPosts } from '@/utils/postUtils'
 import { Ionicons } from '@expo/vector-icons'
 import Mapbox, { Camera, CircleLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
 import * as Location from 'expo-location'
@@ -57,7 +59,10 @@ export default function MapScreen() {
     const [locationLoading, setLocationLoading] = useState(true)
     const [initialLocation, setInitialLocation] = useState<Location.LocationObject | null>(null)
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
-    const [showSearchButton, setShowSearchButton] = useState(false)
+    const { getCachedPosts, cachePosts } = usePost()
+    const lastFetchRef = useRef<number>(0)
+    const fetchTimeoutRef = useRef<any>(undefined)
+    const FILTER_DEBOUNCE = 600 // reduced to 600ms for snappier feel
 
     // List Focus Mode State
     const { listId, postId, filter, panToUser } = useLocalSearchParams<{
@@ -286,7 +291,8 @@ export default function MapScreen() {
         setActiveList(null)
         setListPosts([])
         // setViewMode('map')
-        fetchPostsInViewport() // Reload normal posts
+        // setViewMode('map')
+        loadVisiblePosts() // Reload normal posts
     }
 
     // Apply sorting based on active filter
@@ -306,72 +312,110 @@ export default function MapScreen() {
     }, [])
 
     // Fetch posts in current viewport
-    const fetchPostsInViewport = useCallback(async () => {
+    const loadVisiblePosts = useCallback(async () => {
         if (!mapRef.current || isListMode) return
 
+        // Debounce if called too frequently (unless forced)
+        const now = Date.now()
+        if (now - lastFetchRef.current < 1000) return
+        lastFetchRef.current = now
+
         setLoadingPosts(true)
-        setShowSearchButton(false)
 
         try {
-            // Get camera center for radius query instead of viewport bounds
-            const center = await mapRef.current.getCenter()
-            console.log('Map center:', center)
-
-            if (!center || center.length !== 2) {
-                console.error('Invalid map center:', center)
+            const visibleBounds = await mapRef.current.getVisibleBounds()
+            if (!visibleBounds || visibleBounds.length !== 2) {
                 return
             }
 
-            // Use a large radius to cover the viewport (25km should cover most views)
-            const postLocations = await getPostsInRadius({
-                centerLat: center[1], // latitude
-                centerLng: center[0], // longitude
-                radiusInMeters: 25000, // 25km
-            })
-            console.log(`Found ${postLocations.length} post locations in radius`)
+            // visibleBounds is [[east, north], [west, south]] (NE, SW) in some versions
+            // OR [[neLng, neLat], [swLng, swLat]]
+            // We need to parse correctly. 
+            // Standard Mapbox: [ne, sw] arrays.
 
-            // Fetch full post data
-            const postIds = postLocations.map((loc) => loc.postId)
-            const postDocs = await Promise.all(
-                postIds.map((id) => getDoc(doc(db, 'posts', id)))
-            )
+            // Assume [NE, SW] based on common RNMapbox usage
+            const ne = visibleBounds[0] // [lng, lat]
+            const sw = visibleBounds[1] // [lng, lat]
 
-            const posts = postDocs
-                .filter((docSnap) => docSnap.exists())
-                .map((docSnap) => {
-                    const postData = docSnap.data()
-                    const location = postLocations.find((loc) => loc.postId === docSnap.id)
+            console.log('Visible Bounds Raw:', visibleBounds)
+            // Ensure we handle both potential formats [[ne], [sw]] or [[sw], [ne]]
+            // We want North (max lat), South (min lat), East (max lng), West (min lng)
+
+            const lat1 = ne[1]
+            const lat2 = sw[1]
+            const lng1 = ne[0]
+            const lng2 = sw[0]
+
+            const bounds = {
+                north: Math.max(lat1, lat2),
+                south: Math.min(lat1, lat2),
+                east: Math.max(lng1, lng2),
+                west: Math.min(lng1, lng2)
+            }
+
+            // 1. Get Location Data (Cached by bounds in utils)
+            const postLocations = await fetchViewportPosts(bounds)
+            // console.log(`Found ${postLocations.length} post locations in viewport`)
+
+            const postIds = postLocations.map(loc => loc.postId)
+
+            // 2. Check Local Cache for Post Data
+            const { found, missing } = getCachedPosts(postIds)
+            // console.log(`Cache hit: ${found.length}, Missing: ${missing.length}`)
+
+            // 3. Fetch Missing Posts
+            let fetchedPosts: Post[] = []
+            if (missing.length > 0) {
+                fetchedPosts = await batchGetPosts(missing)
+                // Cache the newly fetched posts
+                cachePosts(fetchedPosts)
+            }
+
+            // 4. Merge and Display
+            const allPosts = [...found, ...fetchedPosts]
+
+            // IMPORTANT: Merge valid location data from the geospatial query into the post objects
+            // The Firestore 'posts' doc might not have lat/long or it might be stale/private
+            const mergedPosts = allPosts.map(post => {
+                const loc = postLocations.find((l: any) => l.postId === post.id)
+                if (loc) {
                     return {
-                        id: docSnap.id,
-                        ...postData,
-                        latitude: location?.latitude,
-                        longitude: location?.longitude,
-                    } as Post
-                })
-                .filter((post) => post.isOriginal === true) // Only show original posts
+                        ...post,
+                        latitude: loc.latitude,
+                        longitude: loc.longitude,
+                        // Ensure hasLocation is true if we found a location
+                        hasLocation: true
+                    }
+                }
+                return post
+            })
 
-            console.log(`Filtered to ${posts.length} original posts`)
+            const filteredPosts = mergedPosts
+                .filter(p => p.isOriginal) // Only show original posts
+                .filter(p => p.latitude && p.longitude) // Ensure they have valid coordinates
 
-            // Apply filter sorting
-            const sortedPosts = applySorting(posts, activeFilter)
-
-            console.log(`Setting ${sortedPosts.length} visible posts on map`)
+            const sortedPosts = applySorting(filteredPosts, activeFilter)
             setVisiblePosts(sortedPosts)
+
         } catch (error) {
             console.error('Error fetching posts in viewport:', error)
-            Alert.alert('Error', 'Failed to load posts in this area')
+            // Don't alert on auto-fetch error to avoid annoyance
         } finally {
             setLoadingPosts(false)
         }
-    }, [activeFilter, applySorting])
+    }, [activeFilter, applySorting, getCachedPosts, cachePosts, isListMode])
 
-    // Handle map movement
-    const handleMapMove = useCallback(() => {
-        // Show search button when map is moved (only in normal mode)
-        if (!isListMode) {
-            setShowSearchButton(true)
+    // Handle map movement - Auto Fetch with Debounce
+    const handleCameraChanged = useCallback((state: any) => {
+        // Only fetch if idle (interaction ended)
+        if (!state.gestures.isGestureActive) {
+            // We use a timeout to debounce the fetch
+            if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
+            fetchTimeoutRef.current = setTimeout(() => {
+                loadVisiblePosts()
+            }, FILTER_DEBOUNCE)
         }
-    }, [isListMode])
+    }, [loadVisiblePosts])
 
     // Initial load when map is ready
     useEffect(() => {
@@ -379,7 +423,7 @@ export default function MapScreen() {
             // Small delay to ensure map is fully rendered
             console.log('Map ready, fetching posts...')
             setTimeout(() => {
-                fetchPostsInViewport()
+                loadVisiblePosts()
             }, 1500)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -556,7 +600,7 @@ export default function MapScreen() {
 
         // Trigger search in this area after animation
         setTimeout(() => {
-            fetchPostsInViewport()
+            loadVisiblePosts()
         }, 1200)
     }
 
@@ -566,29 +610,31 @@ export default function MapScreen() {
     return (
         <View style={styles.container}>
             {/* Compact Header */}
-            <View style={[styles.header, { paddingTop: insets.top }]}>
-                <View style={styles.headerTitleContainer}>
-                    <Text style={styles.headerTitle}>{isListMode ? activeList?.name || 'List' : 'Map'}</Text>
-                </View>
+            {/* Compact Header - REMOVED for full map experience */}
+            {/* If we want a header, it should be an absolute overlay or standard stack header */}
 
-                {isListMode && (
+            {isListMode && (
+                <View style={[styles.header, { paddingTop: insets.top }]}>
+                    <View style={styles.headerTitleContainer}>
+                        <Text style={styles.headerTitle}>{activeList?.name || 'List'}</Text>
+                    </View>
                     <TouchableOpacity
                         onPress={handleListClose}
                         style={{ position: 'absolute', left: 16, bottom: 12 + 8, zIndex: 10 }}
                     >
                         <Ionicons name="close" size={24} color={colors.textPrimary} />
                     </TouchableOpacity>
-                )}
 
-                {isListMode && activeList?.creatorId === user?.uid && (
-                    <TouchableOpacity
-                        onPress={() => router.push(`/create-list?listId=${activeList.id}` as any)}
-                        style={{ position: 'absolute', right: 16, bottom: 12 + 8, zIndex: 10 }}
-                    >
-                        <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Edit</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
+                    {activeList?.creatorId === user?.uid && (
+                        <TouchableOpacity
+                            onPress={() => router.push(`/create-list?listId=${activeList.id}` as any)}
+                            style={{ position: 'absolute', right: 16, bottom: 12 + 8, zIndex: 10 }}
+                        >
+                            <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Edit</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            )}
 
             {/* View Toggle - Bottom Center */}
             {isListMode && (
@@ -605,7 +651,7 @@ export default function MapScreen() {
             {!isListMode && (
                 <LocationSearchBar
                     onLocationSelect={handleLocationSelect}
-                    containerStyle={{ top: 110 }} // Position below header (approx safe area + header height)
+                    containerStyle={{ top: insets.top + 10 }} // Position just below status bar
                     userLocation={userLocation ? {
                         latitude: userLocation.coords.latitude,
                         longitude: userLocation.coords.longitude
@@ -615,7 +661,7 @@ export default function MapScreen() {
 
             {/* Floating Filter Pills */}
             {!locationLoading && !isListMode && (
-                <View style={styles.filterContainer} pointerEvents="box-none">
+                <View style={[styles.filterContainer, { top: insets.top + 70 }]} pointerEvents="box-none">
                     <FilterPills
                         activeFilter={activeFilter}
                         onFilterChange={handleFilterChange}
@@ -625,18 +671,7 @@ export default function MapScreen() {
 
 
 
-            {/* Search This Area Button */}
-            {showSearchButton && !loadingPosts && (
-                <View style={styles.searchButtonContainer}>
-                    <TouchableOpacity
-                        style={styles.searchButton}
-                        onPress={fetchPostsInViewport}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.searchButtonText}>Search this area</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
+
 
             {/* Map */}
             {locationLoading ? (
@@ -656,11 +691,7 @@ export default function MapScreen() {
                     compassEnabled={true}
                     compassViewPosition={1}
                     compassViewMargins={{ x: 16, y: 158 }}
-                    onCameraChanged={(state) => {
-                        if (state.gestures.isGestureActive) {
-                            setShowSearchButton(true)
-                        }
-                    }}
+                    onCameraChanged={handleCameraChanged}
                 >
                     <Camera
                         ref={cameraRef}
@@ -758,9 +789,9 @@ export default function MapScreen() {
             )}
 
             {/* Center on location button */}
-            {userLocation && (
+            {userLocation && !isListMode && (
                 <TouchableOpacity
-                    style={styles.centerButton}
+                    style={[styles.centerButton, { top: insets.top + 70 }]}
                     onPress={centerOnUserLocation}
                     activeOpacity={0.7}
                 >
@@ -883,7 +914,7 @@ const styles = StyleSheet.create({
     },
     filterContainer: {
         position: 'absolute',
-        top: 170, // Moved down for SearchBar
+        top: 110, // Moved up
         left: 0,
         right: 0,
         zIndex: 10,
@@ -891,7 +922,7 @@ const styles = StyleSheet.create({
     },
     searchButtonContainer: {
         position: 'absolute',
-        top: 220, // Moved down for SearchBar
+        top: 160, // Moved up
         left: 0,
         right: 0,
         zIndex: 10,
