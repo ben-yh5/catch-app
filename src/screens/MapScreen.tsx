@@ -690,7 +690,7 @@ export default function MapScreen() {
                     scaleBarEnabled={false}
                     compassEnabled={true}
                     compassViewPosition={1}
-                    compassViewMargins={{ x: 16, y: 158 }}
+                    compassViewMargins={{ x: 16, y: insets.top + 140 }}
                     onCameraChanged={handleCameraChanged}
                 >
                     <Camera
