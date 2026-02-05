@@ -23,10 +23,11 @@ interface LocationResult {
 interface LocationSearchBarProps {
     onLocationSelect: (location: LocationResult) => void
     containerStyle?: any
+    inputContainerStyle?: any
     userLocation?: { longitude: number; latitude: number } | null
 }
 
-export default function LocationSearchBar({ onLocationSelect, containerStyle, userLocation }: LocationSearchBarProps) {
+export default function LocationSearchBar({ onLocationSelect, containerStyle, inputContainerStyle, userLocation }: LocationSearchBarProps) {
     const [query, setQuery] = useState('')
     const [results, setResults] = useState<LocationResult[]>([])
     const [loading, setLoading] = useState(false)
@@ -92,7 +93,7 @@ export default function LocationSearchBar({ onLocationSelect, containerStyle, us
 
     return (
         <View style={[styles.container, containerStyle]}>
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, inputContainerStyle]}>
                 <Ionicons name="search" size={20} color={colors.textTertiary} style={styles.icon} />
                 <TextInput
                     style={styles.input}
@@ -148,19 +149,21 @@ export default function LocationSearchBar({ onLocationSelect, containerStyle, us
 
 const styles = StyleSheet.create({
     container: {
-        position: 'absolute',
-        top: 0,
-        left: 20,
-        right: 20,
         zIndex: 100,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.cardBackground,
+        backgroundColor: colors.cardBackground, // Default, can be overridden via styles if we passed a prop, but currently we don't. 
+        // We will modify the component to accept specific styles for inputContainer later if needed, 
+        // or we can rely on the fact that we might want it opaque inside the glass?
+        // Actually, for glassmorphism, we usually want these to be semi-transparent.
+        // Let's keep it simple for now and just remove the positioning.
         borderRadius: 24,
         paddingHorizontal: 12,
         paddingVertical: 10,
+        // Remove shadows if inside a glass container? Or keep them?
+        // Let's keep them for now.
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,

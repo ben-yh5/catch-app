@@ -1,8 +1,8 @@
-import FilterPills, { FilterType } from '@/components/FilterPills'
+import { FilterType } from '@/components/FilterPills'
 import ListCarousel from '@/components/ListCarousel'
 import ListModal from '@/components/ListModal'
-import LocationSearchBar from '@/components/LocationSearchBar'
 import MapBottomSheet from '@/components/MapBottomSheet'
+import MapHUD from '@/components/MapHUD'
 import ThreadModal from '@/components/ThreadModal'
 import ViewToggle from '@/components/ViewToggle'
 import { useAuth } from '@/context/AuthContext'
@@ -647,33 +647,18 @@ export default function MapScreen() {
                 />
             )}
 
-            {/* Search Bar */}
+            {/* Map HUD (Search + Filters) */}
             {!isListMode && (
-                <LocationSearchBar
+                <MapHUD
                     onLocationSelect={handleLocationSelect}
-                    containerStyle={{ top: insets.top + 10 }} // Position just below status bar
                     userLocation={userLocation ? {
                         latitude: userLocation.coords.latitude,
                         longitude: userLocation.coords.longitude
                     } : null}
+                    activeFilter={activeFilter}
+                    onFilterChange={handleFilterChange}
                 />
             )}
-
-            {/* Floating Filter Pills */}
-            {!locationLoading && !isListMode && (
-                <View style={[styles.filterContainer, { top: insets.top + 70 }]} pointerEvents="box-none">
-                    <FilterPills
-                        activeFilter={activeFilter}
-                        onFilterChange={handleFilterChange}
-                    />
-                </View>
-            )}
-
-
-
-
-
-            {/* Map */}
             {locationLoading ? (
                 <View style={styles.map}>
                     <View style={styles.locationLoadingOverlay}>
@@ -689,8 +674,10 @@ export default function MapScreen() {
                     logoEnabled={false}
                     scaleBarEnabled={false}
                     compassEnabled={true}
-                    compassViewPosition={1}
-                    compassViewMargins={{ x: 16, y: insets.top + 140 }}
+                    compassViewPosition={1} // 1 = Top Right
+                    // Compass at top relative to map, BELOW HUD.
+                    // HUD ~110px. Increasing spacing per user request.
+                    compassViewMargins={{ x: 16, y: insets.top + 180 }}
                     onCameraChanged={handleCameraChanged}
                 >
                     <Camera
@@ -788,10 +775,11 @@ export default function MapScreen() {
                 </MapView>
             )}
 
-            {/* Center on location button */}
+            {/* Center on location button - Below Compass */}
             {userLocation && !isListMode && (
                 <TouchableOpacity
-                    style={[styles.centerButton, { top: insets.top + 70 }]}
+                    // Compass at ~180 + ~40 height = 220 + gap = 240
+                    style={[styles.centerButton, { top: insets.top + 240 }]}
                     onPress={centerOnUserLocation}
                     activeOpacity={0.7}
                 >
@@ -962,8 +950,7 @@ const styles = StyleSheet.create({
     },
     centerButton: {
         position: 'absolute',
-        top: 110, // Align with filters
-        right: 16, // Move to right
+        right: 16,
         width: 48,
         height: 48,
         borderRadius: 24,
@@ -977,6 +964,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
-        zIndex: 15, // Ensure it's above filter container (10)
+        zIndex: 15,
     },
 })

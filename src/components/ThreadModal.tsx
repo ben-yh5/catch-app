@@ -29,6 +29,7 @@ import { Post } from '@/types'
 import { isPostSaved } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
+import * as Linking from 'expo-linking'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
 import {
@@ -46,8 +47,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
-    FlatList,
-    Linking,
+    FlatList, // Renamed to avoid conflict with expo-linking
     Modal,
     Platform,
     StyleSheet,
