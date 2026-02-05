@@ -277,16 +277,6 @@ export default function PostScreen() {
                     onPhotoTaken={handlePhotoTaken}
                     onCancel={handleCameraCancel}
                 />
-                <View style={{
-                    position: 'absolute',
-                    top: 100,
-                    left: 20,
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    padding: 10,
-                    borderRadius: 8
-                }}>
-                    <Text style={{ color: 'white' }}>Heading: {heading}°</Text>
-                </View>
             </View>
         )
     }

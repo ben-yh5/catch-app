@@ -551,12 +551,13 @@ export default function ThreadModal({
                     loading={uploading}
                     loadingText="Creating catch..."
                     originalPhotoUrl={rootPost?.photoURL}
-                    hasLocation={true} // useCatchFlow ensures we have location before preview
+                    hasLocation={true}
                     loadingLocation={fetchingLocation}
                 />
             </Modal>
         )
     }
+
     return (
         <Modal
             visible={visible}
@@ -803,8 +804,8 @@ export default function ThreadModal({
                                                 style={styles.directionsButton}
                                                 onPress={handleGetDirections}
                                             >
-                                                <Ionicons name="navigate" size={20} color={colors.primary} />
-                                                <Text style={styles.directionsButtonText}>Get Directions</Text>
+                                                <Ionicons name="navigate-outline" size={20} color={colors.primary} />
+                                                <Text style={styles.directionsButtonText}>Directions</Text>
                                             </TouchableOpacity>
                                         )}
                                     </View>
@@ -820,12 +821,16 @@ export default function ThreadModal({
                 <ListSelectionBottomSheet
                     visible={showAddToListModal}
                     onClose={() => setShowAddToListModal(false)}
-                    postId={currentPost.id}
-                    onSaveStateChange={handleSaveStateChange}
+                    initialSelectedIds={new Set(isSaved ? ['default'] : [])}
+                    onSelectionChange={(selectedIds) => {
+                        setShowAddToListModal(false)
+                        setIsSaved(selectedIds.size > 0)
+                    }}
                 />
             )}
         </Modal>
     )
+
 }
 
 const styles = StyleSheet.create({
