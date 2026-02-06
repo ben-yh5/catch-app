@@ -1,4 +1,7 @@
 tensorflow
 numpy
+pillow
 python-dotenv
+firebase-admin
+streamlit
 pillow

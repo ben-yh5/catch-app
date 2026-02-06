@@ -53,3 +53,10 @@ firebase-debug.log
 *.md
 *.MD
 !README.md
+
+# ML sensitive & data
+serviceAccountKey.json
+training_data/
+assets/models/view_encoder_tuned.tflite
+__pycache__/
+*.pyc
