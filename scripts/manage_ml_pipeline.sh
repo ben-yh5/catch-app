@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Catch App ML Pipeline Runner
-# Usage: ./scripts/run_pipeline.sh
+# Usage: ./scripts/manage_ml_pipeline.sh
 
 echo "🧠 Catch App ML Pipeline"
 echo "========================"
@@ -13,7 +13,7 @@ while true; do
     echo "2) Clean/Verify Data (GUI)"
     echo "3) Train Model"
     echo "4) Test Similarity"
-    echo "5) Export Base Model"
+    echo "5) Export Model (Custom)"
     echo "6) Quit"
     echo ""
     read -p "👉 Select a step to run: " opt
@@ -52,8 +52,22 @@ while true; do
             ;;
         5)
             echo ""
-            echo "📦 Exporting original MobileNetV2..."
-            python scripts/export_model.py
+            echo "📦 Exporting Model..."
+            read -p "   Name for model (default: view_encoder): " model_name
+            read -p "   Path to weights .h5 (optional, enter for ImageNet): " weights_path
+            
+            cmd="python scripts/export_model.py"
+            
+            if [ ! -z "$model_name" ]; then
+                cmd="$cmd --name $model_name"
+            fi
+            
+            if [ ! -z "$weights_path" ]; then
+                cmd="$cmd --weights $weights_path"
+            fi
+            
+            echo "   Running: $cmd"
+            $cmd
             ;;
         6)
             echo "Bye! 👋"
