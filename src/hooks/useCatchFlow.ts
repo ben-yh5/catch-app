@@ -6,7 +6,7 @@ import { ImageMetadata, uploadTrainingPair } from '@/services/trainingData';
 import { Post } from '@/types';
 import { validateCatch } from '@/utils/catchValidation';
 import { cropToSquare } from '@/utils/imageProcessing';
-import { checkBrightness } from '@/utils/imageValidation';
+import { checkBlur, checkBrightness } from '@/utils/imageValidation';
 import { addPostToList } from '@/utils/listUtils';
 import { verifyViewSimilarity } from '@/utils/visualMatcher';
 import { useCameraPermissions } from 'expo-camera';
@@ -118,11 +118,18 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
                 return;
             }
 
-            // 2. Quality validation
+            // 2. Quality validation (Brightness & Blur)
             const isBrightEnough = await checkBrightness(catchImageUri);
             if (!isBrightEnough) {
                 setUploading(false);
                 Alert.alert('Too Dark', 'Your photo is too dark. Please try again with better lighting.');
+                return;
+            }
+
+            const isSharpEnough = await checkBlur(catchImageUri);
+            if (!isSharpEnough) {
+                setUploading(false);
+                Alert.alert('Too Blurry', 'Your photo is too blurry. Please steady your hand and try again.');
                 return;
             }
 

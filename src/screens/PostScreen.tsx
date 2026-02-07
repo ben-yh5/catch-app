@@ -6,6 +6,7 @@ import { useDeviceSensors } from '@/hooks/useDeviceSensors'
 import { db, storage } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { cropToSquare } from '@/utils/imageProcessing'
+import { checkBlur } from '@/utils/imageValidation'
 import { addPostToList } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
@@ -171,6 +172,13 @@ export default function PostScreen() {
                 'Location Required',
                 'You must enable location permissions to share a location. Please try again with location enabled.'
             )
+            return
+        }
+
+        // Check for blur
+        const isSharpEnough = await checkBlur(capturedImage)
+        if (!isSharpEnough) {
+            Alert.alert('Too Blurry', 'Your photo is too blurry. Please steady your hand and try again.')
             return
         }
 
