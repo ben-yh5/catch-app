@@ -962,3 +962,88 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
         )
     }
 })
+
+/**
+ * HTTPS Callable Function: Recalculates user stats based on their posts
+ *
+ * Fixes inaccuracies in totalPosts, totalCatches, and contribution scores
+ * by re-tallying all documents in the posts collection.
+ *
+ * @param data.userId - Optional userId to recount (defaults to auth user)
+ * @returns Object with the new stats
+ */
+export const recountUserData = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            'unauthenticated',
+            'Must be logged in to recount data'
+        )
+    }
+
+    // Allow recounting self, or other users if admin (not implementing admin check for now)
+    const targetUserId = data.userId || context.auth.uid
+
+    try {
+        const db = admin.firestore()
+        const postsQuery = await db.collection('posts')
+            .where('authorId', '==', targetUserId)
+            .get()
+
+        let totalPosts = 0
+        let totalCatches = 0
+        let calculatedContribution = 0
+
+        const batch = db.batch()
+        let batchCount = 0
+
+        for (const doc of postsQuery.docs) {
+            const postData = doc.data()
+
+            if (postData.isOriginal) {
+                totalPosts++
+                calculatedContribution += (postData.contributionEarned || 0)
+            } else {
+                totalCatches++
+                // Catches are worth fixed amount
+                // If the catch post doesn't have contributionEarned stored, we assume the constant
+                const catchValue = CONTRIBUTION.CATCH
+                calculatedContribution += catchValue
+
+                // Self-healing: if catch didn't store its value, store it now
+                // so onPostDeleted works correctly in the future
+                if (postData.contributionEarned !== catchValue) {
+                    batch.update(doc.ref, { contributionEarned: catchValue })
+                    batchCount++
+                }
+            }
+        }
+
+        // Commit any fixes to post documents
+        if (batchCount > 0) {
+            await batch.commit()
+            functions.logger.info(`Fixed contributionEarned on ${batchCount} catch posts`)
+        }
+
+        // Update user stats
+        await db.collection('users').doc(targetUserId).update({
+            totalPosts,
+            totalCatches,
+            contribution: calculatedContribution
+        })
+
+        return {
+            success: true,
+            stats: {
+                totalPosts,
+                totalCatches,
+                contribution: calculatedContribution
+            }
+        }
+    } catch (error) {
+        functions.logger.error('Error recounting user data:', error)
+        throw new functions.https.HttpsError(
+            'internal',
+            'Failed to recount user data'
+        )
+    }
+})

@@ -309,9 +309,16 @@ export default function ThreadModal({
             // Get user's current location
             const { status } = await Location.requestForegroundPermissionsAsync()
             if (status === 'granted') {
-                const userLoc = await Location.getCurrentPositionAsync({
+                // detailed hanging
+                const locationPromise = Location.getCurrentPositionAsync({
                     accuracy: Location.Accuracy.Balanced,
                 })
+
+                const timeoutPromise = new Promise<Location.LocationObject>((_, reject) => {
+                    setTimeout(() => reject(new Error('Location request timed out')), 10000)
+                })
+
+                const userLoc = await Promise.race([locationPromise, timeoutPromise])
 
                 // Calculate distance
                 const dist = calculateDistance(

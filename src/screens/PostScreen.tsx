@@ -89,9 +89,16 @@ export default function PostScreen() {
                 }
             }
 
-            const location = await Location.getCurrentPositionAsync({
+            // detailed hanging
+            const locationPromise = Location.getCurrentPositionAsync({
                 accuracy: Location.Accuracy.Balanced,
             })
+
+            const timeoutPromise = new Promise<Location.LocationObject>((_, reject) => {
+                setTimeout(() => reject(new Error('Location request timed out')), 10000)
+            })
+
+            const location = await Promise.race([locationPromise, timeoutPromise])
 
             return {
                 latitude: location.coords.latitude,

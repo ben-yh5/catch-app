@@ -23,7 +23,10 @@ import React, {
     useState
 } from 'react'
 
+import { useAuth } from '@/context/AuthContext'
+import { db } from '@/services/firebase'
 import { Post } from '@/types'
+import { collection, getDocs, query, where } from 'firebase/firestore'
 
 type PostAction = 'create' | 'delete' | 'update' | 'catch'
 type PostEvent = {
@@ -44,6 +47,9 @@ interface PostContextType {
     // Data Caching
     getCachedPosts: (ids: string[]) => { found: Post[], missing: string[] }
     cachePosts: (posts: Post[]) => void
+    // User Data
+    caughtThreadIds: Set<string>
+    refreshCaughtThreads: () => Promise<void>
 }
 
 const PostContext = createContext<PostContextType | undefined>(undefined)
@@ -184,6 +190,60 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }, [shouldRefresh])
 
+    // Caught Threads State
+    const [caughtThreadIds, setCaughtThreadIds] = useState<Set<string>>(new Set())
+    const { user } = useAuth()
+
+    /**
+     * Fetch all threads caught by the current user
+     */
+    const refreshCaughtThreads = useCallback(async () => {
+        if (!user) {
+            setCaughtThreadIds(new Set())
+            return
+        }
+
+        try {
+            const q = query(
+                collection(db, 'posts'),
+                where('authorId', '==', user.uid),
+                where('isOriginal', '==', false)
+            )
+
+            const querySnapshot = await getDocs(q)
+            const ids = new Set<string>()
+
+            querySnapshot.forEach((doc) => {
+                const data = doc.data()
+                if (data.rootPostId) {
+                    ids.add(data.rootPostId)
+                }
+            })
+
+            setCaughtThreadIds(ids)
+        } catch (error) {
+            console.error('Error fetching caught threads:', error)
+        }
+    }, [user])
+
+    // Initial fetch on mount/user change
+    useEffect(() => {
+        refreshCaughtThreads()
+    }, [refreshCaughtThreads])
+
+    // Listen for new catches via local event system to update set immediately
+    useEffect(() => {
+        const unsubscribe = subscribeToPostEvents((event) => {
+            if (event.action === 'catch' && event.userId === user?.uid) {
+                // We could optimize this by just adding the ID if we knew the rootPostId, 
+                // but for consistency we'll refresh. 
+                // Actually, let's just refresh to be safe.
+                refreshCaughtThreads()
+            }
+        })
+        return unsubscribe
+    }, [subscribeToPostEvents, user, refreshCaughtThreads])
+
     return (
         <PostContext.Provider
             value={{
@@ -196,6 +256,8 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
                 isStale,
                 getCachedPosts,
                 cachePosts,
+                caughtThreadIds,
+                refreshCaughtThreads,
             }}
         >
             {children}

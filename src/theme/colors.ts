@@ -18,7 +18,7 @@ export const colors = {
     // Primary Accents
     primary: '#007AFF',         // iOS blue - primary actions, uncaught state
     secondary: '#CF2CF6',       // Pink - caught state, trophies
-    accent: '#FF6BCB',          // Light pink - highlights, user location
+    accent: '#CF2CF6',          // Pink - highlights, user location
     danger: '#FF3B30',          // iOS red - delete/destructive actions
 
     // Caught State Indicators
@@ -28,8 +28,8 @@ export const colors = {
     // Map Pin Colors
     pinDefault: '#007AFF',      // Blue - uncaught posts
     pinCaught: '#CF2CF6',       // Pink - caught by user
-    pinSelected: '#FF6BCB',     // Light pink - currently selected
-    userLocation: '#FF6BCB',    // Light pink - user's location puck
+    pinSelected: '#CF2CF6',     // Pink - currently selected
+    userLocation: '#CF2CF6',    // Pink - user's location puck
 
     // Text
     textPrimary: '#ffffff',     // White

@@ -59,7 +59,7 @@ export default function MapScreen() {
     const [locationLoading, setLocationLoading] = useState(true)
     const [initialLocation, setInitialLocation] = useState<Location.LocationObject | null>(null)
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
-    const { getCachedPosts, cachePosts } = usePost()
+    const { getCachedPosts, cachePosts, caughtThreadIds } = usePost()
     const lastFetchRef = useRef<number>(0)
     const fetchTimeoutRef = useRef<any>(undefined)
     const FILTER_DEBOUNCE = 600 // reduced to 600ms for snappier feel
@@ -483,6 +483,7 @@ export default function MapScreen() {
                     postId: post.id,
                     isSelected: post.id === selectedPostId,
                     isOwn: post.authorId === user?.uid,
+                    isCaught: caughtThreadIds.has(post.id),
                 },
                 geometry: {
                     type: 'Point' as const,
@@ -764,6 +765,8 @@ export default function MapScreen() {
                                     MAP_COLORS.selectedPin,
                                     ['get', 'isOwn'],
                                     MAP_COLORS.selectedPin,
+                                    ['get', 'isCaught'],
+                                    MAP_COLORS.pinCaught,
                                     MAP_COLORS.pin,
                                 ],
                                 circleRadius: ['case', ['get', 'isSelected'], 12, 10],
