@@ -84,17 +84,48 @@ def create_dataset(data_dir):
 
     # Generator for triplets
     def triplet_generator():
-        random.shuffle(pair_folders)
+        # Group folders by Original ID to avoid False Negatives
+        # Folder name format: {originalId}_{timestamp}
+        grouped_folders = {}
         for folder in pair_folders:
-            orig_path = str(folder / 'original.jpg')
-            catch_path = str(folder / 'catch.jpg')
+            # Extract original_id (everything before the last underscore)
+            # If manual naming was used and no underscore, use full name.
+            folder_name = folder.name
+            if '_' in folder_name:
+                group_id = folder_name.rsplit('_', 1)[0]
+            else:
+                group_id = folder_name
             
-            # Select a random NEGATIVE pair
-            # (In a real system, we'd mine 'hard negatives' too)
-            neg_folder = folder
-            while neg_folder == folder:
-                neg_folder = random.choice(pair_folders)
+            if group_id not in grouped_folders:
+                grouped_folders[group_id] = []
+            grouped_folders[group_id].append(folder)
+
+        group_ids = list(grouped_folders.keys())
+        
+        if len(group_ids) < 2:
+            print("⚠️ Not enough distinct locations to form triplets (need at least 2 groups).")
+            return
+
+        print(f"   Identified {len(group_ids)} distinct locations from {len(pair_folders)} folders.")
+
+        while True: # Infinite generator for dataset
+            # Shuffle groups to ensure variety per epoch if we weren't infinite
+            # For infinite, random.choice is fine.
             
+            # 1. Select an Anchor Group
+            anchor_group_id = random.choice(group_ids)
+            anchor_folder = random.choice(grouped_folders[anchor_group_id])
+            
+            orig_path = str(anchor_folder / 'original.jpg')
+            catch_path = str(anchor_folder / 'catch.jpg')
+            
+            # 2. Select a Negative Group (MUST be different from Anchor Group)
+            neg_group_id = anchor_group_id
+            while neg_group_id == anchor_group_id:
+                neg_group_id = random.choice(group_ids)
+            
+            # 3. Select Negative Sample
+            neg_folder = random.choice(grouped_folders[neg_group_id])
             neg_path = str(neg_folder / 'original.jpg') # Use the other location's original as negative
 
             yield (orig_path, catch_path, neg_path)
