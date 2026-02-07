@@ -247,7 +247,7 @@ export default function PostScreen() {
                 }
             }
 
-            Alert.alert('Success!', 'Your post has been created!')
+            Alert.alert('Success!', 'Your post has been created! Contribution points incoming.')
 
             // Reset state
             setCapturedImage(null)

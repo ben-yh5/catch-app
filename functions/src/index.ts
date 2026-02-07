@@ -17,6 +17,16 @@ admin.initializeApp()
 /** Maximum distance (in meters) a user must be from a post location to catch it */
 const CATCH_RADIUS_METERS = 100
 
+/** Contribution System Constants */
+const CONTRIBUTION = {
+    PIONEER_POST: 10,      // Creating a post >50m from existing pins
+    NEARBY_POST: 2,        // Creating a post within 50m of existing pins
+    CATCH: 14,             // Catching any post
+    ROYALTY_PIONEER: 7,    // Royalty to original poster when Pioneer post is caught
+    ROYALTY_NEARBY: 2,     // Royalty to original poster when Nearby post is caught
+    NEARBY_THRESHOLD_METERS: 50
+}
+
 /**
  * Calculates the distance between two geographic coordinates using the Haversine formula
  * @param lat1 - Latitude of first point
@@ -286,11 +296,11 @@ export const getPostLocations = functions.https.onCall(async (data, context) => 
 /**
  * Firestore Trigger: Handles post creation events
  *
- * Performs two main tasks:
- * 1. Increments user's totalCatches count if the new post is a catch
- * 2. Sends push notifications to all followers when a user creates an original post
- *
- * Note: Catches don't trigger follower notifications to avoid spam
+ * Performs:
+ * 1. Contribution points for original posts (Pioneer vs Nearby check)
+ * 2. Contribution points for catches + royalties to original poster
+ * 3. Increments user's totalCatches/totalPosts counters
+ * 4. Sends push notifications to followers for original posts
  */
 export const onPostCreated = functions.firestore
     .document('posts/{postId}')
@@ -304,75 +314,139 @@ export const onPostCreated = functions.firestore
             return
         }
 
-        try {
-            const userRef = admin.firestore().collection('users').doc(authorId)
+        const db = admin.firestore()
 
-            // Increment totalCatches if this is a catch (not an original post)
+        try {
+            const userRef = db.collection('users').doc(authorId)
+            const postRef = snap.ref
+
+            // Handle CATCH posts
             if (postData.parentPostId && !postData.isOriginal) {
+                // Award catch contribution to catcher
                 await userRef.update({
                     totalCatches: admin.firestore.FieldValue.increment(1),
+                    contribution: admin.firestore.FieldValue.increment(CONTRIBUTION.CATCH),
                 })
-                functions.logger.info(`Incremented totalCatches for user ${authorId}`)
+                functions.logger.info(`Awarded ${CONTRIBUTION.CATCH} contribution to catcher ${authorId}`)
+
+                // Award royalty to original poster
+                const rootPostId = postData.rootPostId
+                if (rootPostId) {
+                    const rootPostDoc = await db.collection('posts').doc(rootPostId).get()
+                    if (rootPostDoc.exists) {
+                        const rootData = rootPostDoc.data()
+                        const rootAuthorId = rootData?.authorId
+                        const isPioneer = rootData?.isPioneer ?? true // Default to Pioneer if not set
+
+                        const royalty = isPioneer ? CONTRIBUTION.ROYALTY_PIONEER : CONTRIBUTION.ROYALTY_NEARBY
+
+                        if (rootAuthorId && rootAuthorId !== authorId) {
+                            await db.collection('users').doc(rootAuthorId).update({
+                                contribution: admin.firestore.FieldValue.increment(royalty),
+                            })
+                            functions.logger.info(`Awarded ${royalty} royalty to original poster ${rootAuthorId}`)
+                        }
+
+                        // Increment contributionEarned on root post
+                        await rootPostDoc.ref.update({
+                            contributionEarned: admin.firestore.FieldValue.increment(royalty),
+                        })
+                    }
+                }
             }
 
-            // Send notifications to followers (only for original posts, not catches)
+            // Handle ORIGINAL posts
             if (postData.isOriginal) {
-                const authorDoc = await userRef.get()
-                if (!authorDoc.exists) {
-                    functions.logger.warn(`Author ${authorId} not found`)
-                    return
+                // Check if Pioneer (no posts within threshold distance)
+                const locationQuery = await db
+                    .collection('post_locations')
+                    .where('postId', '==', postId)
+                    .limit(1)
+                    .get()
+
+                let isPioneer = true
+                let contributionAmount = CONTRIBUTION.PIONEER_POST
+
+                if (!locationQuery.empty) {
+                    const newPostLocation = locationQuery.docs[0].data()
+                    const center: [number, number] = [newPostLocation.latitude, newPostLocation.longitude]
+
+                    // Query nearby posts using geohash
+                    const bounds = geohashQueryBounds(center, CONTRIBUTION.NEARBY_THRESHOLD_METERS)
+
+                    const nearbyPromises = bounds.map(([start, end]) =>
+                        db.collection('post_locations')
+                            .where('geohash', '>=', start)
+                            .where('geohash', '<=', end)
+                            .get()
+                    )
+
+                    const nearbySnapshots = await Promise.all(nearbyPromises)
+
+                    for (const snapshot of nearbySnapshots) {
+                        for (const doc of snapshot.docs) {
+                            // Skip self
+                            if (doc.data().postId === postId) continue
+
+                            const otherLocation = doc.data()
+                            const distance = distanceBetween(
+                                center,
+                                [otherLocation.latitude, otherLocation.longitude]
+                            ) * 1000 // Convert km to meters
+
+                            if (distance <= CONTRIBUTION.NEARBY_THRESHOLD_METERS) {
+                                isPioneer = false
+                                contributionAmount = CONTRIBUTION.NEARBY_POST
+                                break
+                            }
+                        }
+                        if (!isPioneer) break
+                    }
                 }
 
-                const authorData = authorDoc.data()
-                const authorUsername = authorData?.username || 'Someone'
-                const followers = authorData?.followers || []
+                // Update post with isPioneer flag and initial contributionEarned
+                await postRef.update({
+                    isPioneer,
+                    contributionEarned: contributionAmount,
+                })
 
-                functions.logger.info(
-                    `Notifying ${followers.length} followers about new post from ${authorUsername}`
-                )
+                // Award contribution to author
+                await userRef.update({
+                    totalPosts: admin.firestore.FieldValue.increment(1),
+                    contribution: admin.firestore.FieldValue.increment(contributionAmount),
+                })
 
-                for (const followerId of followers) {
-                    try {
-                        const followerDoc = await admin
-                            .firestore()
-                            .collection('users')
-                            .doc(followerId)
-                            .get()
+                functions.logger.info(`Post ${postId} isPioneer=${isPioneer}, awarded ${contributionAmount} contribution to ${authorId}`)
 
-                        if (!followerDoc.exists) {
-                            functions.logger.warn(`Follower ${followerId} not found`)
-                            continue
-                        }
+                // Send notifications to followers
+                const authorDoc = await userRef.get()
+                if (authorDoc.exists) {
+                    const authorData = authorDoc.data()
+                    const authorUsername = authorData?.username || 'Someone'
+                    const followers = authorData?.followers || []
 
-                        const followerData = followerDoc.data()
-                        const pushToken = followerData?.pushToken
+                    for (const followerId of followers) {
+                        try {
+                            const followerDoc = await db.collection('users').doc(followerId).get()
+                            if (!followerDoc.exists) continue
 
-                        if (!pushToken) {
-                            functions.logger.info(
-                                `Follower ${followerId} has no push token, skipping`
+                            const followerData = followerDoc.data()
+                            const pushToken = followerData?.pushToken
+                            if (!pushToken) continue
+
+                            await sendPushNotification(
+                                pushToken,
+                                'New Post',
+                                `@${authorUsername} just made a new post!`,
+                                {
+                                    userId: authorId,
+                                    postId: postId,
+                                    type: 'new_post',
+                                }
                             )
-                            continue
+                        } catch (error) {
+                            functions.logger.error(`Error sending notification to follower ${followerId}:`, error)
                         }
-
-                        await sendPushNotification(
-                            pushToken,
-                            'New Post',
-                            `@${authorUsername} just made a new post!`,
-                            {
-                                userId: authorId,
-                                postId: postId,
-                                type: 'new_post',
-                            }
-                        )
-
-                        functions.logger.info(
-                            `Sent new post notification to follower ${followerId}`
-                        )
-                    } catch (error) {
-                        functions.logger.error(
-                            `Error sending notification to follower ${followerId}:`,
-                            error
-                        )
                     }
                 }
             }
@@ -406,12 +480,29 @@ export const onPostDeleted = functions.firestore
         try {
             const userRef = admin.firestore().collection('users').doc(authorId)
 
+            // Subtract contributionEarned from author
+            const contributionEarned = postData.contributionEarned || 0
+            if (contributionEarned > 0) {
+                await userRef.update({
+                    contribution: admin.firestore.FieldValue.increment(-contributionEarned),
+                })
+                functions.logger.info(`Subtracted ${contributionEarned} contribution from user ${authorId}`)
+            }
+
             // Decrement totalCatches if this was a catch
             if (postData.parentPostId && !postData.isOriginal) {
                 await userRef.update({
                     totalCatches: admin.firestore.FieldValue.increment(-1),
                 })
                 functions.logger.info(`Decremented totalCatches for user ${authorId}`)
+            }
+
+            // Decrement totalPosts if this was an original post
+            if (postData.isOriginal) {
+                await userRef.update({
+                    totalPosts: admin.firestore.FieldValue.increment(-1),
+                })
+                functions.logger.info(`Decremented totalPosts for user ${authorId}`)
             }
 
             // Remove post from any lists that contain it

@@ -59,6 +59,8 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     const insets = useSafeAreaInsets()
     const [username, setUsername] = useState<string>('')
     const [totalCatches, setTotalCatches] = useState<number>(0)
+    const [contribution, setContribution] = useState<number>(0)
+    const [totalPosts, setTotalPosts] = useState<number>(0)
     const [followerCount, setFollowerCount] = useState<number>(0)
     const [followingCount, setFollowingCount] = useState<number>(0)
     const [isFollowing, setIsFollowing] = useState<boolean>(false)
@@ -100,6 +102,8 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                 const userData = userDoc.data()
                 setUsername(userData.username || 'Unknown')
                 setTotalCatches(userData.totalCatches || 0)
+                setContribution(userData.contribution || 0)
+                setTotalPosts(userData.totalPosts || 0)
                 setFollowerCount(userData.followers?.length || 0)
                 setFollowingCount(userData.following?.length || 0)
 
@@ -618,22 +622,17 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             <View style={styles.statsContainer}>
                                 <Text style={styles.username}>@{username}</Text>
                                 <View style={styles.statRow}>
-                                    <View style={styles.statItem}>
+                                    <TouchableOpacity
+                                        style={styles.statItem}
+                                        onPress={() => Alert.alert('Breakdown', `${totalPosts} Posts\n${totalCatches} Catches`)}
+                                    >
                                         <Text style={styles.statNumber}>
-                                            {posts.length}
+                                            {contribution}
                                         </Text>
                                         <Text style={styles.statLabel}>
-                                            Posts
+                                            Contribution
                                         </Text>
-                                    </View>
-                                    <View style={styles.statItem}>
-                                        <Text style={styles.statNumber}>
-                                            {totalCatches}
-                                        </Text>
-                                        <Text style={styles.statLabel}>
-                                            Catches
-                                        </Text>
-                                    </View>
+                                    </TouchableOpacity>
                                     <TouchableOpacity
                                         style={styles.statItem}
                                         onPress={() => handleShowFollowList('followers')}

@@ -35,6 +35,10 @@ interface AuthContextType {
     logout: () => Promise<void>
     dataContributionEnabled: boolean
     toggleDataContribution: (enabled: boolean) => Promise<void>
+    // Contribution stats
+    contribution: number
+    totalPosts: number
+    totalCatches: number
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -45,6 +49,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
     const [dataContributionEnabled, setDataContributionEnabled] = useState(false)
+    const [contribution, setContribution] = useState(0)
+    const [totalPosts, setTotalPosts] = useState(0)
+    const [totalCatches, setTotalCatches] = useState(0)
 
     useEffect(() => {
         // Configure Google Sign-In
@@ -62,12 +69,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     if (userDoc.exists()) {
                         const data = userDoc.data()
                         setDataContributionEnabled(data.dataContributionEnabled || false)
+                        setContribution(data.contribution || 0)
+                        setTotalPosts(data.totalPosts || 0)
+                        setTotalCatches(data.totalCatches || 0)
                     }
                 } catch (error) {
                     console.error('Error fetching user settings:', error)
                 }
             } else {
                 setDataContributionEnabled(false)
+                setContribution(0)
+                setTotalPosts(0)
+                setTotalCatches(0)
             }
             setLoading(false)
         })
@@ -108,6 +121,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 username: username,
                 email: email,
                 totalCatches: 0,
+                totalPosts: 0,
+                contribution: 0,
                 followers: [],
                 following: [],
                 pushToken: null,
@@ -199,7 +214,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             loginWithGoogle,
             logout,
             dataContributionEnabled,
-            toggleDataContribution
+            toggleDataContribution,
+            contribution,
+            totalPosts,
+            totalCatches,
         }}>
             {children}
         </AuthContext.Provider>
