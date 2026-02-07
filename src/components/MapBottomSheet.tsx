@@ -2,7 +2,7 @@ import { useAuth } from '@/context/AuthContext';
 import { colors } from '@/theme/colors';
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import React, { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import CompactPostCard from './CompactPostCard';
 
 interface MapBottomSheetProps {
@@ -11,6 +11,9 @@ interface MapBottomSheetProps {
     onPostPress: (postId: string) => void;
     onJumpToLocation: (latitude: number, longitude: number) => void;
     selectedPostId?: string | null;
+    title?: string;
+    onClose?: () => void;
+    isListMode?: boolean;
 }
 
 export default function MapBottomSheet({
@@ -19,6 +22,9 @@ export default function MapBottomSheet({
     onPostPress,
     onJumpToLocation,
     selectedPostId,
+    title,
+    onClose,
+    isListMode,
 }: MapBottomSheetProps) {
     const { user } = useAuth();
     const bottomSheetRef = useRef<BottomSheet>(null);
@@ -43,12 +49,23 @@ export default function MapBottomSheet({
             <View style={styles.handleContainer}>
                 <View style={styles.handle} />
             </View>
-            <View style={styles.countContainer}>
-                <Text style={styles.countIcon}>📍</Text>
-                <Text style={styles.countText}>
-                    {loading ? 'Loading...' : `${posts.length} shot${posts.length !== 1 ? 's' : ''} in this area`}
-                </Text>
-            </View>
+            {isListMode ? (
+                <View style={styles.listHeaderContainer}>
+                    <Text style={styles.listTitle} numberOfLines={1}>{title || 'List'}</Text>
+                    {onClose && (
+                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                            <Text style={styles.closeButtonText}>Close</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            ) : (
+                <View style={styles.countContainer}>
+                    <Text style={styles.countIcon}>📍</Text>
+                    <Text style={styles.countText}>
+                        {loading ? 'Loading...' : `${posts.length} shot${posts.length !== 1 ? 's' : ''} in this area`}
+                    </Text>
+                </View>
+            )}
         </View>
     );
 
@@ -161,5 +178,30 @@ const styles = StyleSheet.create({
     emptySubtext: {
         fontSize: 14,
         color: '#CCCCCC', // Light gray text
+    },
+    listHeaderContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingBottom: 4,
+    },
+    listTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        flex: 1,
+    },
+    closeButton: {
+        padding: 4,
+        backgroundColor: colors.card,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    closeButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.primary,
     },
 });

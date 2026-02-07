@@ -1,10 +1,7 @@
 import { FilterType } from '@/components/FilterPills'
-import ListCarousel from '@/components/ListCarousel'
-import ListModal from '@/components/ListModal'
 import MapBottomSheet from '@/components/MapBottomSheet'
 import MapHUD from '@/components/MapHUD'
 import ThreadModal from '@/components/ThreadModal'
-import ViewToggle from '@/components/ViewToggle'
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
 import { db } from '@/services/firebase'
@@ -74,7 +71,7 @@ export default function MapScreen() {
     const [activeList, setActiveList] = useState<any | null>(null)
     const [listPosts, setListPosts] = useState<Post[]>([])
     const [isListMode, setIsListMode] = useState(false)
-    const [showListModal, setShowListModal] = useState(false)
+
 
     // Thread modal state
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
@@ -233,6 +230,13 @@ export default function MapScreen() {
         }
     }
 
+    // Reload posts when exiting list mode
+    useEffect(() => {
+        if (!isListMode && !locationLoading) {
+            loadVisiblePosts()
+        }
+    }, [isListMode, locationLoading])
+
     const fetchPostForLocate = async (id: string) => {
         try {
             setLoadingPosts(true)
@@ -288,11 +292,6 @@ export default function MapScreen() {
         setIsListMode(false)
         setActiveList(null)
         setListPosts([])
-        setActiveList(null)
-        setListPosts([])
-        // setViewMode('map')
-        // setViewMode('map')
-        loadVisiblePosts() // Reload normal posts
     }
 
     // Apply sorting based on active filter
@@ -449,7 +448,6 @@ export default function MapScreen() {
             })
         }
     }
-
     // Handle post press from bottom sheet
     const handlePostPress = (postId: string) => {
         const post = sortedVisiblePosts.find((p) => p.id === postId)
@@ -461,16 +459,7 @@ export default function MapScreen() {
         }
     }
 
-    const handleCarouselSnap = (post: Post) => {
-        if (post.latitude && post.longitude && cameraRef.current) {
-            setSelectedPostId(post.id)
-            cameraRef.current.setCamera({
-                centerCoordinate: [post.longitude, post.latitude],
-                zoomLevel: 14,
-                animationDuration: 500,
-            })
-        }
-    }
+
 
     // Convert posts to GeoJSON for Mapbox
     const getGeoJSONData = () => {
@@ -610,56 +599,19 @@ export default function MapScreen() {
 
     return (
         <View style={styles.container}>
-            {/* Compact Header */}
-            {/* Compact Header - REMOVED for full map experience */}
-            {/* If we want a header, it should be an absolute overlay or standard stack header */}
 
-            {isListMode && (
-                <View style={[styles.header, { paddingTop: insets.top }]}>
-                    <View style={styles.headerTitleContainer}>
-                        <Text style={styles.headerTitle}>{activeList?.name || 'List'}</Text>
-                    </View>
-                    <TouchableOpacity
-                        onPress={handleListClose}
-                        style={{ position: 'absolute', left: 16, bottom: 12 + 8, zIndex: 10 }}
-                    >
-                        <Ionicons name="close" size={24} color={colors.textPrimary} />
-                    </TouchableOpacity>
-
-                    {activeList?.creatorId === user?.uid && (
-                        <TouchableOpacity
-                            onPress={() => router.push(`/create-list?listId=${activeList.id}` as any)}
-                            style={{ position: 'absolute', right: 16, bottom: 12 + 8, zIndex: 10 }}
-                        >
-                            <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Edit</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
-            )}
-
-            {/* View Toggle - Bottom Center */}
-            {isListMode && (
-                <ViewToggle
-                    activeMode={showListModal ? 'list' : 'map'}
-                    onToggle={(mode) => {
-                        setShowListModal(mode === 'list')
-                    }}
-                    bottomOffset={12}
-                />
-            )}
 
             {/* Map HUD (Search + Filters) */}
-            {!isListMode && (
-                <MapHUD
-                    onLocationSelect={handleLocationSelect}
-                    userLocation={userLocation ? {
-                        latitude: userLocation.coords.latitude,
-                        longitude: userLocation.coords.longitude
-                    } : null}
-                    activeFilter={activeFilter}
-                    onFilterChange={handleFilterChange}
-                />
-            )}
+            <MapHUD
+                onLocationSelect={handleLocationSelect}
+                userLocation={userLocation ? {
+                    latitude: userLocation.coords.latitude,
+                    longitude: userLocation.coords.longitude
+                } : null}
+                activeFilter={activeFilter}
+                onFilterChange={handleFilterChange}
+            />
+
             {locationLoading ? (
                 <View style={styles.map}>
                     <View style={styles.locationLoadingOverlay}>
@@ -779,7 +731,7 @@ export default function MapScreen() {
             )}
 
             {/* Center on location button - Below Compass */}
-            {userLocation && !isListMode && (
+            {userLocation && (
                 <TouchableOpacity
                     // Compass at ~180 + ~40 height = 220 + gap = 240
                     style={[styles.centerButton, { top: insets.top + 240 }]}
@@ -791,28 +743,18 @@ export default function MapScreen() {
             )}
 
 
-            {/* Bottom Sheet or List Carousel */}
+            {/* Bottom Sheet */}
             {!locationLoading && (
-                isListMode ? (
-                    <ListCarousel
-                        posts={listPosts}
-                        onPostSnap={handleCarouselSnap}
-                        onPostPress={(post) => {
-                            setSelectedPost(post)
-                            setShowThreadModal(true)
-                        }}
-                        selectedPostId={selectedPostId}
-                        bottomOffset={insets.bottom + 60}
-                    />
-                ) : (
-                    <MapBottomSheet
-                        posts={sortedVisiblePosts}
-                        loading={loadingPosts}
-                        onPostPress={handlePostPress}
-                        onJumpToLocation={handleJumpToLocation}
-                        selectedPostId={selectedPostId}
-                    />
-                )
+                <MapBottomSheet
+                    posts={sortedVisiblePosts}
+                    loading={loadingPosts}
+                    onPostPress={handlePostPress}
+                    onJumpToLocation={handleJumpToLocation}
+                    selectedPostId={selectedPostId}
+                    title={activeList?.name}
+                    onClose={handleListClose}
+                    isListMode={isListMode}
+                />
             )}
 
             {/* Thread Modal */}
@@ -824,18 +766,7 @@ export default function MapScreen() {
                 onPostDelete={handlePostDelete}
             />
 
-            {/* List Modal */}
-            <ListModal
-                visible={showListModal}
-                onClose={() => setShowListModal(false)}
-                list={activeList}
-                posts={listPosts}
-                loading={loadingPosts}
-                onRemovePost={handleRemovePostFromList}
-                onDeleteList={handleDeleteList}
-                onRefresh={() => activeList?.id && fetchListDetails(activeList.id)}
-                refreshing={loadingPosts}
-            />
+
         </View >
     )
 }

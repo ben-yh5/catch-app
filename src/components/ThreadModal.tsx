@@ -827,10 +827,9 @@ export default function ThreadModal({
             {currentPost && (
                 <ListSelectionBottomSheet
                     visible={showAddToListModal}
+                    postId={currentPost.id}
                     onClose={() => setShowAddToListModal(false)}
-                    initialSelectedIds={new Set(isSaved ? ['default'] : [])}
                     onSelectionChange={(selectedIds) => {
-                        setShowAddToListModal(false)
                         setIsSaved(selectedIds.size > 0)
                     }}
                 />
