@@ -5,6 +5,7 @@ import { usePost } from '@/context/PostContext'
 import { useDeviceSensors } from '@/hooks/useDeviceSensors'
 import { db, storage } from '@/services/firebase'
 import { colors } from '@/theme/colors'
+import { getPostsInRadius } from '@/utils/geospatialQueries'
 import { cropToSquare } from '@/utils/imageProcessing'
 import { checkBlur } from '@/utils/imageValidation'
 import { addPostToList } from '@/utils/listUtils'
@@ -89,20 +90,48 @@ export default function PostScreen() {
                 }
             }
 
-            // detailed hanging
-            const locationPromise = Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced,
-            })
+            // 1. Try last known location first for speed
+            const lastKnown = await Location.getLastKnownPositionAsync({})
+            if (lastKnown) {
+                const now = Date.now()
+                // If reasonably fresh (e.g., < 60 seconds), use it immediately
+                if (now - lastKnown.timestamp < 60000) {
+                    console.log('[PostScreen] Using fresh last known location')
+                    return {
+                        latitude: lastKnown.coords.latitude,
+                        longitude: lastKnown.coords.longitude,
+                    }
+                }
+            }
 
-            const timeoutPromise = new Promise<Location.LocationObject>((_, reject) => {
-                setTimeout(() => reject(new Error('Location request timed out')), 10000)
-            })
+            // 2. Fetch fresh location with timeout
+            try {
+                const locationPromise = Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                })
 
-            const location = await Promise.race([locationPromise, timeoutPromise])
+                const timeoutPromise = new Promise<Location.LocationObject>((_, reject) => {
+                    setTimeout(() => reject(new Error('Location request timed out')), 10000)
+                })
 
-            return {
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
+                const location = await Promise.race([locationPromise, timeoutPromise])
+                console.log('[PostScreen] Got fresh location')
+                return {
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                }
+            } catch (error) {
+                console.warn('[PostScreen] Error getting fresh location:', error)
+
+                // 3. Fallback to last known if available (even if stale)
+                if (lastKnown) {
+                    console.log('[PostScreen] Falling back to stale last known location')
+                    return {
+                        latitude: lastKnown.coords.latitude,
+                        longitude: lastKnown.coords.longitude,
+                    }
+                }
+                throw error
             }
         } catch (error) {
             console.error('Error getting device location:', error)
@@ -254,7 +283,38 @@ export default function PostScreen() {
                 }
             }
 
-            Alert.alert('Success!', 'Your post has been created! Contribution points incoming.')
+            // Calculate expected points based on nearby posts
+            // This is a client-side estimate matching server logic
+            let expectedPoints = 10 // PIONEER
+            let type = 'Pioneer'
+
+            // We need to check if there are nearby posts
+            // Since we can't easily query geohashes here without bringing in more logic,
+            // we'll rely on the server validation for the exact points.
+            // But for immediate feedback, we can optimistically assume Pioneer unless we know otherwise.
+            // Actually, we can't easily know without querying.
+            // Let's just say "Contribution points incoming" but make it specific to the action.
+
+            // Edit: Requirement is "show how many points are awarded".
+            // Implementation Plan says: "Perform client-side check using getPostsInRadius(50) to estimate points."
+
+            // Let's do that check
+            const nearbyPosts = await getPostsInRadius({
+                centerLat: location.latitude,
+                centerLng: location.longitude,
+                radiusInMeters: 50
+            })
+
+            const isPioneer = nearbyPosts.length === 0
+            const points = isPioneer ? 10 : 2
+            const badge = isPioneer ? 'Pioneer' : 'Nearby'
+
+            const alertTitle = isPioneer ? 'Pioneer Bonus! (+10 XP)' : 'Shared! (+2 XP)'
+            const alertMsg = isPioneer
+                ? 'You mapped a new area! You are the first to post here.'
+                : 'You added to the map! Nice shot.'
+
+            Alert.alert(alertTitle, alertMsg)
 
             // Reset state
             setCapturedImage(null)

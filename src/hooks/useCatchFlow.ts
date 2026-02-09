@@ -242,7 +242,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
                 uploadTrainingPair(rootPost.id, docRef.id, rootPost.photoURL, catchImageUri, originalMeta, catchMeta, 'POSITIVE', user.uid);
             }
 
-            Alert.alert('Success!', 'Location caught! +14 Contribution');
+            Alert.alert('Success!', 'Location caught! +14 Contribution (+14 XP)')
             onSuccess({ id: docRef.id, ...postData } as Post);
             handlePreviewCancel();
 

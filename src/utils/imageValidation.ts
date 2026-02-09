@@ -83,7 +83,7 @@ export const checkBrightness = async (uri: string, threshold: number = 30): Prom
  * @param uri - Image URI
  * @param threshold - Variance threshold. Below this = blurry. Default 2000.
  */
-export const checkBlur = async (uri: string, threshold: number = 2000): Promise<boolean> => {
+export const checkBlur = async (uri: string, threshold: number = 1000): Promise<boolean> => {
     try {
         const SIZE = 256;
         const { data, width, height } = await decodeImage(uri, SIZE, SIZE);

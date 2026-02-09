@@ -341,10 +341,24 @@ export const onPostCreated = functions.firestore
                         const royalty = isPioneer ? CONTRIBUTION.ROYALTY_PIONEER : CONTRIBUTION.ROYALTY_NEARBY
 
                         if (rootAuthorId && rootAuthorId !== authorId) {
+                            // AWARD ROYALTY
                             await db.collection('users').doc(rootAuthorId).update({
                                 contribution: admin.firestore.FieldValue.increment(royalty),
                             })
                             functions.logger.info(`Awarded ${royalty} royalty to original poster ${rootAuthorId}`)
+
+                            // CREATE NOTIFICATION
+                            // Check user settings first (optional optimization, but good practice to check if we should even create the doc)
+                            // For now, we'll create the doc, and the client can decide whether to show a badge or push notification based on settings
+                            // Actually, let's just create it. Settings usually control PUSH, not in-app inbox.
+                            await db.collection('users').doc(rootAuthorId).collection('notifications').add({
+                                type: 'royalty',
+                                amount: royalty,
+                                fromUserId: authorId,
+                                postId: rootPostId,
+                                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                                read: false,
+                            })
                         }
 
                         // Increment contributionEarned on root post
@@ -687,6 +701,18 @@ export const onUserFollowed = functions.firestore
 
         if (newFollowers.length === 0) {
             return
+        }
+
+        const db = admin.firestore()
+
+        // Create notification docs for each new follower
+        for (const followerId of newFollowers) {
+            await db.collection('users').doc(userId).collection('notifications').add({
+                type: 'follow',
+                fromUserId: followerId,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                read: false,
+            })
         }
 
         const pushToken = afterData.pushToken

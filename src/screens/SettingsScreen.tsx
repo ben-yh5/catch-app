@@ -7,7 +7,13 @@ import { Alert, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export default function SettingsScreen() {
-    const { logout, dataContributionEnabled, toggleDataContribution } = useAuth()
+    const {
+        logout,
+        dataContributionEnabled,
+        toggleDataContribution,
+        notificationSettings,
+        toggleNotificationSetting
+    } = useAuth()
     const router = useRouter()
     const insets = useSafeAreaInsets()
 
@@ -58,6 +64,41 @@ export default function SettingsScreen() {
                         <Switch
                             value={dataContributionEnabled}
                             onValueChange={toggleDataContribution}
+                            trackColor={{ false: colors.border, true: colors.primary }}
+                            thumbColor={colors.inverseTextPrimary}
+                        />
+                    </View>
+                </View>
+
+                {/* Notifications Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Notifications</Text>
+
+                    <View style={styles.settingItem}>
+                        <View style={styles.settingTextContainer}>
+                            <Text style={styles.settingLabel}>New Catches</Text>
+                            <Text style={styles.settingDescription}>
+                                Get notified when someone catches your shots and you earn royalties.
+                            </Text>
+                        </View>
+                        <Switch
+                            value={notificationSettings.notifyOnCatch}
+                            onValueChange={(val) => toggleNotificationSetting('notifyOnCatch', val)}
+                            trackColor={{ false: colors.border, true: colors.primary }}
+                            thumbColor={colors.inverseTextPrimary}
+                        />
+                    </View>
+
+                    <View style={[styles.settingItem, { marginTop: 12 }]}>
+                        <View style={styles.settingTextContainer}>
+                            <Text style={styles.settingLabel}>New Followers</Text>
+                            <Text style={styles.settingDescription}>
+                                Get notified when someone follows you.
+                            </Text>
+                        </View>
+                        <Switch
+                            value={notificationSettings.notifyOnFollow}
+                            onValueChange={(val) => toggleNotificationSetting('notifyOnFollow', val)}
                             trackColor={{ false: colors.border, true: colors.primary }}
                             thumbColor={colors.inverseTextPrimary}
                         />

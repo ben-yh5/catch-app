@@ -39,6 +39,17 @@ interface AuthContextType {
     contribution: number
     totalPosts: number
     totalCatches: number
+
+    // Notifications
+    notifications: any[] // Using any to avoid circular deps or dup types for now, will fix
+    unreadCount: number
+    notificationSettings: {
+        notifyOnCatch: boolean
+        notifyOnFollow: boolean
+    }
+    toggleNotificationSetting: (type: 'notifyOnCatch' | 'notifyOnFollow', enabled: boolean) => Promise<void>
+    markNotificationAsRead: (id: string) => Promise<void>
+    markAllNotificationsAsRead: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -52,6 +63,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [contribution, setContribution] = useState(0)
     const [totalPosts, setTotalPosts] = useState(0)
     const [totalCatches, setTotalCatches] = useState(0)
+
+    // Notification State
+    const [notifications, setNotifications] = useState<any[]>([])
+    const [unreadCount, setUnreadCount] = useState(0)
+    const [notificationSettings, setNotificationSettings] = useState({
+        notifyOnCatch: true,
+        notifyOnFollow: true
+    })
 
     useEffect(() => {
         // Configure Google Sign-In
@@ -72,6 +91,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                         setContribution(data.contribution || 0)
                         setTotalPosts(data.totalPosts || 0)
                         setTotalCatches(data.totalCatches || 0)
+
+                        // Load notification settings
+                        if (data.notificationSettings) {
+                            setNotificationSettings({
+                                notifyOnCatch: data.notificationSettings.notifyOnCatch ?? true,
+                                notifyOnFollow: data.notificationSettings.notifyOnFollow ?? true
+                            })
+                        }
                     }
                 } catch (error) {
                     console.error('Error fetching user settings:', error)
@@ -81,12 +108,98 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 setContribution(0)
                 setTotalPosts(0)
                 setTotalCatches(0)
+                setNotifications([])
+                setUnreadCount(0)
             }
             setLoading(false)
         })
 
         return unsubscribe
     }, [])
+
+    // Subscribe to notifications when user is logged in
+    useEffect(() => {
+        if (!user) return
+
+        import('firebase/firestore').then(({ collection, query, orderBy, onSnapshot, limit }) => {
+            const q = query(
+                collection(db, 'users', user.uid, 'notifications'),
+                orderBy('createdAt', 'desc'),
+                limit(50)
+            )
+
+            const unsubscribeNotifications = onSnapshot(q, (snapshot) => {
+                const newNotifications = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }))
+                setNotifications(newNotifications)
+
+                // Update unread count
+                const unread = newNotifications.filter((n: any) => !n.read).length
+                setUnreadCount(unread)
+            }, (error) => {
+                console.error("Error listening to notifications:", error)
+            })
+
+            return () => unsubscribeNotifications()
+        })
+    }, [user])
+
+    const toggleNotificationSetting = async (type: 'notifyOnCatch' | 'notifyOnFollow', enabled: boolean) => {
+        if (!user) return
+
+        const newSettings = { ...notificationSettings, [type]: enabled }
+        setNotificationSettings(newSettings)
+
+        try {
+            await updateDoc(doc(db, 'users', user.uid), {
+                notificationSettings: newSettings
+            })
+        } catch (error) {
+            console.error("Error updating notification settings:", error)
+            // Revert on error
+            setNotificationSettings(notificationSettings)
+        }
+    }
+
+    const markNotificationAsRead = async (id: string) => {
+        if (!user) return
+
+        try {
+            await updateDoc(doc(db, 'users', user.uid, 'notifications', id), {
+                read: true
+            })
+        } catch (error) {
+            console.error("Error marking notification as read:", error)
+        }
+    }
+
+    const markAllNotificationsAsRead = async () => {
+        if (!user) return
+
+        // This should potentialy be a batch update or cloud function for efficiency
+        // For now, client-side loop is okay for small numbers
+        const unreadNotifications = notifications.filter((n: any) => !n.read)
+
+        if (unreadNotifications.length === 0) return
+
+        // Just mark the visible ones for now
+        import('firebase/firestore').then(async ({ writeBatch, doc }) => {
+            const batch = writeBatch(db)
+
+            unreadNotifications.forEach((n: any) => {
+                const ref = doc(db, 'users', user.uid, 'notifications', n.id)
+                batch.update(ref, { read: true })
+            })
+
+            try {
+                await batch.commit()
+            } catch (error) {
+                console.error("Error batch marking read:", error)
+            }
+        })
+    }
 
     /**
      * Sign in existing user with email and password
@@ -218,6 +331,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             contribution,
             totalPosts,
             totalCatches,
+            notifications,
+            unreadCount,
+            notificationSettings,
+            toggleNotificationSetting,
+            markNotificationAsRead,
+            markAllNotificationsAsRead,
         }}>
             {children}
         </AuthContext.Provider>
