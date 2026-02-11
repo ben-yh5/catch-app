@@ -315,6 +315,7 @@ export const onPostCreated = functions.firestore
         }
 
         const db = admin.firestore()
+        functions.logger.info(`[onPostCreated] Triggered for post ${postId} by author ${authorId}`)
 
         try {
             const userRef = db.collection('users').doc(authorId)
@@ -351,14 +352,19 @@ export const onPostCreated = functions.firestore
                             // Check user settings first (optional optimization, but good practice to check if we should even create the doc)
                             // For now, we'll create the doc, and the client can decide whether to show a badge or push notification based on settings
                             // Actually, let's just create it. Settings usually control PUSH, not in-app inbox.
-                            await db.collection('users').doc(rootAuthorId).collection('notifications').add({
-                                type: 'royalty',
-                                amount: royalty,
-                                fromUserId: authorId,
-                                postId: rootPostId,
-                                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                                read: false,
-                            })
+                            try {
+                                await db.collection('users').doc(rootAuthorId).collection('notifications').add({
+                                    type: 'royalty',
+                                    amount: royalty,
+                                    fromUserId: authorId,
+                                    postId: rootPostId,
+                                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                                    read: false,
+                                })
+                                functions.logger.info(`[onPostCreated] Created royalty notification for ${rootAuthorId}`)
+                            } catch (e) {
+                                functions.logger.error(`[onPostCreated] Failed to create royalty notification for ${rootAuthorId}`, e)
+                            }
                         }
 
                         // Increment contributionEarned on root post
@@ -441,6 +447,17 @@ export const onPostCreated = functions.firestore
 
                     for (const followerId of followers) {
                         try {
+                            // Create in-app notification
+                            functions.logger.info(`[onPostCreated] Creating new_post notification for follower ${followerId}`)
+                            await db.collection('users').doc(followerId).collection('notifications').add({
+                                type: 'new_post',
+                                fromUserId: authorId,
+                                postId: postId,
+                                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                                read: false,
+                            })
+                            functions.logger.info(`[onPostCreated] Successfully created notification for ${followerId}`)
+
                             const followerDoc = await db.collection('users').doc(followerId).get()
                             if (!followerDoc.exists) continue
 
@@ -707,12 +724,18 @@ export const onUserFollowed = functions.firestore
 
         // Create notification docs for each new follower
         for (const followerId of newFollowers) {
-            await db.collection('users').doc(userId).collection('notifications').add({
-                type: 'follow',
-                fromUserId: followerId,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                read: false,
-            })
+            try {
+                functions.logger.info(`[onUserFollowed] Creating follow notification for user ${userId} from ${followerId}`)
+                await db.collection('users').doc(userId).collection('notifications').add({
+                    type: 'follow',
+                    fromUserId: followerId,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    read: false,
+                })
+                functions.logger.info(`[onUserFollowed] Successfully created follow notification`)
+            } catch (e) {
+                functions.logger.error(`[onUserFollowed] Failed to create follow notification`, e)
+            }
         }
 
         const pushToken = afterData.pushToken

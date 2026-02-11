@@ -15,13 +15,17 @@ service cloud.firestore {
       // Users can update their own document
       allow update: if request.auth != null && request.auth.uid == userId;
 
+      // Allow authenticated users to update the followers list (to follow/unfollow)
+      allow update: if request.auth != null &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers']);
+
       // Allow update: if request.auth != null &&
       //                  request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers', 'following']);
       
       // Notifications subcollection
-      match /notifications/{notificationId} {
-        // Users can read and delete their own notifications
-        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow get: if request.auth != null && request.auth.uid == userId;
+        allow list: if request.auth != null && request.auth.uid == userId;
+        allow delete: if request.auth != null && request.auth.uid == userId;
         // Only Cloud Functions (admin SDK) creates notifications, but in case client needs to mark read (update)
         allow update: if request.auth != null && request.auth.uid == userId;
       }

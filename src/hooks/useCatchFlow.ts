@@ -40,6 +40,8 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
     const [uploading, setUploading] = useState(false);
     const [fetchingLocation, setFetchingLocation] = useState(false);
 
+    const [statusMessage, setStatusMessage] = useState<string>('');
+
     const {
         heading,
         pitch,
@@ -99,6 +101,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
         setCatchPreviewMode(false);
         setCatchImageUri(null);
         setCatchLocation(null);
+        setStatusMessage('');
         resetCapture();
     };
 
@@ -109,19 +112,24 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
         }
 
         setUploading(true);
+        setStatusMessage('Verifying location...');
+
         try {
             // 1. Geography validation
             const validation = await validateCatch(rootPost.id, catchLocation.latitude, catchLocation.longitude);
             if (!validation.isValid) {
                 setUploading(false);
+                setStatusMessage('');
                 Alert.alert('Too Far Away', `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m.`);
                 return;
             }
 
             // 2. Quality validation (Brightness & Blur)
+            setStatusMessage('Checking image quality...');
             const isBrightEnough = await checkBrightness(catchImageUri);
             if (!isBrightEnough) {
                 setUploading(false);
+                setStatusMessage('');
                 Alert.alert('Too Dark', 'Your photo is too dark. Please try again with better lighting.');
                 return;
             }
@@ -129,11 +137,13 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
             const isSharpEnough = await checkBlur(catchImageUri);
             if (!isSharpEnough) {
                 setUploading(false);
+                setStatusMessage('');
                 Alert.alert('Too Blurry', 'Your photo is too blurry. Please steady your hand and try again.');
                 return;
             }
 
             // 3. Orientation validation
+            setStatusMessage('Verifying angle...');
             const HEADING_THRESHOLD = 75;
             const PITCH_THRESHOLD = 75;
 
@@ -142,6 +152,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
                 if (headingDiff > 180) headingDiff = 360 - headingDiff;
                 if (headingDiff > HEADING_THRESHOLD) {
                     setUploading(false);
+                    setStatusMessage('');
                     Alert.alert('Wrong Direction', `Face the original view (off by ${Math.round(headingDiff)}°).`);
                     return;
                 }
@@ -151,18 +162,21 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
                 const pitchDiff = Math.abs(validation.pitch - capturedPitch);
                 if (pitchDiff > PITCH_THRESHOLD) {
                     setUploading(false);
+                    setStatusMessage('');
                     Alert.alert('Wrong Angle', `Try to match the original angle (off by ${Math.round(pitchDiff)}°).`);
                     return;
                 }
             }
 
             // 4. Visual Verification ("The Judge")
+            setStatusMessage('Analyzing view similarity...');
             try {
                 const similarity = await verifyViewSimilarity(rootPost.photoURL, catchImageUri);
                 const SIMILARITY_THRESHOLD = 0.65; // Adjusted based on MobileNetV2 testing (Secure: 0.60-0.70)
 
                 if (similarity < SIMILARITY_THRESHOLD) {
                     setUploading(false);
+                    setStatusMessage('');
                     Alert.alert(
                         'Match Failed',
                         'Your shot doesn\'t visually match the original view well enough. Try to align it more closely!'
@@ -176,6 +190,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
             }
 
             // 5. Upload & Create Post
+            setStatusMessage('Uploading catch...');
             const userDoc = await getDoc(doc(db, 'users', user.uid));
             const username = userDoc.exists() ? userDoc.data().username : 'Anonymous';
 
@@ -244,11 +259,13 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
 
             Alert.alert('Success!', 'Location caught! +14 Contribution (+14 XP)')
             onSuccess({ id: docRef.id, ...postData } as Post);
+            setStatusMessage('');
             handlePreviewCancel();
 
         } catch (error: any) {
             console.error('Error in catch confirm:', error);
             setUploading(false);
+            setStatusMessage('');
             Alert.alert('Error', `Failed: ${error.message}`);
         }
     };
@@ -259,6 +276,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
         catchImageUri,
         fetchingLocation,
         uploading,
+        statusMessage,
         heading,
         handleCatchPress,
         handlePhotoTaken,

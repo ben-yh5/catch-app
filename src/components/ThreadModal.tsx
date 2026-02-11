@@ -108,6 +108,7 @@ export default function ThreadModal({
         catchImageUri,
         fetchingLocation,
         uploading,
+        statusMessage,
         heading,
         handleCatchPress,
         handlePhotoTaken,
@@ -310,30 +311,36 @@ export default function ThreadModal({
             const { status } = await Location.requestForegroundPermissionsAsync()
             if (status === 'granted') {
                 // detailed hanging
-                const locationPromise = Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Balanced,
-                })
+                let userLoc: Location.LocationObject | null = null;
+                try {
+                    const locationPromise = Location.getCurrentPositionAsync({
+                        accuracy: Location.Accuracy.Balanced,
+                    })
+                    const timeoutPromise = new Promise<Location.LocationObject>((_, reject) => {
+                        setTimeout(() => reject(new Error('Location request timed out')), 5000)
+                    })
+                    userLoc = await Promise.race([locationPromise, timeoutPromise])
+                } catch (e) {
+                    console.warn('Current location timed out, trying last known...')
+                    userLoc = await Location.getLastKnownPositionAsync();
+                }
 
-                const timeoutPromise = new Promise<Location.LocationObject>((_, reject) => {
-                    setTimeout(() => reject(new Error('Location request timed out')), 10000)
-                })
+                if (userLoc) {
+                    // Calculate distance
+                    const dist = calculateDistance(
+                        userLoc.coords.latitude,
+                        userLoc.coords.longitude,
+                        locationData.latitude,
+                        locationData.longitude
+                    )
+                    setDistance(Math.round(dist))
+                }
 
-                const userLoc = await Promise.race([locationPromise, timeoutPromise])
-
-                // Calculate distance
-                const dist = calculateDistance(
-                    userLoc.coords.latitude,
-                    userLoc.coords.longitude,
-                    locationData.latitude,
-                    locationData.longitude
-                )
-                setDistance(Math.round(dist))
+                // Ensure the post has hasLocation=true so the button shows up
+                setThreadPosts(current => current.map((p, i) =>
+                    i === 0 ? { ...p, hasLocation: true } : p
+                ))
             }
-
-            // Ensure the post has hasLocation=true so the button shows up
-            setThreadPosts(current => current.map((p, i) =>
-                i === 0 ? { ...p, hasLocation: true } : p
-            ))
         } catch (error) {
             console.error('Error fetching post location:', error)
             setPostLocation(null)
@@ -430,10 +437,25 @@ export default function ThreadModal({
             // Delete the post
             await deleteDoc(doc(db, 'posts', currentPost.id))
 
-            // Update local state
+            // Update local state and catch count if needed
+            const isCatch = !currentPost.isOriginal && currentPost.rootPostId
             const newThreadPosts = threadPosts.filter(
                 (p) => p.id !== currentPost.id
             )
+
+            if (isCatch && newThreadPosts.length > 0) {
+                // Update root post catch count
+                newThreadPosts[0] = {
+                    ...newThreadPosts[0],
+                    catchCount: Math.max(0, (newThreadPosts[0].catchCount || 0) - 1)
+                }
+
+                // Update parent component too
+                onPostUpdate?.({
+                    ...newThreadPosts[0]
+                })
+            }
+
             setThreadPosts(newThreadPosts)
 
             // Adjust current index if needed
@@ -556,7 +578,7 @@ export default function ThreadModal({
                     onCancel={handlePreviewCancel}
                     mode="catch"
                     loading={uploading}
-                    loadingText="Creating catch..."
+                    loadingText={statusMessage || "Creating catch..."}
                     originalPhotoUrl={rootPost?.photoURL}
                     hasLocation={true}
                     loadingLocation={fetchingLocation}

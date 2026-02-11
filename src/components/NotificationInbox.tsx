@@ -48,6 +48,7 @@ export default function NotificationInbox({
     }, [visible, notifications])
 
     const hydrateNotifications = async () => {
+        console.log(`[NotificationInbox] Hydrating ${notifications.length} notifications`)
         setLoading(true)
         const hydrated = await Promise.all(
             notifications.map(async (n): Promise<Notification> => {
@@ -84,6 +85,7 @@ export default function NotificationInbox({
             })
         )
         setHydratedNotifications(hydrated)
+        console.log(`[NotificationInbox] Finished hydrating. Count: ${hydrated.length}`)
         setLoading(false)
     }
 
@@ -135,6 +137,8 @@ export default function NotificationInbox({
                     </TouchableOpacity>
                 </View>
 
+
+
                 {loading ? (
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color={colors.primary} />
@@ -154,12 +158,19 @@ export default function NotificationInbox({
                                     onPress={() => handleNotificationPress(item)}
                                 >
                                     <View style={styles.avatarContainer}>
-                                        {/* Placeholder for user avatar if fromUserPhoto is missing */}
-                                        <View style={styles.avatarPlaceholder}>
-                                            <Text style={styles.avatarInitial}>
-                                                {item.fromUsername ? item.fromUsername[0].toUpperCase() : '?'}
-                                            </Text>
-                                        </View>
+                                        {item.fromUserPhoto ? (
+                                            <Image
+                                                source={{ uri: item.fromUserPhoto }}
+                                                style={styles.avatarImage}
+                                                contentFit="cover"
+                                            />
+                                        ) : (
+                                            <View style={styles.avatarPlaceholder}>
+                                                <Text style={styles.avatarInitial}>
+                                                    {item.fromUsername ? item.fromUsername[0].toUpperCase() : '?'}
+                                                </Text>
+                                            </View>
+                                        )}
                                     </View>
 
                                     <View style={styles.itemContent}>
@@ -167,6 +178,8 @@ export default function NotificationInbox({
                                             <Text style={styles.username}>@{item.fromUsername} </Text>
                                             {item.type === 'follow' ? (
                                                 'started following you'
+                                            ) : item.type === 'new_post' ? (
+                                                'posted a new photo'
                                             ) : (
                                                 <>
                                                     caught your shot!
@@ -218,6 +231,7 @@ const styles = StyleSheet.create({
         right: 16,
         padding: 8,
     },
+
     content: {
         paddingVertical: 8,
     },
@@ -248,6 +262,12 @@ const styles = StyleSheet.create({
     },
     avatarContainer: {
         marginRight: 12,
+    },
+    avatarImage: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: colors.surface,
     },
     avatarPlaceholder: {
         width: 44,

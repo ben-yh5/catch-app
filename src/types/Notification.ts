@@ -1,6 +1,6 @@
 export interface Notification {
     id: string
-    type: 'royalty' | 'follow'
+    type: 'royalty' | 'follow' | 'new_post'
     fromUserId?: string
     fromUsername?: string // Hydrated on client
     fromUserPhoto?: string // Hydrated on client

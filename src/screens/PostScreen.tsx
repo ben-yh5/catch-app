@@ -90,24 +90,11 @@ export default function PostScreen() {
                 }
             }
 
-            // 1. Try last known location first for speed
-            const lastKnown = await Location.getLastKnownPositionAsync({})
-            if (lastKnown) {
-                const now = Date.now()
-                // If reasonably fresh (e.g., < 60 seconds), use it immediately
-                if (now - lastKnown.timestamp < 60000) {
-                    console.log('[PostScreen] Using fresh last known location')
-                    return {
-                        latitude: lastKnown.coords.latitude,
-                        longitude: lastKnown.coords.longitude,
-                    }
-                }
-            }
-
-            // 2. Fetch fresh location with timeout
+            // 1. Fetch fresh location (Strict Mode for New Posts)
+            // We do NOT use lastKnownPosition here because new posts must be accurate
             try {
                 const locationPromise = Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Balanced,
+                    accuracy: Location.Accuracy.Highest, // Highest accuracy for new posts
                 })
 
                 const timeoutPromise = new Promise<Location.LocationObject>((_, reject) => {
@@ -121,23 +108,14 @@ export default function PostScreen() {
                     longitude: location.coords.longitude,
                 }
             } catch (error) {
-                console.warn('[PostScreen] Error getting fresh location:', error)
-
-                // 3. Fallback to last known if available (even if stale)
-                if (lastKnown) {
-                    console.log('[PostScreen] Falling back to stale last known location')
-                    return {
-                        latitude: lastKnown.coords.latitude,
-                        longitude: lastKnown.coords.longitude,
-                    }
-                }
+                console.error('[PostScreen] Error getting fresh location:', error)
                 throw error
             }
         } catch (error) {
             console.error('Error getting device location:', error)
             Alert.alert(
                 'Location Error',
-                'Could not get your current location. Please try again.'
+                'Could not get your current location. New posts require an accurate location. Please try again or move to an area with better signal.'
             )
             return null
         }

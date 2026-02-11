@@ -12,6 +12,7 @@
  */
 
 import { auth, db } from '@/services/firebase'
+import { registerForPushNotificationsAsync } from '@/utils/registerForPushNotificationsAsync'
 import { GoogleSignin } from '@react-native-google-signin/google-signin'
 import {
     createUserWithEmailAndPassword,
@@ -100,6 +101,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                             })
                         }
                     }
+
+                    // Register for push notifications
+                    registerForPushNotificationsAsync().then((token) => {
+                        if (token) {
+                            updateDoc(doc(db, 'users', user.uid), {
+                                pushToken: token
+                            }).catch(err => console.error("Error saving push token:", err))
+                        }
+                    })
                 } catch (error) {
                     console.error('Error fetching user settings:', error)
                 }
@@ -117,22 +127,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return unsubscribe
     }, [])
 
-    // Subscribe to notifications when user is logged in
     useEffect(() => {
         if (!user) return
 
-        import('firebase/firestore').then(({ collection, query, orderBy, onSnapshot, limit }) => {
+        let unsubscribe: (() => void) | undefined
+
+        import('firebase/firestore').then(({ collection, query, orderBy, onSnapshot, limit, addDoc, serverTimestamp }) => {
+            console.log(`[AuthContext] Setting up listener for: users/${user.uid}/notifications`)
+
+            // Verify permissions by attempting a write (DEBUG ONLY - REMOVE LATER)
+            /*
+            addDoc(collection(db, 'users', user.uid, 'notifications'), {
+                type: 'system',
+                title: 'Test Notification',
+                body: 'This is a test to verify permissions',
+                createdAt: serverTimestamp(),
+                read: false
+            }).catch(e => console.error('[AuthContext] Test write failed:', e))
+            */
+
             const q = query(
                 collection(db, 'users', user.uid, 'notifications'),
-                orderBy('createdAt', 'desc'),
+                // orderBy('createdAt', 'desc'), // Temporarily disabled to rule out index issues
                 limit(50)
             )
 
-            const unsubscribeNotifications = onSnapshot(q, (snapshot) => {
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                console.log(`[AuthContext] Notification snapshot size: ${snapshot.size} for user ${user.uid}`)
+                if (!snapshot.empty) {
+                    console.log('[AuthContext] Latest notification sample:', snapshot.docs[0].data())
+                }
+
                 const newNotifications = snapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 }))
+                // Sort manually since we removed orderBy
+                newNotifications.sort((a: any, b: any) => {
+                    const tA = a.createdAt?.toMillis?.() || 0
+                    const tB = b.createdAt?.toMillis?.() || 0
+                    return tB - tA
+                })
+
+                console.log(`[AuthContext] Processed ${newNotifications.length} notifications`)
                 setNotifications(newNotifications)
 
                 // Update unread count
@@ -141,9 +178,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             }, (error) => {
                 console.error("Error listening to notifications:", error)
             })
-
-            return () => unsubscribeNotifications()
         })
+
+        return () => {
+            if (unsubscribe) {
+                unsubscribe()
+            }
+        }
     }, [user])
 
     const toggleNotificationSetting = async (type: 'notifyOnCatch' | 'notifyOnFollow', enabled: boolean) => {
