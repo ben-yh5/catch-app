@@ -28,6 +28,8 @@ export interface Post {
     // Optional location fields (only present in some contexts like MapScreen)
     latitude?: number
     longitude?: number
+    thumbnailURL?: string
+    mediumURL?: string
 }
 
 /**

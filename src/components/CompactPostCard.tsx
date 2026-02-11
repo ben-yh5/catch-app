@@ -9,7 +9,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface CompactPostCardProps {
-    post: Pick<Post, 'id' | 'photoURL' | 'authorUsername' | 'title' | 'caption' | 'catchCount' | 'createdAt' | 'latitude' | 'longitude'>;
+    post: Pick<Post, 'id' | 'photoURL' | 'thumbnailURL' | 'authorUsername' | 'title' | 'caption' | 'catchCount' | 'createdAt' | 'latitude' | 'longitude'>;
     onPress: () => void;
     onJumpToLocation?: () => void;
     highlighted?: boolean;
@@ -26,7 +26,7 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation, highl
         >
             <View style={styles.imageContainer}>
                 <Image
-                    source={{ uri: post.photoURL }}
+                    source={{ uri: post.thumbnailURL || post.photoURL }}
                     style={styles.image}
                     contentFit="cover"
                     cachePolicy="memory-disk"

@@ -101,7 +101,10 @@ export default function ExploreScreen() {
                     const postIdsToFetch = listData.postIds.slice(0, 4)
                     for (const postId of postIdsToFetch) {
                         const postDoc = await getDoc(doc(db, 'posts', postId))
-                        if (postDoc.exists()) thumbnails.push(postDoc.data().photoURL)
+                        if (postDoc.exists()) {
+                            const data = postDoc.data()
+                            thumbnails.push(data.thumbnailURL || data.photoURL)
+                        }
                     }
 
                     if (thumbnails.length > 0) {

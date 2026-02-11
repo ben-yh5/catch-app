@@ -13,6 +13,7 @@ interface FeaturedPostCardProps {
         authorUsername: string;
         caption?: string;
         catchCount: number;
+        mediumURL?: string;
     };
     onPress: () => void;
     size: number;
@@ -37,7 +38,7 @@ export default function FeaturedPostCard({
             activeOpacity={0.9}
         >
             <Image
-                source={{ uri: post.photoURL }}
+                source={{ uri: post.mediumURL || post.photoURL }}
                 style={{ width: size, height: size }}
                 contentFit="cover"
                 cachePolicy="memory-disk"

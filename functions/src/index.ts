@@ -11,8 +11,11 @@
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { distanceBetween, geohashForLocation, geohashQueryBounds } from 'geofire-common'
+import { onImageUpload } from './triggers/onImageUpload'
 
 admin.initializeApp()
+
+export { onImageUpload }
 
 /** Maximum distance (in meters) a user must be from a post location to catch it */
 const CATCH_RADIUS_METERS = 100
@@ -1096,3 +1099,124 @@ export const recountUserData = functions.https.onCall(async (data, context) => {
         )
     }
 })
+
+/**
+ * HTTPS Function: Backfill thumbnails for existing posts
+ *
+ * One-time migration function. Finds all posts missing thumbnailURL,
+ * downloads their original image, generates thumb + medium variants,
+ * uploads them, and updates Firestore.
+ *
+ * Call via: https://us-central1-catch-72b09.cloudfunctions.net/backfillThumbnails
+ */
+export const backfillThumbnails = functions
+    .runWith({ memory: '1GB', timeoutSeconds: 540 })
+    .https.onRequest(async (req, res) => {
+        const sharp = require('sharp')
+        const path = require('path')
+        const os = require('os')
+        const fs = require('fs-extra')
+
+        const db = admin.firestore()
+        const bucket = admin.storage().bucket()
+
+        let processed = 0
+        let skipped = 0
+        let errors = 0
+
+        try {
+            // Get all posts missing thumbnailURL
+            const snapshot = await db.collection('posts').get()
+            functions.logger.info(`Found ${snapshot.size} total posts to check`)
+
+            for (const doc of snapshot.docs) {
+                const data = doc.data()
+
+                // Skip if already has thumbnails
+                if (data.thumbnailURL && data.mediumURL) {
+                    skipped++
+                    continue
+                }
+
+                if (!data.photoURL) {
+                    skipped++
+                    continue
+                }
+
+                try {
+                    // Extract the storage path from the photoURL
+                    // photoURL format: https://firebasestorage.googleapis.com/v0/b/BUCKET/o/ENCODED_PATH?alt=media&token=...
+                    const url = new URL(data.photoURL)
+                    const encodedPath = url.pathname.split('/o/')[1]
+                    if (!encodedPath) {
+                        functions.logger.warn(`Could not extract path from URL for post ${doc.id}`)
+                        skipped++
+                        continue
+                    }
+
+                    const filePath = decodeURIComponent(encodedPath)
+                    const fileName = path.basename(filePath)
+                    const contentType = 'image/jpeg'
+
+                    // Temp file paths
+                    const workingDir = path.join(os.tmpdir(), `backfill_${doc.id}`)
+                    await fs.ensureDir(workingDir)
+                    const tempFilePath = path.join(workingDir, fileName)
+
+                    const thumbName = fileName.replace(/(\.\w+)$/i, '_thumb$1')
+                    const thumbPath = path.join(workingDir, thumbName)
+                    const mediumName = fileName.replace(/(\.\w+)$/i, '_medium$1')
+                    const mediumPath = path.join(workingDir, mediumName)
+
+                    const thumbStoragePath = path.join(path.dirname(filePath), thumbName)
+                    const mediumStoragePath = path.join(path.dirname(filePath), mediumName)
+
+                    // Download original
+                    await bucket.file(filePath).download({ destination: tempFilePath })
+
+                    // Generate thumbnails
+                    await sharp(tempFilePath).resize(200, 200, { fit: 'cover' }).toFile(thumbPath)
+                    await sharp(tempFilePath).resize(600, 600, { fit: 'cover' }).toFile(mediumPath)
+
+                    // Upload
+                    await bucket.upload(thumbPath, {
+                        destination: thumbStoragePath,
+                        metadata: { contentType, cacheControl: 'public, max-age=31536000' },
+                    })
+                    await bucket.upload(mediumPath, {
+                        destination: mediumStoragePath,
+                        metadata: { contentType, cacheControl: 'public, max-age=31536000' },
+                    })
+
+                    // Get signed URLs
+                    const [thumbUrl] = await bucket.file(thumbStoragePath).getSignedUrl({
+                        action: 'read',
+                        expires: '03-01-2500',
+                    })
+                    const [mediumUrl] = await bucket.file(mediumStoragePath).getSignedUrl({
+                        action: 'read',
+                        expires: '03-01-2500',
+                    })
+
+                    // Update Firestore
+                    await doc.ref.update({ thumbnailURL: thumbUrl, mediumURL: mediumUrl })
+
+                    // Cleanup
+                    await fs.remove(workingDir)
+                    processed++
+                    functions.logger.info(`[${processed}] Backfilled thumbnails for post ${doc.id}`)
+                } catch (err: any) {
+                    errors++
+                    functions.logger.error(`Error processing post ${doc.id}:`, err.message)
+                }
+            }
+
+            res.status(200).send({
+                success: true,
+                message: `Backfill complete. Processed: ${processed}, Skipped: ${skipped}, Errors: ${errors}`,
+            })
+        } catch (error: any) {
+            functions.logger.error('Backfill failed:', error)
+            res.status(500).send({ success: false, error: error.message })
+        }
+    })
