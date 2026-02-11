@@ -9,6 +9,7 @@ import { doc, getDoc } from 'firebase/firestore'
 import React, { useEffect, useState } from 'react'
 import {
     ActivityIndicator,
+    Alert,
     Modal,
     ScrollView,
     StyleSheet,
@@ -31,6 +32,7 @@ export default function NotificationInbox({
         notifications,
         markNotificationAsRead,
         markAllNotificationsAsRead,
+        clearAllNotifications,
     } = useAuth()
     const router = useRouter()
     const insets = useSafeAreaInsets()
@@ -122,6 +124,27 @@ export default function NotificationInbox({
         return `${days}d`
     }
 
+    const handleClearAll = () => {
+        Alert.alert(
+            'Clear All Notifications',
+            'Are you sure you want to delete all notifications?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Clear',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await clearAllNotifications()
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to clear notifications')
+                        }
+                    }
+                }
+            ]
+        )
+    }
+
     return (
         <Modal
             visible={visible}
@@ -131,10 +154,15 @@ export default function NotificationInbox({
         >
             <View style={styles.container}>
                 <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                    <Text style={styles.headerTitle}>Notifications</Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                         <Ionicons name="close" size={24} color={colors.textPrimary} />
                     </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Notifications</Text>
+                    {hydratedNotifications.length > 0 && (
+                        <TouchableOpacity onPress={handleClearAll} style={styles.clearButton}>
+                            <Ionicons name="trash-outline" size={24} color={colors.textPrimary} />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
 
@@ -228,8 +256,17 @@ const styles = StyleSheet.create({
     },
     closeButton: {
         position: 'absolute',
+        left: 16,
+        padding: 8,
+        zIndex: 1,
+        bottom: 8,
+    },
+    clearButton: {
+        position: 'absolute',
         right: 16,
         padding: 8,
+        zIndex: 1,
+        bottom: 8,
     },
 
     content: {

@@ -51,6 +51,7 @@ interface AuthContextType {
     toggleNotificationSetting: (type: 'notifyOnCatch' | 'notifyOnFollow', enabled: boolean) => Promise<void>
     markNotificationAsRead: (id: string) => Promise<void>
     markAllNotificationsAsRead: () => Promise<void>
+    clearAllNotifications: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -216,6 +217,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }
 
+    const clearAllNotifications = async () => {
+        if (!user) return
+
+        try {
+            const { collection, getDocs, writeBatch, doc } = await import('firebase/firestore')
+            const notificationsRef = collection(db, 'users', user.uid, 'notifications')
+            const snapshot = await getDocs(notificationsRef)
+
+            if (snapshot.empty) return
+
+            const batch = writeBatch(db)
+            snapshot.docs.forEach((d) => {
+                batch.delete(doc(db, 'users', user.uid, 'notifications', d.id))
+            })
+
+            await batch.commit()
+            // Local state update is handled by onSnapshot
+        } catch (error) {
+            console.error('Error clearing notifications:', error)
+            throw error
+        }
+    }
+
     const markAllNotificationsAsRead = async () => {
         if (!user) return
 
@@ -378,6 +402,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             toggleNotificationSetting,
             markNotificationAsRead,
             markAllNotificationsAsRead,
+            clearAllNotifications,
         }}>
             {children}
         </AuthContext.Provider>
