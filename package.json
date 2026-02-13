@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:rules": "firebase emulators:exec --only firestore 'jest --config jest.rules.config.js'"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -61,6 +62,7 @@
     "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "^30.0.0",
     "@types/jpeg-js": "^0.3.7",
