@@ -12,22 +12,27 @@ service cloud.firestore {
       // Users can delete their own document
       allow delete: if request.auth != null && request.auth.uid == userId;
 
-      // Users can update their own document
-      allow update: if request.auth != null && request.auth.uid == userId;
+      // Users can update their own document (restricted to safe fields only)
+      // Server-computed fields (contribution, totalPosts, totalCatches) are only writable by Cloud Functions
+      allow update: if request.auth != null && request.auth.uid == userId &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['username', 'pushToken', 'notificationSettings', 'dataContributionEnabled', 'following', 'bio']);
 
-      // Allow authenticated users to update the followers list (to follow/unfollow)
+      // Allow authenticated users to update ONLY the followers array on other users' profiles
+      // Restricted to single-element changes to prevent mass follower injection
       allow update: if request.auth != null &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers']);
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers']) &&
+                       (request.resource.data.followers.size() == resource.data.followers.size() + 1 ||
+                        request.resource.data.followers.size() == resource.data.followers.size() - 1);
 
-      // Allow update: if request.auth != null &&
-      //                  request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers', 'following']);
-      
       // Notifications subcollection
+      match /notifications/{notifId} {
         allow get: if request.auth != null && request.auth.uid == userId;
         allow list: if request.auth != null && request.auth.uid == userId;
         allow delete: if request.auth != null && request.auth.uid == userId;
-        // Only Cloud Functions (admin SDK) creates notifications, but in case client needs to mark read (update)
-        allow update: if request.auth != null && request.auth.uid == userId;
+        // Only Cloud Functions (admin SDK) creates notifications, client can mark as read
+        allow update: if request.auth != null && request.auth.uid == userId &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       }
     }
 
@@ -36,15 +41,16 @@ service cloud.firestore {
       // Anyone can read posts
       allow read: if true;
 
-      // Only authenticated users can create posts
-      allow create: if request.auth != null;
+      // Only authenticated users can create posts, must set authorId to own uid
+      allow create: if request.auth != null &&
+                       request.auth.uid == request.resource.data.authorId;
 
       // Only the post author can delete their posts
-      allow delete: if request.auth.uid == resource.data.authorId;
+      allow delete: if request.auth != null &&
+                       request.auth.uid == resource.data.authorId;
 
-      // Allow updates only to catchCount field (for catches)
-      allow update: if request.auth != null &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['catchCount']);
+      // No client-side updates — catchCount managed by Cloud Functions (onPostCreated/onPostDeleted)
+      allow update: if false;
     }
 
     // Post locations collection
@@ -52,10 +58,15 @@ service cloud.firestore {
       // No read access (location data is private)
       allow read: if false;
 
-      // Allow authenticated users to create location documents
-      allow create: if request.auth != null;
+      // Authenticated users can create location documents with required fields and valid coordinates
+      allow create: if request.auth != null &&
+                       request.resource.data.keys().hasAll(['postId', 'latitude', 'longitude', 'geohash']) &&
+                       request.resource.data.latitude is number &&
+                       request.resource.data.longitude is number &&
+                       request.resource.data.latitude >= -90 && request.resource.data.latitude <= 90 &&
+                       request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180;
 
-      // No updates or deletes from clients (only Cloud Functions can delete)
+      // No updates or deletes from clients (only Cloud Functions can manage)
       allow update, delete: if false;
     }
 

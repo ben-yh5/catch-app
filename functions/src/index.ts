@@ -370,9 +370,10 @@ export const onPostCreated = functions.firestore
                             }
                         }
 
-                        // Increment contributionEarned on root post
+                        // Increment contributionEarned and catchCount on root post
                         await rootPostDoc.ref.update({
                             contributionEarned: admin.firestore.FieldValue.increment(royalty),
+                            catchCount: admin.firestore.FieldValue.increment(1),
                         })
                     }
                 }

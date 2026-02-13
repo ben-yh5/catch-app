@@ -11,7 +11,7 @@ import { addPostToList } from '@/utils/listUtils';
 import { verifyViewSimilarity } from '@/utils/visualMatcher';
 import { useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import { addDoc, collection, doc, getDoc, increment, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { geohashForLocation } from 'geofire-common';
 import { useState } from 'react';
@@ -228,10 +228,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
                 createdAt: new Date(),
             });
 
-            // Update root count
-            await updateDoc(doc(db, 'posts', rootPost.id), {
-                catchCount: increment(1),
-            });
+            // catchCount is now incremented server-side by onPostCreated Cloud Function
 
             // Add to lists
             if (listIds && listIds.size > 0) {
