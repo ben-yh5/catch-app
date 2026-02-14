@@ -136,6 +136,12 @@ Notification types: `new_post`, `follow`, `royalty`.
 ### lists/{listId}
 - `name`, `userId`, `postIds` (array), `isPublic`
 
+### usernames/{lowercaseUsername} (uniqueness index, server-only writes)
+- `uid`: user ID that owns this username
+
+### processed_events/{eventId} (trigger deduplication, server-only)
+- `processedAt`: timestamp
+
 ## Cloud Functions (`functions/src/index.ts`)
 
 | Function | Type | Purpose |
@@ -145,8 +151,11 @@ Notification types: `new_post`, `follow`, `royalty`.
 | `getPostLocations` | HTTPS Callable | Batch coordinates (max 500 posts) |
 | `getPostsInArea` | HTTPS Callable | Geospatial query by viewport bounds or radius |
 | `recountUserData` | HTTPS Callable | Recalculates authenticated user's own stats only |
-| `onPostCreated` | Firestore Trigger | Contribution points, Pioneer/Nearby check, catchCount increment, notifications |
-| `onPostDeleted` | Firestore Trigger | Thread promotion, counter decrements (catchCount), list cleanup |
+| `setupUsername` | HTTPS Callable | Atomically claims username + creates user doc (prevents TOCTOU race) |
+| `followUser` | HTTPS Callable | Atomically updates both users' following/followers arrays in a transaction |
+| `unfollowUser` | HTTPS Callable | Atomically removes from both users' following/followers arrays in a transaction |
+| `onPostCreated` | Firestore Trigger | Contribution points, Pioneer/Nearby check, catchCount increment, notifications. Idempotent via `context.eventId` dedup |
+| `onPostDeleted` | Firestore Trigger | Thread promotion, counter decrements (catchCount), list cleanup. Idempotent via `context.eventId` dedup |
 | `onUserFollowed` | Firestore Trigger | Follow notifications (in-app + push) |
 | `onImageUpload` | Storage Trigger | Auto-generates thumbnail and medium image variants |
 
@@ -159,12 +168,15 @@ Notification types: `new_post`, `follow`, `royalty`.
 - **Path alias**: `@/` maps to `src/` (configured in tsconfig)
 - **`post_locations` geohash**: Used for spatial queries; new posts must include geohash via `geohashForLocation()` from `geofire-common`
 - **Server-only counters**: `catchCount`, `contribution`, `totalPosts`, `totalCatches` are only writable by Cloud Functions (admin SDK). Client-side Firestore rules block direct updates to these fields.
+- **Trigger idempotency**: `onPostCreated` and `onPostDeleted` deduplicate via `context.eventId` using a `processed_events` collection to handle Firestore's at-least-once delivery.
+- **Username uniqueness**: `setupUsername` Cloud Function uses a `usernames/{lowercase}` collection as an atomic uniqueness index via Firestore transaction.
+- **Atomic follow/unfollow**: `followUser`/`unfollowUser` Cloud Functions update both users' arrays in a single transaction. No client-side writes to `followers` or `following`.
 
 ## Firestore Security Rules
 
 Rules enforce authorization, not just authentication:
-- **Users**: Self-update restricted to allowlisted fields (`username`, `pushToken`, `notificationSettings`, `dataContributionEnabled`, `following`, `bio`). Server-computed fields (`contribution`, `totalPosts`, `totalCatches`) only writable by admin SDK.
-- **Followers**: Other users can modify only the `followers` array, restricted to single-element changes (prevents mass injection).
+- **Users**: Self-update restricted to allowlisted fields (`username`, `pushToken`, `notificationSettings`, `dataContributionEnabled`, `bio`). Server-computed fields (`contribution`, `totalPosts`, `totalCatches`, `followers`, `following`) only writable by Cloud Functions (admin SDK).
+- **Followers/Following**: Managed exclusively by `followUser`/`unfollowUser` Cloud Functions. No client-side writes.
 - **Posts**: `create` requires `authorId == auth.uid`. No client-side updates allowed (`catchCount` managed by Cloud Functions). Only author can delete.
 - **Notifications**: Proper subcollection rules under `match /notifications/{notifId}` with owner-only access. Updates restricted to `read` field only.
 - **Post locations**: `create` validates required fields (`postId`, `latitude`, `longitude`, `geohash`) and coordinate ranges. No client reads.

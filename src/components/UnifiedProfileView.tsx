@@ -10,8 +10,6 @@ import { useIsFocused } from '@react-navigation/native'
 import * as Haptics from 'expo-haptics'
 import { useNavigation, useRouter } from 'expo-router'
 import {
-    arrayRemove,
-    arrayUnion,
     collection,
     doc,
     DocumentData,
@@ -22,9 +20,10 @@ import {
     query,
     QueryDocumentSnapshot,
     startAfter,
-    updateDoc,
     where,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '@/services/firebase'
 import React, { useCallback, useEffect, useState } from 'react'
 import {
     ActivityIndicator,
@@ -501,30 +500,17 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     const handleFollowFromList = async (targetUserId: string) => {
         if (!user) return
 
+        // Find the user in the list
+        const userInList = followList.find(u => u.id === targetUserId)
+        if (!userInList) return
+
         try {
-            const currentUserRef = doc(db, 'users', user.uid)
-            const targetUserRef = doc(db, 'users', targetUserId)
-
-            // Find the user in the list
-            const userInList = followList.find(u => u.id === targetUserId)
-            if (!userInList) return
-
             if (userInList.isFollowing) {
-                // Unfollow
-                await updateDoc(currentUserRef, {
-                    following: arrayRemove(targetUserId),
-                })
-                await updateDoc(targetUserRef, {
-                    followers: arrayRemove(user.uid),
-                })
+                const unfollowUserFn = httpsCallable(functions, 'unfollowUser')
+                await unfollowUserFn({ targetUserId })
             } else {
-                // Follow
-                await updateDoc(currentUserRef, {
-                    following: arrayUnion(targetUserId),
-                })
-                await updateDoc(targetUserRef, {
-                    followers: arrayUnion(user.uid),
-                })
+                const followUserFn = httpsCallable(functions, 'followUser')
+                await followUserFn({ targetUserId })
             }
 
             // Update the list
@@ -542,39 +528,24 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     const handleFollowToggle = async () => {
         if (!user || !userId) return
 
+        // Optimistic update
+        const wasFollowing = isFollowing
+        setIsFollowing(!wasFollowing)
+        setFollowerCount((prev) => wasFollowing ? Math.max(0, prev - 1) : prev + 1)
+
         try {
-            const currentUserRef = doc(db, 'users', user.uid)
-            const targetUserRef = doc(db, 'users', userId)
-
-            if (isFollowing) {
-                // Unfollow
-                setIsFollowing(false)
-                setFollowerCount((prev) => Math.max(0, prev - 1))
-
-                await updateDoc(currentUserRef, {
-                    following: arrayRemove(userId),
-                })
-                await updateDoc(targetUserRef, {
-                    followers: arrayRemove(user.uid),
-                })
+            if (wasFollowing) {
+                const unfollowUserFn = httpsCallable(functions, 'unfollowUser')
+                await unfollowUserFn({ targetUserId: userId })
             } else {
-                // Follow
-                setIsFollowing(true)
-                setFollowerCount((prev) => prev + 1)
-
-                await updateDoc(currentUserRef, {
-                    following: arrayUnion(userId),
-                })
-
-                await updateDoc(targetUserRef, {
-                    followers: arrayUnion(user.uid),
-                })
+                const followUserFn = httpsCallable(functions, 'followUser')
+                await followUserFn({ targetUserId: userId })
             }
         } catch (error) {
             console.error('Error toggling follow:', error)
             // Revert optimistic update on error
-            setIsFollowing(!isFollowing)
-            setFollowerCount((prev) => (isFollowing ? prev + 1 : prev - 1))
+            setIsFollowing(wasFollowing)
+            setFollowerCount((prev) => wasFollowing ? prev + 1 : Math.max(0, prev - 1))
             Alert.alert('Error', 'Failed to update follow status. Please try again.')
         }
     }

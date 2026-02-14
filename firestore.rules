@@ -13,17 +13,13 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == userId;
 
       // Users can update their own document (restricted to safe fields only)
-      // Server-computed fields (contribution, totalPosts, totalCatches) are only writable by Cloud Functions
+      // Server-computed fields (contribution, totalPosts, totalCatches, followers, following) are only writable by Cloud Functions
       allow update: if request.auth != null && request.auth.uid == userId &&
                        request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['username', 'pushToken', 'notificationSettings', 'dataContributionEnabled', 'following', 'bio']);
+                         .hasOnly(['username', 'pushToken', 'notificationSettings', 'dataContributionEnabled', 'bio']);
 
-      // Allow authenticated users to update ONLY the followers array on other users' profiles
-      // Restricted to single-element changes to prevent mass follower injection
-      allow update: if request.auth != null &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers']) &&
-                       (request.resource.data.followers.size() == resource.data.followers.size() + 1 ||
-                        request.resource.data.followers.size() == resource.data.followers.size() - 1);
+      // Follow/unfollow operations are handled atomically by followUser/unfollowUser Cloud Functions
+      // No client-side updates to followers or following arrays
 
       // Notifications subcollection
       match /notifications/{notifId} {
@@ -90,6 +86,20 @@ service cloud.firestore {
       allow create: if request.auth != null;
       // No client-side read/update/delete
       allow read, update, delete: if false;
+    }
+
+    // Usernames collection (uniqueness index, managed by setupUsername Cloud Function)
+    match /usernames/{username} {
+      // Allow reads for username availability checks
+      allow read: if true;
+      // Only Cloud Functions (admin SDK) can write
+      allow create, update, delete: if false;
+    }
+
+    // Processed events collection (deduplication for Firestore triggers)
+    match /processed_events/{eventId} {
+      // No client access — only written by Cloud Functions (admin SDK)
+      allow read, write: if false;
     }
   }
 }

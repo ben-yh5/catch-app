@@ -1,7 +1,7 @@
 import UnifiedAuthLayout from '@/components/UnifiedAuthLayout'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
-import { isUsernameAvailable, validateUsernameFormat } from '@/utils/usernameValidation'
+import { validateUsernameFormat } from '@/utils/usernameValidation'
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import {
@@ -13,8 +13,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
-import { doc, setDoc } from 'firebase/firestore'
-import { db } from '@/services/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '@/services/firebase'
 
 export default function UsernameSetupScreen() {
     const [username, setUsername] = useState('')
@@ -29,7 +29,7 @@ export default function UsernameSetupScreen() {
         // Clear previous error
         setError(null)
 
-        // Validate format
+        // Validate format client-side (server also validates)
         const formatError = validateUsernameFormat(username)
         if (formatError) {
             setError(formatError)
@@ -38,29 +38,19 @@ export default function UsernameSetupScreen() {
 
         setLoading(true)
         try {
-            // Check if username is available
-            const available = await isUsernameAvailable(username)
-            if (!available) {
-                setError('Username is already taken')
-                setLoading(false)
-                return
-            }
-
-            // Create user document in Firestore
-            await setDoc(doc(db, 'users', user.uid), {
-                username: username,
-                email: user.email || '',
-                totalCatches: 0,
-                followers: [],
-                following: [],
-                pushToken: null,
-                createdAt: new Date(),
-            })
+            // Atomically check username uniqueness + create user doc via Cloud Function
+            const setupUsernameFn = httpsCallable(functions, 'setupUsername')
+            await setupUsernameFn({ username })
 
             // Navigate directly to tabs
             router.replace('/(tabs)')
         } catch (error: any) {
-            Alert.alert('Error', error.message)
+            const message = error?.message || 'Something went wrong'
+            if (message.includes('already taken') || message.includes('already-exists')) {
+                setError('Username is already taken')
+            } else {
+                Alert.alert('Error', message)
+            }
             setLoading(false)
         }
     }

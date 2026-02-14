@@ -337,7 +337,18 @@ export const getPostLocations = functions.https.onCall(async (data, context) => 
  */
 export const onPostCreated = functions.firestore
     .document('posts/{postId}')
-    .onCreate(async (snap) => {
+    .onCreate(async (snap, context) => {
+        const db = admin.firestore()
+
+        // Deduplicate: Firestore triggers have at-least-once delivery semantics
+        const eventRef = db.collection('processed_events').doc(context.eventId)
+        const existing = await eventRef.get()
+        if (existing.exists) {
+            functions.logger.info(`[onPostCreated] Duplicate event ${context.eventId}, skipping`)
+            return
+        }
+        await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp() })
+
         const postData = snap.data()
         const authorId = postData.authorId
         const postId = snap.id
@@ -347,7 +358,6 @@ export const onPostCreated = functions.firestore
             return
         }
 
-        const db = admin.firestore()
         functions.logger.info(`[onPostCreated] Triggered for post ${postId} by author ${authorId}`)
 
         try {
@@ -532,7 +542,18 @@ export const onPostCreated = functions.firestore
  */
 export const onPostDeleted = functions.firestore
     .document('posts/{postId}')
-    .onDelete(async (snap) => {
+    .onDelete(async (snap, context) => {
+        const db = admin.firestore()
+
+        // Deduplicate: Firestore triggers have at-least-once delivery semantics
+        const eventRef = db.collection('processed_events').doc(context.eventId)
+        const existing = await eventRef.get()
+        if (existing.exists) {
+            functions.logger.info(`[onPostDeleted] Duplicate event ${context.eventId}, skipping`)
+            return
+        }
+        await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp() })
+
         const postData = snap.data()
         const postId = snap.id
         const authorId = postData.authorId
@@ -543,7 +564,7 @@ export const onPostDeleted = functions.firestore
         }
 
         try {
-            const userRef = admin.firestore().collection('users').doc(authorId)
+            const userRef = db.collection('users').doc(authorId)
 
             // Subtract contributionEarned from author
             const contributionEarned = postData.contributionEarned || 0
@@ -571,14 +592,13 @@ export const onPostDeleted = functions.firestore
             }
 
             // Remove post from any lists that contain it
-            const listsQuery = await admin
-                .firestore()
+            const listsQuery = await db
                 .collection('lists')
                 .where('postIds', 'array-contains', postId)
                 .get()
 
             if (!listsQuery.empty) {
-                const batch = admin.firestore().batch()
+                const batch = db.batch()
                 listsQuery.docs.forEach((listDoc) => {
                     batch.update(listDoc.ref, {
                         postIds: admin.firestore.FieldValue.arrayRemove(postId),
@@ -592,8 +612,7 @@ export const onPostDeleted = functions.firestore
             if (postData.isOriginal) {
                 functions.logger.info(`Root post ${postId} deleted, checking for thread promotion`)
 
-                const catchesQuery = await admin
-                    .firestore()
+                const catchesQuery = await db
                     .collection('posts')
                     .where('rootPostId', '==', postId)
                     .orderBy('createdAt', 'asc')
@@ -605,7 +624,7 @@ export const onPostDeleted = functions.firestore
 
                     functions.logger.info(`Promoting catch ${newRootId} to new root`)
 
-                    const batch = admin.firestore().batch()
+                    const batch = db.batch()
 
                     // Promote oldest catch to root
                     batch.update(newRootDoc.ref, {
@@ -625,8 +644,7 @@ export const onPostDeleted = functions.firestore
                     }
 
                     // Delete old root's location data (new root keeps its own)
-                    const oldLocationQuery = await admin
-                        .firestore()
+                    const oldLocationQuery = await db
                         .collection('post_locations')
                         .where('postId', '==', postId)
                         .limit(1)
@@ -640,8 +658,7 @@ export const onPostDeleted = functions.firestore
                     functions.logger.info(`Thread promotion complete. New root: ${newRootId}`)
                 } else {
                     // No catches in thread, just delete location data
-                    const locationQuery = await admin
-                        .firestore()
+                    const locationQuery = await db
                         .collection('post_locations')
                         .where('postId', '==', postId)
                         .limit(1)
@@ -656,7 +673,7 @@ export const onPostDeleted = functions.firestore
                 // Catch deleted - decrement root's catchCount
                 const rootPostId = postData.rootPostId
                 if (rootPostId) {
-                    const rootRef = admin.firestore().collection('posts').doc(rootPostId)
+                    const rootRef = db.collection('posts').doc(rootPostId)
                     const rootDoc = await rootRef.get()
                     if (rootDoc.exists) {
                         await rootRef.update({
@@ -667,8 +684,7 @@ export const onPostDeleted = functions.firestore
                 }
 
                 // Delete catch's location data
-                const locationQuery = await admin
-                    .firestore()
+                const locationQuery = await db
                     .collection('post_locations')
                     .where('postId', '==', postId)
                     .limit(1)
@@ -1066,3 +1082,244 @@ export const recountUserData = functions.https.onCall(async (_data, context) => 
 })
 
 // backfillThumbnails: REMOVED — one-time migration completed, unauthenticated HTTP endpoint was a security risk
+
+/**
+ * HTTPS Callable Function: Atomically sets up a username for a new user
+ *
+ * Prevents TOCTOU race condition where two users could claim the same username.
+ * Uses a `usernames` collection as a uniqueness index with document ID = lowercase username.
+ * Runs inside a Firestore transaction so check + create is atomic.
+ *
+ * @param data.username - The desired username
+ * @returns Object with success status
+ */
+export const setupUsername = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            'unauthenticated',
+            'Must be logged in to set up username'
+        )
+    }
+
+    const { username } = data
+
+    if (!username || typeof username !== 'string') {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'Username is required'
+        )
+    }
+
+    // Server-side format validation (mirrors client-side rules)
+    const trimmed = username.trim()
+    if (trimmed.length < 3 || trimmed.length > 20) {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'Username must be 3-20 characters'
+        )
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'Username can only contain letters, numbers, underscores, and hyphens'
+        )
+    }
+
+    const db = admin.firestore()
+    const uid = context.auth.uid
+    const usernameLower = trimmed.toLowerCase()
+
+    try {
+        await db.runTransaction(async (transaction) => {
+            // Check if user already has a document (prevent double setup)
+            const userRef = db.collection('users').doc(uid)
+            const userDoc = await transaction.get(userRef)
+            if (userDoc.exists) {
+                throw new functions.https.HttpsError(
+                    'already-exists',
+                    'User account already set up'
+                )
+            }
+
+            // Check username uniqueness via the usernames index
+            const usernameRef = db.collection('usernames').doc(usernameLower)
+            const usernameDoc = await transaction.get(usernameRef)
+            if (usernameDoc.exists) {
+                throw new functions.https.HttpsError(
+                    'already-exists',
+                    'Username is already taken'
+                )
+            }
+
+            // Atomically claim the username and create the user document
+            transaction.set(usernameRef, { uid })
+            transaction.set(userRef, {
+                username: trimmed,
+                email: context.auth!.token.email || '',
+                totalPosts: 0,
+                totalCatches: 0,
+                contribution: 0,
+                followers: [],
+                following: [],
+                pushToken: null,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            })
+        })
+
+        return { success: true }
+    } catch (error: any) {
+        if (error instanceof functions.https.HttpsError) {
+            throw error
+        }
+        functions.logger.error('Error setting up username:', error)
+        throw new functions.https.HttpsError(
+            'internal',
+            'Failed to set up username'
+        )
+    }
+})
+
+/**
+ * HTTPS Callable Function: Atomically follows a user
+ *
+ * Updates both the current user's `following` array and the target user's `followers` array
+ * in a single transaction, ensuring consistency. Also prevents self-follow.
+ *
+ * @param data.targetUserId - The user ID to follow
+ * @returns Object with success status
+ */
+export const followUser = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            'unauthenticated',
+            'Must be logged in to follow a user'
+        )
+    }
+
+    const { targetUserId } = data
+    const currentUserId = context.auth.uid
+
+    if (!targetUserId || typeof targetUserId !== 'string') {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'Target user ID is required'
+        )
+    }
+
+    if (targetUserId === currentUserId) {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'Cannot follow yourself'
+        )
+    }
+
+    const db = admin.firestore()
+
+    try {
+        await db.runTransaction(async (transaction) => {
+            const currentUserRef = db.collection('users').doc(currentUserId)
+            const targetUserRef = db.collection('users').doc(targetUserId)
+
+            const [currentUserDoc, targetUserDoc] = await Promise.all([
+                transaction.get(currentUserRef),
+                transaction.get(targetUserRef),
+            ])
+
+            if (!currentUserDoc.exists) {
+                throw new functions.https.HttpsError('not-found', 'Your user account was not found')
+            }
+            if (!targetUserDoc.exists) {
+                throw new functions.https.HttpsError('not-found', 'Target user not found')
+            }
+
+            const currentFollowing: string[] = currentUserDoc.data()?.following || []
+            if (currentFollowing.includes(targetUserId)) {
+                throw new functions.https.HttpsError('already-exists', 'Already following this user')
+            }
+
+            transaction.update(currentUserRef, {
+                following: admin.firestore.FieldValue.arrayUnion(targetUserId),
+            })
+            transaction.update(targetUserRef, {
+                followers: admin.firestore.FieldValue.arrayUnion(currentUserId),
+            })
+        })
+
+        return { success: true }
+    } catch (error: any) {
+        if (error instanceof functions.https.HttpsError) {
+            throw error
+        }
+        functions.logger.error('Error following user:', error)
+        throw new functions.https.HttpsError('internal', 'Failed to follow user')
+    }
+})
+
+/**
+ * HTTPS Callable Function: Atomically unfollows a user
+ *
+ * Updates both the current user's `following` array and the target user's `followers` array
+ * in a single transaction, ensuring consistency.
+ *
+ * @param data.targetUserId - The user ID to unfollow
+ * @returns Object with success status
+ */
+export const unfollowUser = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            'unauthenticated',
+            'Must be logged in to unfollow a user'
+        )
+    }
+
+    const { targetUserId } = data
+    const currentUserId = context.auth.uid
+
+    if (!targetUserId || typeof targetUserId !== 'string') {
+        throw new functions.https.HttpsError(
+            'invalid-argument',
+            'Target user ID is required'
+        )
+    }
+
+    const db = admin.firestore()
+
+    try {
+        await db.runTransaction(async (transaction) => {
+            const currentUserRef = db.collection('users').doc(currentUserId)
+            const targetUserRef = db.collection('users').doc(targetUserId)
+
+            const [currentUserDoc, targetUserDoc] = await Promise.all([
+                transaction.get(currentUserRef),
+                transaction.get(targetUserRef),
+            ])
+
+            if (!currentUserDoc.exists) {
+                throw new functions.https.HttpsError('not-found', 'Your user account was not found')
+            }
+            if (!targetUserDoc.exists) {
+                throw new functions.https.HttpsError('not-found', 'Target user not found')
+            }
+
+            const currentFollowing: string[] = currentUserDoc.data()?.following || []
+            if (!currentFollowing.includes(targetUserId)) {
+                throw new functions.https.HttpsError('not-found', 'Not following this user')
+            }
+
+            transaction.update(currentUserRef, {
+                following: admin.firestore.FieldValue.arrayRemove(targetUserId),
+            })
+            transaction.update(targetUserRef, {
+                followers: admin.firestore.FieldValue.arrayRemove(currentUserId),
+            })
+        })
+
+        return { success: true }
+    } catch (error: any) {
+        if (error instanceof functions.https.HttpsError) {
+            throw error
+        }
+        functions.logger.error('Error unfollowing user:', error)
+        throw new functions.https.HttpsError('internal', 'Failed to unfollow user')
+    }
+})
