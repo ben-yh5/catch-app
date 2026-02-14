@@ -140,17 +140,15 @@ Notification types: `new_post`, `follow`, `royalty`.
 
 | Function | Type | Purpose |
 |---|---|---|
-| `validateCatch` | HTTPS Callable | Validates user is within 100m of post location |
+| `validateCatch` | HTTPS Callable | Validates proximity, prevents self-catch and duplicate catches |
 | `getPostLocation` | HTTPS Callable | Returns coordinates for a single post |
 | `getPostLocations` | HTTPS Callable | Batch coordinates (max 500 posts) |
 | `getPostsInArea` | HTTPS Callable | Geospatial query by viewport bounds or radius |
-| `recountUserData` | HTTPS Callable | Recalculates user stats from posts |
+| `recountUserData` | HTTPS Callable | Recalculates authenticated user's own stats only |
 | `onPostCreated` | Firestore Trigger | Contribution points, Pioneer/Nearby check, catchCount increment, notifications |
 | `onPostDeleted` | Firestore Trigger | Thread promotion, counter decrements (catchCount), list cleanup |
 | `onUserFollowed` | Firestore Trigger | Follow notifications (in-app + push) |
 | `onImageUpload` | Storage Trigger | Auto-generates thumbnail and medium image variants |
-| `backfillGeohashes` | HTTP | One-time migration |
-| `backfillThumbnails` | HTTP | One-time migration |
 
 ## Key Patterns
 

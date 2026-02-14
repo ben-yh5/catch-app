@@ -10,7 +10,7 @@
 
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
-import { distanceBetween, geohashForLocation, geohashQueryBounds } from 'geofire-common'
+import { distanceBetween, geohashQueryBounds } from 'geofire-common'
 import { onImageUpload } from './triggers/onImageUpload'
 
 admin.initializeApp()
@@ -88,7 +88,8 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
     }
 
     try {
-        const postRef = admin.firestore().collection('posts').doc(postId)
+        const db = admin.firestore()
+        const postRef = db.collection('posts').doc(postId)
         const postDoc = await postRef.get()
 
         if (!postDoc.exists) {
@@ -104,9 +105,34 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
             )
         }
 
+        // Prevent self-catch: user cannot catch their own post
+        if (postData.authorId === context.auth.uid) {
+            throw new functions.https.HttpsError(
+                'permission-denied',
+                'You cannot catch your own post'
+            )
+        }
+
+        // Determine rootPostId for duplicate check (original posts use their own ID)
+        const rootPostId = postData.rootPostId || postId
+
+        // Prevent duplicate catch: check if user already caught this thread
+        const existingCatchQuery = await db.collection('posts')
+            .where('authorId', '==', context.auth.uid)
+            .where('rootPostId', '==', rootPostId)
+            .where('isOriginal', '==', false)
+            .limit(1)
+            .get()
+
+        if (!existingCatchQuery.empty) {
+            throw new functions.https.HttpsError(
+                'already-exists',
+                'You have already caught this post'
+            )
+        }
+
         // Fetch coordinates from private collection (server-side only access)
-        const locationQuery = await admin
-            .firestore()
+        const locationQuery = await db
             .collection('post_locations')
             .where('postId', '==', postId)
             .limit(1)
@@ -133,6 +159,10 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
             pitch: locationData.pitch,     // Optional
         }
     } catch (error: any) {
+        // Re-throw HttpsErrors as-is so clients get proper error codes
+        if (error instanceof functions.https.HttpsError) {
+            throw error
+        }
         functions.logger.error('Error validating catch:', error)
         throw new functions.https.HttpsError(
             'internal',
@@ -788,73 +818,7 @@ export const onUserFollowed = functions.firestore
         }
     })
 
-/**
- * HTTPS Callable Function: Backfill geohash for existing post_locations
- * This is a one-time migration function
- *
- * @returns Object with success status and number of updated locations
- */
-export const backfillGeohashes = functions.https.onRequest(async (req, res) => {
-    try {
-        const db = admin.firestore()
-        let batchUpdates: any[] = []
-        let updateCount = 0
-
-        // Get all post_locations without geohash
-        const locationsSnapshot = await db.collection('post_locations').get()
-
-        functions.logger.info(`Found ${locationsSnapshot.size} post_locations to check`)
-
-        for (const doc of locationsSnapshot.docs) {
-            const data = doc.data()
-
-            // Skip if already has geohash
-            if (data.geohash) {
-                continue
-            }
-
-            // Generate geohash from existing coordinates
-            if (data.latitude && data.longitude) {
-                const geohash = geohashForLocation([data.latitude, data.longitude])
-                batchUpdates.push({ ref: doc.ref, geohash })
-                updateCount++
-
-                functions.logger.info(`Adding geohash to ${doc.id}: ${geohash}`)
-            } else {
-                functions.logger.warn(`Missing coordinates for ${doc.id}`)
-            }
-
-            // Firestore batch limit is 500 operations
-            if (batchUpdates.length >= 500) {
-                const batch = db.batch()
-                batchUpdates.forEach(update => {
-                    batch.update(update.ref, { geohash: update.geohash })
-                })
-                await batch.commit()
-                functions.logger.info(`Committed batch of ${batchUpdates.length} updates`)
-                batchUpdates = []
-            }
-        }
-
-        // Commit any remaining updates
-        if (batchUpdates.length > 0) {
-            const batch = db.batch()
-            batchUpdates.forEach(update => {
-                batch.update(update.ref, { geohash: update.geohash })
-            })
-            await batch.commit()
-            functions.logger.info(`Committed final batch of ${batchUpdates.length} updates`)
-        }
-
-        res.status(200).send({
-            success: true,
-            message: `Backfilled ${updateCount} post_locations with geohash`
-        })
-    } catch (error: any) {
-        functions.logger.error('Error backfilling geohashes:', error)
-        res.status(500).send({ success: false, error: error.message })
-    }
-})
+// backfillGeohashes: REMOVED — one-time migration completed, unauthenticated HTTP endpoint was a security risk
 
 /**
  * HTTPS Callable Function: Get posts within a map viewport or circular radius
@@ -1021,11 +985,11 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
  *
  * Fixes inaccuracies in totalPosts, totalCatches, and contribution scores
  * by re-tallying all documents in the posts collection.
+ * Restricted to the authenticated user's own data only.
  *
- * @param data.userId - Optional userId to recount (defaults to auth user)
  * @returns Object with the new stats
  */
-export const recountUserData = functions.https.onCall(async (data, context) => {
+export const recountUserData = functions.https.onCall(async (_data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError(
             'unauthenticated',
@@ -1033,8 +997,8 @@ export const recountUserData = functions.https.onCall(async (data, context) => {
         )
     }
 
-    // Allow recounting self, or other users if admin (not implementing admin check for now)
-    const targetUserId = data.userId || context.auth.uid
+    // Only allow recounting own data — prevents any user from overwriting another's stats
+    const targetUserId = context.auth.uid
 
     try {
         const db = admin.firestore()
@@ -1101,123 +1065,4 @@ export const recountUserData = functions.https.onCall(async (data, context) => {
     }
 })
 
-/**
- * HTTPS Function: Backfill thumbnails for existing posts
- *
- * One-time migration function. Finds all posts missing thumbnailURL,
- * downloads their original image, generates thumb + medium variants,
- * uploads them, and updates Firestore.
- *
- * Call via: https://us-central1-catch-72b09.cloudfunctions.net/backfillThumbnails
- */
-export const backfillThumbnails = functions
-    .runWith({ memory: '1GB', timeoutSeconds: 540 })
-    .https.onRequest(async (req, res) => {
-        const sharp = require('sharp')
-        const path = require('path')
-        const os = require('os')
-        const fs = require('fs-extra')
-
-        const db = admin.firestore()
-        const bucket = admin.storage().bucket()
-
-        let processed = 0
-        let skipped = 0
-        let errors = 0
-
-        try {
-            // Get all posts missing thumbnailURL
-            const snapshot = await db.collection('posts').get()
-            functions.logger.info(`Found ${snapshot.size} total posts to check`)
-
-            for (const doc of snapshot.docs) {
-                const data = doc.data()
-
-                // Skip if already has thumbnails
-                if (data.thumbnailURL && data.mediumURL) {
-                    skipped++
-                    continue
-                }
-
-                if (!data.photoURL) {
-                    skipped++
-                    continue
-                }
-
-                try {
-                    // Extract the storage path from the photoURL
-                    // photoURL format: https://firebasestorage.googleapis.com/v0/b/BUCKET/o/ENCODED_PATH?alt=media&token=...
-                    const url = new URL(data.photoURL)
-                    const encodedPath = url.pathname.split('/o/')[1]
-                    if (!encodedPath) {
-                        functions.logger.warn(`Could not extract path from URL for post ${doc.id}`)
-                        skipped++
-                        continue
-                    }
-
-                    const filePath = decodeURIComponent(encodedPath)
-                    const fileName = path.basename(filePath)
-                    const contentType = 'image/jpeg'
-
-                    // Temp file paths
-                    const workingDir = path.join(os.tmpdir(), `backfill_${doc.id}`)
-                    await fs.ensureDir(workingDir)
-                    const tempFilePath = path.join(workingDir, fileName)
-
-                    const thumbName = fileName.replace(/(\.\w+)$/i, '_thumb$1')
-                    const thumbPath = path.join(workingDir, thumbName)
-                    const mediumName = fileName.replace(/(\.\w+)$/i, '_medium$1')
-                    const mediumPath = path.join(workingDir, mediumName)
-
-                    const thumbStoragePath = path.join(path.dirname(filePath), thumbName)
-                    const mediumStoragePath = path.join(path.dirname(filePath), mediumName)
-
-                    // Download original
-                    await bucket.file(filePath).download({ destination: tempFilePath })
-
-                    // Generate thumbnails
-                    await sharp(tempFilePath).resize(200, 200, { fit: 'cover' }).toFile(thumbPath)
-                    await sharp(tempFilePath).resize(600, 600, { fit: 'cover' }).toFile(mediumPath)
-
-                    // Upload
-                    await bucket.upload(thumbPath, {
-                        destination: thumbStoragePath,
-                        metadata: { contentType, cacheControl: 'public, max-age=31536000' },
-                    })
-                    await bucket.upload(mediumPath, {
-                        destination: mediumStoragePath,
-                        metadata: { contentType, cacheControl: 'public, max-age=31536000' },
-                    })
-
-                    // Get signed URLs
-                    const [thumbUrl] = await bucket.file(thumbStoragePath).getSignedUrl({
-                        action: 'read',
-                        expires: '03-01-2500',
-                    })
-                    const [mediumUrl] = await bucket.file(mediumStoragePath).getSignedUrl({
-                        action: 'read',
-                        expires: '03-01-2500',
-                    })
-
-                    // Update Firestore
-                    await doc.ref.update({ thumbnailURL: thumbUrl, mediumURL: mediumUrl })
-
-                    // Cleanup
-                    await fs.remove(workingDir)
-                    processed++
-                    functions.logger.info(`[${processed}] Backfilled thumbnails for post ${doc.id}`)
-                } catch (err: any) {
-                    errors++
-                    functions.logger.error(`Error processing post ${doc.id}:`, err.message)
-                }
-            }
-
-            res.status(200).send({
-                success: true,
-                message: `Backfill complete. Processed: ${processed}, Skipped: ${skipped}, Errors: ${errors}`,
-            })
-        } catch (error: any) {
-            functions.logger.error('Backfill failed:', error)
-            res.status(500).send({ success: false, error: error.message })
-        }
-    })
+// backfillThumbnails: REMOVED — one-time migration completed, unauthenticated HTTP endpoint was a security risk

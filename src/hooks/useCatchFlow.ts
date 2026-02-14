@@ -111,11 +111,17 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
             return;
         }
 
+        // Prevent self-catch (UI should already disable the button, but guard here too)
+        if (rootPost.authorId === user.uid) {
+            Alert.alert('Not Allowed', 'You cannot catch your own post.');
+            return;
+        }
+
         setUploading(true);
         setStatusMessage('Verifying location...');
 
         try {
-            // 1. Geography validation
+            // 1. Geography validation (also checks self-catch and duplicate catch server-side)
             const validation = await validateCatch(rootPost.id, catchLocation.latitude, catchLocation.longitude);
             if (!validation.isValid) {
                 setUploading(false);
