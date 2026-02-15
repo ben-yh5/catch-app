@@ -14,6 +14,7 @@ export default {
         ios: {
             bundleIdentifier: 'app.catchapp.mobile',
             supportsTablet: true,
+            googleServicesFile: './GoogleService-Info.plist', // Download from Firebase Console
         },
         android: {
             package: 'app.catchapp.mobile',
@@ -58,6 +59,8 @@ export default {
                 },
             ],
             '@rnmapbox/maps',
+            '@react-native-firebase/app',
+            '@react-native-firebase/app-check',
         ],
         experiments: {
             typedRoutes: true,

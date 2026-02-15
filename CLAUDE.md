@@ -142,6 +142,9 @@ Notification types: `new_post`, `follow`, `royalty`.
 ### processed_events/{eventId} (trigger deduplication, server-only)
 - `processedAt`: timestamp
 
+### rate_limits/{userId} (per-user rate limiting, server-only)
+- `{functionName}_ts`: array of timestamps (sliding window)
+
 ## Cloud Functions (`functions/src/index.ts`)
 
 | Function | Type | Purpose |
@@ -171,12 +174,23 @@ Notification types: `new_post`, `follow`, `royalty`.
 - **Trigger idempotency**: `onPostCreated` and `onPostDeleted` deduplicate via `context.eventId` using a `processed_events` collection to handle Firestore's at-least-once delivery.
 - **Username uniqueness**: `setupUsername` Cloud Function uses a `usernames/{lowercase}` collection as an atomic uniqueness index via Firestore transaction.
 - **Atomic follow/unfollow**: `followUser`/`unfollowUser` Cloud Functions update both users' arrays in a single transaction. No client-side writes to `followers` or `following`.
+- **Rate limiting**: All callable Cloud Functions enforce per-user rate limits via `checkRateLimit()` helper using `rate_limits/{userId}` Firestore docs. Three tiers: GENERAL (30/min), EXPENSIVE (10/min), SETUP (5/min). Fail-open design.
+- **App Check**: Native attestation (App Attest for iOS, Play Integrity for Android) bridged to JS SDK via `CustomProvider` in `src/services/firebase.js`. Server-side `verifyAppCheck()` helper in Cloud Functions with configurable `warn`/`enforce` mode. Currently in `warn` mode.
+- **Geospatial query limits**: `getPostsInArea` caps results at 200 per geohash sub-query and 500 total. Validates `radiusInMeters > 0`, coordinate ranges, and viewport bounds.
 
 ## Firestore Security Rules
 
 Rules enforce authorization, not just authentication:
-- **Users**: Self-update restricted to allowlisted fields (`username`, `pushToken`, `notificationSettings`, `dataContributionEnabled`, `bio`). Server-computed fields (`contribution`, `totalPosts`, `totalCatches`, `followers`, `following`) only writable by Cloud Functions (admin SDK).
+- **Users**: Reads require authentication (`allow read: if request.auth != null`). Self-update restricted to allowlisted fields (`username`, `pushToken`, `notificationSettings`, `dataContributionEnabled`, `bio`). Server-computed fields (`contribution`, `totalPosts`, `totalCatches`, `followers`, `following`) only writable by Cloud Functions (admin SDK).
 - **Followers/Following**: Managed exclusively by `followUser`/`unfollowUser` Cloud Functions. No client-side writes.
 - **Posts**: `create` requires `authorId == auth.uid`. No client-side updates allowed (`catchCount` managed by Cloud Functions). Only author can delete.
 - **Notifications**: Proper subcollection rules under `match /notifications/{notifId}` with owner-only access. Updates restricted to `read` field only.
 - **Post locations**: `create` validates required fields (`postId`, `latitude`, `longitude`, `geohash`) and coordinate ranges. No client reads.
+- **Rate limits**: `rate_limits/{userId}` collection — admin SDK only (`allow read, write: if false`).
+
+## Storage Security Rules
+
+- **Content validation**: All upload paths enforce `isValidImage()` — content type must be `image/(jpeg|png|webp)` and size ≤ 10MB.
+- **Posts**: Owner-only writes to `/posts/{userId}/`, public reads.
+- **Training data**: Any authenticated user can write (client-side opt-in check), authenticated reads.
+- **User profiles**: Owner-only writes to `/users/{userId}/`, public reads.

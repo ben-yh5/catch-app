@@ -12,3 +12,20 @@ jest.mock('react-native-reanimated', () => {
 
 // Silence the warning: Animated: `useNativeDriver` is not supported because the native animated module is missing
 // jest.mock('react-native/Libraries/Animated/src/NativeAnimatedHelper');
+
+// Mock @react-native-firebase/app-check for App Check bridge
+jest.mock('@react-native-firebase/app-check', () => ({
+    default: () => ({
+        initializeAppCheck: jest.fn(),
+        getToken: jest.fn().mockResolvedValue({
+            token: 'mock-app-check-token',
+        }),
+    }),
+    firebase: {
+        appCheck: () => ({
+            newReactNativeFirebaseAppCheckProvider: () => ({
+                configure: jest.fn(),
+            }),
+        }),
+    },
+}));

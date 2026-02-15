@@ -54,10 +54,22 @@ describe('users collection', () => {
 
   // --- Read ---
 
-  test('anyone can read user profiles', async () => {
+  test('unauthenticated user CANNOT read user profiles', async () => {
     await seedUser(USER_ID);
     const unauthed = testEnv.unauthenticatedContext();
-    await assertSucceeds(getDoc(doc(unauthed.firestore(), 'users', USER_ID)));
+    await assertFails(getDoc(doc(unauthed.firestore(), 'users', USER_ID)));
+  });
+
+  test('authenticated user can read own profile', async () => {
+    await seedUser(USER_ID);
+    const authed = testEnv.authenticatedContext(USER_ID);
+    await assertSucceeds(getDoc(doc(authed.firestore(), 'users', USER_ID)));
+  });
+
+  test('authenticated user can read other user profiles', async () => {
+    await seedUser(USER_ID);
+    const otherAuthed = testEnv.authenticatedContext(OTHER_USER_ID);
+    await assertSucceeds(getDoc(doc(otherAuthed.firestore(), 'users', USER_ID)));
   });
 
   // --- Create ---
@@ -125,10 +137,10 @@ describe('users collection', () => {
     );
   });
 
-  test('owner can update following array', async () => {
+  test('owner CANNOT update following array (managed by Cloud Functions)', async () => {
     await seedUser(USER_ID);
     const authed = testEnv.authenticatedContext(USER_ID);
-    await assertSucceeds(
+    await assertFails(
       updateDoc(doc(authed.firestore(), 'users', USER_ID), {
         following: arrayUnion('someUserId'),
       })
@@ -167,39 +179,19 @@ describe('users collection', () => {
     );
   });
 
-  // --- Followers update by other users ---
+  // --- Followers/following managed by Cloud Functions only ---
 
-  test('other user can add one follower', async () => {
+  test('other user CANNOT update followers (managed by Cloud Functions)', async () => {
     await seedUser(USER_ID);
     const otherAuthed = testEnv.authenticatedContext(OTHER_USER_ID);
-    await assertSucceeds(
+    await assertFails(
       updateDoc(doc(otherAuthed.firestore(), 'users', USER_ID), {
         followers: arrayUnion(OTHER_USER_ID),
       })
     );
   });
 
-  test('other user can remove one follower', async () => {
-    await seedUser(USER_ID, { followers: [OTHER_USER_ID] });
-    const otherAuthed = testEnv.authenticatedContext(OTHER_USER_ID);
-    await assertSucceeds(
-      updateDoc(doc(otherAuthed.firestore(), 'users', USER_ID), {
-        followers: arrayRemove(OTHER_USER_ID),
-      })
-    );
-  });
-
-  test('other user CANNOT replace entire followers array', async () => {
-    await seedUser(USER_ID, { followers: ['a', 'b', 'c'] });
-    const otherAuthed = testEnv.authenticatedContext(OTHER_USER_ID);
-    await assertFails(
-      updateDoc(doc(otherAuthed.firestore(), 'users', USER_ID), {
-        followers: ['fake1', 'fake2', 'fake3', 'fake4', 'fake5'],
-      })
-    );
-  });
-
-  test('other user CANNOT update non-followers fields', async () => {
+  test('other user CANNOT update any fields on another user', async () => {
     await seedUser(USER_ID);
     const otherAuthed = testEnv.authenticatedContext(OTHER_USER_ID);
     await assertFails(
@@ -209,7 +201,7 @@ describe('users collection', () => {
     );
   });
 
-  test('unauthenticated user CANNOT update followers', async () => {
+  test('unauthenticated user CANNOT update user documents', async () => {
     await seedUser(USER_ID);
     const unauthed = testEnv.unauthenticatedContext();
     await assertFails(

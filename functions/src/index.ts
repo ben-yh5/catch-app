@@ -30,6 +30,101 @@ const CONTRIBUTION = {
     NEARBY_THRESHOLD_METERS: 50
 }
 
+/** Maximum results per geohash sub-query in getPostsInArea */
+const GEOHASH_QUERY_LIMIT = 200
+
+/** Maximum total results returned from getPostsInArea */
+const MAX_AREA_RESULTS = 500
+
+/** Rate limiting configuration */
+const RATE_LIMITS = {
+    /** General callable functions (30 requests per minute) */
+    GENERAL: { windowMs: 60 * 1000, maxRequests: 30 },
+    /** Expensive operations (10 requests per minute) */
+    EXPENSIVE: { windowMs: 60 * 1000, maxRequests: 10 },
+    /** Account setup operations (5 requests per minute) */
+    SETUP: { windowMs: 60 * 1000, maxRequests: 5 },
+}
+
+/**
+ * Checks and enforces per-user rate limiting using Firestore.
+ * Uses a sliding window counter stored in rate_limits/{userId}.
+ * Fails open: if the rate limit check itself errors, the request proceeds.
+ */
+async function checkRateLimit(
+    userId: string,
+    functionName: string,
+    config: { windowMs: number; maxRequests: number }
+): Promise<void> {
+    const db = admin.firestore()
+    const rateLimitRef = db.collection('rate_limits').doc(userId)
+    const now = Date.now()
+    const windowStart = now - config.windowMs
+    const fieldTimestamps = `${functionName}_ts`
+
+    try {
+        const doc = await rateLimitRef.get()
+        const data = doc.data() || {}
+        const timestamps: number[] = data[fieldTimestamps] || []
+
+        // Filter to only timestamps within the current window
+        const recentTimestamps = timestamps.filter((t: number) => t > windowStart)
+
+        if (recentTimestamps.length >= config.maxRequests) {
+            throw new functions.https.HttpsError(
+                'resource-exhausted',
+                'Rate limit exceeded. Try again later.'
+            )
+        }
+
+        // Add current timestamp and prune old ones
+        recentTimestamps.push(now)
+        await rateLimitRef.set(
+            { [fieldTimestamps]: recentTimestamps },
+            { merge: true }
+        )
+    } catch (error) {
+        // Re-throw rate limit errors
+        if (error instanceof functions.https.HttpsError) {
+            throw error
+        }
+        // If rate limiting itself fails, log but don't block the request
+        functions.logger.error('Rate limit check failed:', error)
+    }
+}
+
+/**
+ * App Check enforcement mode.
+ * 'warn' = log warnings but allow requests (for initial rollout)
+ * 'enforce' = reject requests without valid App Check token
+ *
+ * TODO: Switch to 'enforce' after validating that updated clients send valid App Check tokens.
+ * Requires: Apple Developer Program (App Attest) and Google Play Console (Play Integrity).
+ */
+const APP_CHECK_MODE: 'warn' | 'enforce' = 'warn'
+
+/**
+ * Verifies App Check token on a callable function context.
+ * In 'warn' mode, logs a warning but allows the request.
+ * In 'enforce' mode, throws an error for requests without valid tokens.
+ */
+function verifyAppCheck(context: functions.https.CallableContext): void {
+    if (context.app == undefined) {
+        if (APP_CHECK_MODE === 'enforce') {
+            throw new functions.https.HttpsError(
+                'failed-precondition',
+                'The function must be called from an App Check verified app.'
+            )
+        } else {
+            functions.logger.warn(
+                'App Check token missing or invalid. ' +
+                'Request allowed in warn mode. ' +
+                `User: ${context.auth?.uid || 'unauthenticated'}`
+            )
+        }
+    }
+}
+
 /**
  * Calculates the distance between two geographic coordinates using the Haversine formula
  * @param lat1 - Latitude of first point
@@ -77,6 +172,9 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
             'Must be logged in to validate catch'
         )
     }
+
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'validateCatch', RATE_LIMITS.GENERAL)
 
     const { postId, userLat, userLng } = data
 
@@ -188,6 +286,9 @@ export const getPostLocation = functions.https.onCall(async (data, context) => {
         )
     }
 
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'getPostLocation', RATE_LIMITS.GENERAL)
+
     const { postId } = data
 
     if (!postId) {
@@ -263,6 +364,9 @@ export const getPostLocations = functions.https.onCall(async (data, context) => 
             'Must be logged in to get post locations'
         )
     }
+
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'getPostLocations', RATE_LIMITS.GENERAL)
 
     const { postIds } = data
 
@@ -861,6 +965,9 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
         )
     }
 
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'getPostsInArea', RATE_LIMITS.EXPENSIVE)
+
     const db = admin.firestore()
 
     try {
@@ -872,10 +979,18 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
             const radiusInM = data.radiusInMeters
 
             // Validate radius to prevent abuse
-            if (radiusInM > 100000) {
+            if (radiusInM <= 0 || radiusInM > 100000) {
                 throw new functions.https.HttpsError(
                     'invalid-argument',
-                    'Radius cannot exceed 100km'
+                    'Radius must be between 0 and 100km'
+                )
+            }
+
+            // Validate coordinate ranges
+            if (data.centerLat < -90 || data.centerLat > 90 || data.centerLng < -180 || data.centerLng > 180) {
+                throw new functions.https.HttpsError(
+                    'invalid-argument',
+                    'Coordinates out of valid range'
                 )
             }
 
@@ -884,11 +999,12 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
 
             functions.logger.info(`Querying ${bounds.length} geohash ranges for radius ${radiusInM}m`)
 
-            // Execute queries in parallel
+            // Execute queries in parallel (with per-query limit to prevent abuse)
             const promises = bounds.map(([start, end]) => {
                 return db.collection('post_locations')
                     .where('geohash', '>=', start)
                     .where('geohash', '<=', end)
+                    .limit(GEOHASH_QUERY_LIMIT)
                     .get()
             })
 
@@ -919,11 +1035,31 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
                 return distance <= radiusInM
             })
 
-            functions.logger.info(`Found ${allResults.length} posts in geohash bounds, ${postLocations.length} within exact radius`)
+            // Cap total results
+            if (postLocations.length > MAX_AREA_RESULTS) {
+                postLocations = postLocations.slice(0, MAX_AREA_RESULTS)
+            }
+
+            functions.logger.info(`Found ${allResults.length} posts in geohash bounds, ${postLocations.length} returned (max ${MAX_AREA_RESULTS})`)
         }
 
         // OPTION B: Query by bounding box (map viewport)
-        else if (data.north && data.south && data.east && data.west) {
+        else if (data.north !== undefined && data.south !== undefined && data.east !== undefined && data.west !== undefined) {
+            // Validate viewport bounds
+            if (data.north < data.south) {
+                throw new functions.https.HttpsError(
+                    'invalid-argument',
+                    'North must be greater than south'
+                )
+            }
+            if (data.north < -90 || data.north > 90 || data.south < -90 || data.south > 90 ||
+                data.east < -180 || data.east > 180 || data.west < -180 || data.west > 180) {
+                throw new functions.https.HttpsError(
+                    'invalid-argument',
+                    'Coordinates out of valid range'
+                )
+            }
+
             // Calculate center point and approximate radius from bounds
             const centerLat = (data.north + data.south) / 2
             const centerLng = (data.east + data.west) / 2
@@ -944,6 +1080,7 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
                 return db.collection('post_locations')
                     .where('geohash', '>=', start)
                     .where('geohash', '<=', end)
+                    .limit(GEOHASH_QUERY_LIMIT)
                     .get()
             })
 
@@ -972,7 +1109,12 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
                 )
             })
 
-            functions.logger.info(`Found ${allResults.length} posts in geohash bounds, ${postLocations.length} within exact viewport`)
+            // Cap total results
+            if (postLocations.length > MAX_AREA_RESULTS) {
+                postLocations = postLocations.slice(0, MAX_AREA_RESULTS)
+            }
+
+            functions.logger.info(`Found ${allResults.length} posts in geohash bounds, ${postLocations.length} returned (max ${MAX_AREA_RESULTS})`)
         }
 
         else {
@@ -1012,6 +1154,9 @@ export const recountUserData = functions.https.onCall(async (_data, context) => 
             'Must be logged in to recount data'
         )
     }
+
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'recountUserData', RATE_LIMITS.EXPENSIVE)
 
     // Only allow recounting own data — prevents any user from overwriting another's stats
     const targetUserId = context.auth.uid
@@ -1100,6 +1245,9 @@ export const setupUsername = functions.https.onCall(async (data, context) => {
             'Must be logged in to set up username'
         )
     }
+
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'setupUsername', RATE_LIMITS.SETUP)
 
     const { username } = data
 
@@ -1196,6 +1344,9 @@ export const followUser = functions.https.onCall(async (data, context) => {
         )
     }
 
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'followUser', RATE_LIMITS.GENERAL)
+
     const { targetUserId } = data
     const currentUserId = context.auth.uid
 
@@ -1271,6 +1422,9 @@ export const unfollowUser = functions.https.onCall(async (data, context) => {
             'Must be logged in to unfollow a user'
         )
     }
+
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'unfollowUser', RATE_LIMITS.GENERAL)
 
     const { targetUserId } = data
     const currentUserId = context.auth.uid

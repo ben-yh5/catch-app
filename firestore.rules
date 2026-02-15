@@ -3,8 +3,8 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Users collection
     match /users/{userId} {
-      // Anyone can read user profiles (for viewing other users)
-      allow read: if true;
+      // Authenticated users can read user profiles (for viewing other users)
+      allow read: if request.auth != null;
 
       // Users can create their own document
       allow create: if request.auth != null && request.auth.uid == userId;
@@ -98,6 +98,12 @@ service cloud.firestore {
 
     // Processed events collection (deduplication for Firestore triggers)
     match /processed_events/{eventId} {
+      // No client access — only written by Cloud Functions (admin SDK)
+      allow read, write: if false;
+    }
+
+    // Rate limits collection (managed by Cloud Functions only)
+    match /rate_limits/{userId} {
       // No client access — only written by Cloud Functions (admin SDK)
       allow read, write: if false;
     }

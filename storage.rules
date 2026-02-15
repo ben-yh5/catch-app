@@ -12,23 +12,29 @@ service firebase.storage {
       return request.auth.uid == userId;
     }
 
+    // Helper to validate image uploads (content type + size)
+    function isValidImage() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp)')
+             && request.resource.size <= 10 * 1024 * 1024; // 10MB max
+    }
+
     // Posts: Allow uploading to own folder, reading all
     match /posts/{userId}/{imageId} {
       allow read: if true;
-      allow write: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId) && isValidImage();
     }
 
     // Training Data: Allow uploading for authorized users (opted-in)
     // For now, we just check if they are authenticated to avoid complex firestore lookups in storage rules
     match /training_data/{pairId}/{imageId} {
       allow read: if isAuthenticated(); // Must be readable to getDownloadURL
-      allow write: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidImage();
     }
-    
+
     // Profile pictures (if applicable)
     match /users/{userId}/{allPaths=**} {
       allow read: if true;
-      allow write: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId) && isValidImage();
     }
   }
 }
