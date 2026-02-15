@@ -5,15 +5,18 @@ import { usePost } from '@/context/PostContext'
 import { useDeviceSensors } from '@/hooks/useDeviceSensors'
 import { db, storage } from '@/services/firebase'
 import { colors } from '@/theme/colors'
+import { Post } from '@/types'
+import { validateCatch } from '@/utils/catchValidation'
 import { getPostsInRadius } from '@/utils/geospatialQueries'
 import { cropToSquare } from '@/utils/imageProcessing'
 import { checkBlur } from '@/utils/imageValidation'
 import { addPostToList } from '@/utils/listUtils'
+import { findMostSimilar } from '@/utils/visualMatcher'
 import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
-import { addDoc, collection, doc, getDoc } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, getDocs, query, where, documentId } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { geohashForLocation } from 'geofire-common'
 import React, { useRef, useState } from 'react'
@@ -32,6 +35,8 @@ export default function PostScreen() {
     const [location, setLocation] = useState<LocationData | null>(null)
     const [loadingLocation, setLoadingLocation] = useState(false)
     const [uploading, setUploading] = useState(false)
+    const [similarPost, setSimilarPost] = useState<Post | null>(null)
+    const [catchTarget, setCatchTarget] = useState<Post | null>(null)
     const processingRef = useRef(false)
     const router = useRouter()
     const { user } = useAuth()
@@ -156,6 +161,11 @@ export default function PostScreen() {
 
             setLocation(photoLocation)
             setLoadingLocation(false)
+
+            // Run nudge detection in background (non-blocking)
+            if (photoLocation && processedUri) {
+                checkForSimilarPosts(processedUri, photoLocation)
+            }
         } catch (error) {
             console.error('Error in handlePhotoTaken:', error)
             if (processingRef.current) {
@@ -164,6 +174,155 @@ export default function PostScreen() {
         } finally {
             processingRef.current = false
         }
+    }
+
+    /**
+     * Nudge: checks for visually similar nearby posts after photo capture.
+     * Runs in background — doesn't block the preview screen.
+     */
+    const checkForSimilarPosts = async (imageUri: string, loc: LocationData) => {
+        try {
+            // 1. Get nearby post locations
+            const nearbyLocations = await getPostsInRadius({
+                centerLat: loc.latitude,
+                centerLng: loc.longitude,
+                radiusInMeters: 50,
+            })
+
+            if (nearbyLocations.length === 0) return
+
+            // 2. Batch fetch full post data (need photoURL)
+            const postIds = nearbyLocations
+                .map(l => l.postId)
+                .filter(id => id) // safety
+                .slice(0, 10) // limit batch size
+
+            if (postIds.length === 0) return
+
+            // Firestore 'in' queries support max 30 items
+            const postsQuery = query(
+                collection(db, 'posts'),
+                where(documentId(), 'in', postIds)
+            )
+            const postsSnap = await getDocs(postsQuery)
+            const nearbyPosts: Post[] = postsSnap.docs
+                .map(d => ({ id: d.id, ...d.data() } as Post))
+                .filter(p => p.authorId !== user?.uid) // can't catch your own
+                .filter(p => p.isOriginal) // only root posts
+                .slice(0, 3) // limit similarity checks
+
+            if (nearbyPosts.length === 0) return
+
+            // 3. Run visual similarity (use thumbnails for speed)
+            const candidateUris = nearbyPosts.map(p => p.thumbnailURL || p.photoURL)
+            const match = await findMostSimilar(imageUri, candidateUris)
+
+            if (match) {
+                console.log(`[PostScreen] Nudge: similar post found (score=${match.score.toFixed(3)})`)
+                setSimilarPost(nearbyPosts[match.index])
+            }
+        } catch (error) {
+            // Non-critical — nudge failure should never block posting
+            console.warn('[PostScreen] Nudge check failed:', error)
+        }
+    }
+
+    const handleCatchInstead = (post: Post) => {
+        // Switch to catch mode — keep the captured image, target this post
+        setCatchTarget(post)
+        setSimilarPost(null)
+    }
+
+    const handleCatchConfirm = async (caption?: string, listIds?: Set<string>) => {
+        if (!user || !capturedImage || !catchTarget || !location) {
+            Alert.alert('Error', 'Missing information to complete catch.')
+            return
+        }
+
+        setUploading(true)
+
+        try {
+            // 1. Validate catch (proximity, self-catch, duplicate)
+            const validation = await validateCatch(catchTarget.id, location.latitude, location.longitude)
+            if (!validation.isValid) {
+                setUploading(false)
+                Alert.alert('Too Far Away', `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m.`)
+                return
+            }
+
+            // 2. Quality check
+            const isSharpEnough = await checkBlur(capturedImage)
+            if (!isSharpEnough) {
+                setUploading(false)
+                Alert.alert('Too Blurry', 'Your photo is too blurry. Please steady your hand and try again.')
+                return
+            }
+
+            // 3. Upload image
+            const userDoc = await getDoc(doc(db, 'users', user.uid))
+            const username = userDoc.exists() ? userDoc.data().username : 'Anonymous'
+
+            const response = await fetch(capturedImage)
+            const blob = await response.blob()
+            const filename = `posts/${user.uid}/catch_${Date.now()}.jpg`
+            const storageRef = ref(storage, filename)
+            await uploadBytes(storageRef, blob)
+            const photoURL = await getDownloadURL(storageRef)
+
+            // 4. Create catch post
+            const postData = {
+                authorId: user.uid,
+                authorUsername: username,
+                photoURL,
+                caption: caption?.trim() || '',
+                hasLocation: true,
+                catchCount: 0,
+                parentPostId: catchTarget.id,
+                rootPostId: catchTarget.id,
+                isOriginal: false,
+                createdAt: new Date(),
+            }
+            const docRef = await addDoc(collection(db, 'posts'), postData)
+
+            // 5. Store location
+            const geohash = geohashForLocation([location.latitude, location.longitude])
+            await addDoc(collection(db, 'post_locations'), {
+                postId: docRef.id,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                heading: capturedHeading,
+                pitch: capturedPitch,
+                geohash,
+                createdAt: new Date(),
+            })
+
+            // 6. Add to lists
+            if (listIds && listIds.size > 0) {
+                await Promise.all(
+                    Array.from(listIds).map(id => addPostToList(id, docRef.id))
+                ).catch(e => console.error('Error adding to lists:', e))
+            }
+
+            Alert.alert('Caught!', 'Location caught! +14 Contribution')
+
+            // Reset state
+            setCapturedImage(null)
+            setLocation(null)
+            setCatchTarget(null)
+            setUploading(false)
+
+            notifyPostEvent('catch', docRef.id, user.uid)
+            router.push('/(tabs)/profile')
+        } catch (error: any) {
+            console.error('Error in catch confirm:', error)
+            setUploading(false)
+            Alert.alert('Error', `Failed: ${error.message || 'Unknown error'}`)
+        }
+    }
+
+    const handleCatchCancel = () => {
+        // Go back to post preview mode (keep the image)
+        setCatchTarget(null)
     }
 
     const handleCameraCancel = () => {
@@ -318,6 +477,8 @@ export default function PostScreen() {
         processingRef.current = false
         setCapturedImage(null)
         setLocation(null)
+        setSimilarPost(null)
+        setCatchTarget(null)
         setLoadingLocation(false)
     }
 
@@ -334,7 +495,24 @@ export default function PostScreen() {
         )
     }
 
-    // Preview View
+    // Preview View — catch mode (user tapped nudge card)
+    if (capturedImage && catchTarget) {
+        return (
+            <UnifiedPreviewScreen
+                imageUri={capturedImage}
+                onConfirm={handleCatchConfirm}
+                onCancel={handleCatchCancel}
+                mode="catch"
+                loading={uploading}
+                loadingText="Catching..."
+                hasLocation={!!location}
+                loadingLocation={loadingLocation}
+                originalPhotoUrl={catchTarget.photoURL}
+            />
+        )
+    }
+
+    // Preview View — post mode (default)
     if (capturedImage) {
         return (
             <UnifiedPreviewScreen
@@ -346,6 +524,8 @@ export default function PostScreen() {
                 loadingText="Uploading..."
                 hasLocation={!!location}
                 loadingLocation={loadingLocation}
+                similarPost={similarPost}
+                onCatchInstead={handleCatchInstead}
             />
         )
     }

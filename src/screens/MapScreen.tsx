@@ -8,6 +8,7 @@ import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
 import { getPostsInViewport as fetchViewportPosts, getPostLocations } from '@/utils/geospatialQueries'
+import { getPostBountyStatus } from '@/utils/postClassification'
 import { batchGetPosts } from '@/utils/postUtils'
 import { Ionicons } from '@expo/vector-icons'
 import Mapbox, { Camera, CircleLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
@@ -36,6 +37,8 @@ const MAP_COLORS = {
     pin: colors.pinDefault,             // Blue - uncaught posts
     pinCaught: colors.pinCaught,        // Pink - caught by user
     selectedPin: colors.pinSelected,    // Light pink - currently selected
+    pinBounty: colors.pinBounty,        // Gold - bounty posts
+    pinTrending: colors.pinTrending,    // Silver - trending posts
     stroke: colors.white,
 }
 
@@ -473,6 +476,8 @@ export default function MapScreen() {
                     isSelected: post.id === selectedPostId,
                     isOwn: post.authorId === user?.uid,
                     isCaught: caughtThreadIds.has(post.id),
+                    isBounty: getPostBountyStatus(post) === 'bounty',
+                    isTrending: getPostBountyStatus(post) === 'trending',
                 },
                 geometry: {
                     type: 'Point' as const,
@@ -719,6 +724,10 @@ export default function MapScreen() {
                                     MAP_COLORS.selectedPin,
                                     ['get', 'isCaught'],
                                     MAP_COLORS.pinCaught,
+                                    ['get', 'isBounty'],
+                                    MAP_COLORS.pinBounty,
+                                    ['get', 'isTrending'],
+                                    MAP_COLORS.pinTrending,
                                     MAP_COLORS.pin,
                                 ],
                                 circleRadius: ['case', ['get', 'isSelected'], 12, 10],

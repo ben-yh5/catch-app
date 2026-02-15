@@ -139,3 +139,73 @@ export const verifyViewSimilarity = async (
 
     return similarity;
 };
+
+/**
+ * Extracts a single embedding vector from an image.
+ */
+export const getImageEmbedding = async (uri: string): Promise<Float32Array> => {
+    const tflite = await loadVerifierModel();
+    const tensor = await imageToTensor(uri);
+    const result = await tflite.run([tensor]);
+    return new Float32Array(result[0] as Float32Array);
+};
+
+/** Nudge similarity threshold (lower than catch validation — loose matching for suggestions) */
+export const NUDGE_SIMILARITY_THRESHOLD = 0.50;
+
+/**
+ * Finds the most similar image from a list of candidates.
+ * Used by the Nudge system to suggest existing posts to catch.
+ *
+ * @param capturedUri Local URI of the user's captured photo
+ * @param candidateUris Remote URLs of nearby post images (use thumbnailURL for speed)
+ * @returns Best match index and score, or null if none exceed threshold
+ */
+export const findMostSimilar = async (
+    capturedUri: string,
+    candidateUris: string[]
+): Promise<{ index: number; score: number } | null> => {
+    if (candidateUris.length === 0) return null;
+
+    try {
+        const tflite = await loadVerifierModel();
+
+        // Get embedding for captured image
+        const capturedTensor = await imageToTensor(capturedUri);
+        const capturedRes = await tflite.run([capturedTensor]);
+        const capturedVector = new Float32Array(capturedRes[0] as Float32Array);
+
+        let bestIndex = -1;
+        let bestScore = 0;
+
+        // Compare against each candidate sequentially
+        for (let i = 0; i < candidateUris.length; i++) {
+            try {
+                const candidateTensor = await imageToTensor(candidateUris[i]);
+                const candidateRes = await tflite.run([candidateTensor]);
+                const candidateVector = new Float32Array(candidateRes[0] as Float32Array);
+
+                const score = calculateCosineSimilarity(capturedVector, candidateVector);
+                console.log(`[VisualMatcher] Nudge candidate ${i}: similarity=${score.toFixed(4)}`);
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestIndex = i;
+                }
+            } catch (e) {
+                console.warn(`[VisualMatcher] Failed to process candidate ${i}:`, e);
+            }
+        }
+
+        if (bestIndex >= 0 && bestScore >= NUDGE_SIMILARITY_THRESHOLD) {
+            console.log(`[VisualMatcher] Nudge best match: index=${bestIndex}, score=${bestScore.toFixed(4)}`);
+            return { index: bestIndex, score: bestScore };
+        }
+
+        console.log(`[VisualMatcher] No nudge match found (best=${bestScore.toFixed(4)})`);
+        return null;
+    } catch (error) {
+        console.warn('[VisualMatcher] Nudge similarity check failed:', error);
+        return null;
+    }
+};

@@ -29,6 +29,8 @@ export const colors = {
     pinDefault: '#007AFF',      // Blue - uncaught posts
     pinCaught: '#CF2CF6',       // Pink - caught by user
     pinSelected: '#CF2CF6',     // Pink - currently selected
+    pinBounty: '#FFD700',       // Gold - bounty posts (0 catches or inactive >30 days)
+    pinTrending: '#C0C0C0',     // Silver - trending posts (high catch count)
     userLocation: '#CF2CF6',    // Pink - user's location puck
 
     // Text

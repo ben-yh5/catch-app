@@ -13,6 +13,7 @@
  */
 
 import { colors } from '@/theme/colors'
+import { Post } from '@/types'
 import React, { useState } from 'react'
 import {
     KeyboardAvoidingView,
@@ -22,6 +23,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ListSelectionBottomSheet from './ListSelectionBottomSheet'
+import NudgeCard from './NudgeCard'
 import PostCard from './PostCard'
 interface UnifiedPreviewScreenProps {
     imageUri: string
@@ -33,6 +35,8 @@ interface UnifiedPreviewScreenProps {
     hasLocation?: boolean
     loadingLocation?: boolean
     originalPhotoUrl?: string
+    similarPost?: Post | null
+    onCatchInstead?: (post: Post) => void
 }
 
 export default function UnifiedPreviewScreen({
@@ -45,10 +49,13 @@ export default function UnifiedPreviewScreen({
     hasLocation = false,
     loadingLocation = false,
     originalPhotoUrl,
+    similarPost,
+    onCatchInstead,
 }: UnifiedPreviewScreenProps) {
     const [caption, setCaption] = useState('')
     const [showListSelection, setShowListSelection] = useState(false)
     const [selectedListIds, setSelectedListIds] = useState<Set<string>>(new Set())
+    const [nudgeDismissed, setNudgeDismissed] = useState(false)
     const insets = useSafeAreaInsets()
 
     const handleConfirm = () => {
@@ -88,6 +95,13 @@ export default function UnifiedPreviewScreen({
                 ]}
                 keyboardShouldPersistTaps="handled"
             >
+                {isPost && similarPost && !nudgeDismissed && onCatchInstead && (
+                    <NudgeCard
+                        post={similarPost}
+                        onCatchInstead={onCatchInstead}
+                        onDismiss={() => setNudgeDismissed(true)}
+                    />
+                )}
                 <PostCard
                     // Header
                     showBackButton={true}

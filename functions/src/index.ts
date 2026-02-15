@@ -27,7 +27,11 @@ const CONTRIBUTION = {
     CATCH: 14,             // Catching any post
     ROYALTY_PIONEER: 7,    // Royalty to original poster when Pioneer post is caught
     ROYALTY_NEARBY: 2,     // Royalty to original poster when Nearby post is caught
-    NEARBY_THRESHOLD_METERS: 50
+    NEARBY_THRESHOLD_METERS: 50,
+    BOUNTY_MULTIPLIER: 3,       // Gold pin: 3x catch pts for dead posts
+    TRENDING_MULTIPLIER: 1.5,   // Silver pin: 1.5x catch pts for popular posts
+    TRENDING_THRESHOLD: 5,      // Catches needed to be trending
+    BOUNTY_INACTIVITY_DAYS: 30, // Days since last catch to become bounty
 }
 
 /** Maximum results per geohash sub-query in getPostsInArea */
@@ -470,35 +474,41 @@ export const onPostCreated = functions.firestore
 
             // Handle CATCH posts
             if (postData.parentPostId && !postData.isOriginal) {
-                // Award catch contribution to catcher
-                await userRef.update({
-                    totalCatches: admin.firestore.FieldValue.increment(1),
-                    contribution: admin.firestore.FieldValue.increment(CONTRIBUTION.CATCH),
-                })
-                functions.logger.info(`Awarded ${CONTRIBUTION.CATCH} contribution to catcher ${authorId}`)
-
-                // Award royalty to original poster
+                // Determine bounty/trending status of root post for catch multiplier
+                let catchPoints = CONTRIBUTION.CATCH
+                let catchMultiplier = 1
                 const rootPostId = postData.rootPostId
+
                 if (rootPostId) {
                     const rootPostDoc = await db.collection('posts').doc(rootPostId).get()
                     if (rootPostDoc.exists) {
-                        const rootData = rootPostDoc.data()
-                        const rootAuthorId = rootData?.authorId
-                        const isPioneer = rootData?.isPioneer ?? true // Default to Pioneer if not set
+                        const rootData = rootPostDoc.data()!
+                        const rootCatchCount = rootData.catchCount ?? 0
+                        const lastCaughtAt = rootData.lastCaughtAt?.toMillis?.() ?? 0
+                        const thirtyDaysAgo = Date.now() - CONTRIBUTION.BOUNTY_INACTIVITY_DAYS * 24 * 60 * 60 * 1000
 
+                        const isBountyPost = rootCatchCount === 0 || (lastCaughtAt > 0 && lastCaughtAt < thirtyDaysAgo)
+                        const isTrendingPost = !isBountyPost && rootCatchCount >= CONTRIBUTION.TRENDING_THRESHOLD
+
+                        if (isBountyPost) {
+                            catchMultiplier = CONTRIBUTION.BOUNTY_MULTIPLIER
+                        } else if (isTrendingPost) {
+                            catchMultiplier = CONTRIBUTION.TRENDING_MULTIPLIER
+                        }
+                        catchPoints = Math.round(CONTRIBUTION.CATCH * catchMultiplier)
+                        functions.logger.info(`Catch multiplier: ${catchMultiplier}x (bounty=${isBountyPost}, trending=${isTrendingPost}), points=${catchPoints}`)
+
+                        // Award royalty to original poster (unmultiplied)
+                        const rootAuthorId = rootData.authorId
+                        const isPioneer = rootData.isPioneer ?? true
                         const royalty = isPioneer ? CONTRIBUTION.ROYALTY_PIONEER : CONTRIBUTION.ROYALTY_NEARBY
 
                         if (rootAuthorId && rootAuthorId !== authorId) {
-                            // AWARD ROYALTY
                             await db.collection('users').doc(rootAuthorId).update({
                                 contribution: admin.firestore.FieldValue.increment(royalty),
                             })
                             functions.logger.info(`Awarded ${royalty} royalty to original poster ${rootAuthorId}`)
 
-                            // CREATE NOTIFICATION
-                            // Check user settings first (optional optimization, but good practice to check if we should even create the doc)
-                            // For now, we'll create the doc, and the client can decide whether to show a badge or push notification based on settings
-                            // Actually, let's just create it. Settings usually control PUSH, not in-app inbox.
                             try {
                                 await db.collection('users').doc(rootAuthorId).collection('notifications').add({
                                     type: 'royalty',
@@ -514,13 +524,26 @@ export const onPostCreated = functions.firestore
                             }
                         }
 
-                        // Increment contributionEarned and catchCount on root post
+                        // Update root post: increment contributionEarned, catchCount, and set lastCaughtAt
                         await rootPostDoc.ref.update({
                             contributionEarned: admin.firestore.FieldValue.increment(royalty),
                             catchCount: admin.firestore.FieldValue.increment(1),
+                            lastCaughtAt: admin.firestore.FieldValue.serverTimestamp(),
                         })
                     }
                 }
+
+                // Award catch contribution to catcher (with multiplier)
+                await userRef.update({
+                    totalCatches: admin.firestore.FieldValue.increment(1),
+                    contribution: admin.firestore.FieldValue.increment(catchPoints),
+                })
+                functions.logger.info(`Awarded ${catchPoints} contribution to catcher ${authorId}`)
+
+                // Store actual catch points earned on the catch post
+                await postRef.update({
+                    contributionEarned: catchPoints,
+                })
             }
 
             // Handle ORIGINAL posts
@@ -774,16 +797,30 @@ export const onPostDeleted = functions.firestore
                     }
                 }
             } else {
-                // Catch deleted - decrement root's catchCount
+                // Catch deleted - decrement root's catchCount and claw back royalty
                 const rootPostId = postData.rootPostId
                 if (rootPostId) {
                     const rootRef = db.collection('posts').doc(rootPostId)
                     const rootDoc = await rootRef.get()
                     if (rootDoc.exists) {
+                        const rootData = rootDoc.data()!
+                        const isPioneer = rootData.isPioneer ?? true
+                        const royalty = isPioneer ? CONTRIBUTION.ROYALTY_PIONEER : CONTRIBUTION.ROYALTY_NEARBY
+
                         await rootRef.update({
                             catchCount: admin.firestore.FieldValue.increment(-1),
+                            contributionEarned: admin.firestore.FieldValue.increment(-royalty),
                         })
-                        functions.logger.info(`Decremented catchCount for root post ${rootPostId}`)
+                        functions.logger.info(`Decremented catchCount and contributionEarned (${royalty}) for root post ${rootPostId}`)
+
+                        // Claw back royalty from original poster
+                        const rootAuthorId = rootData.authorId
+                        if (rootAuthorId && rootAuthorId !== authorId) {
+                            await db.collection('users').doc(rootAuthorId).update({
+                                contribution: admin.firestore.FieldValue.increment(-royalty),
+                            })
+                            functions.logger.info(`Clawed back ${royalty} royalty from original poster ${rootAuthorId}`)
+                        }
                     }
                 }
 

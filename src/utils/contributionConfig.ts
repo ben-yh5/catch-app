@@ -22,5 +22,17 @@ export const CONTRIBUTION = {
     ROYALTY_NEARBY: 2,
 
     /** Distance threshold (meters) for Pioneer vs Nearby classification */
-    NEARBY_THRESHOLD_METERS: 50
+    NEARBY_THRESHOLD_METERS: 50,
+
+    /** Bounty (Gold Pin): catch multiplier for dead posts (0 catches or inactive >30 days) */
+    BOUNTY_MULTIPLIER: 3,
+
+    /** Trending (Silver Pin): catch multiplier for popular posts */
+    TRENDING_MULTIPLIER: 1.5,
+
+    /** Minimum catches for a post to be considered trending */
+    TRENDING_THRESHOLD: 5,
+
+    /** Days of inactivity before a post becomes a bounty */
+    BOUNTY_INACTIVITY_DAYS: 30,
 };
