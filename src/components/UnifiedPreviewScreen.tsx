@@ -20,6 +20,7 @@ import {
     Platform,
     ScrollView,
     StyleSheet,
+    View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ListSelectionBottomSheet from './ListSelectionBottomSheet'
@@ -37,6 +38,7 @@ interface UnifiedPreviewScreenProps {
     originalPhotoUrl?: string
     similarPost?: Post | null
     onCatchInstead?: (post: Post) => void
+    onNotAMatch?: () => void
 }
 
 export default function UnifiedPreviewScreen({
@@ -51,6 +53,7 @@ export default function UnifiedPreviewScreen({
     originalPhotoUrl,
     similarPost,
     onCatchInstead,
+    onNotAMatch,
 }: UnifiedPreviewScreenProps) {
     const [caption, setCaption] = useState('')
     const [showListSelection, setShowListSelection] = useState(false)
@@ -95,13 +98,6 @@ export default function UnifiedPreviewScreen({
                 ]}
                 keyboardShouldPersistTaps="handled"
             >
-                {isPost && similarPost && !nudgeDismissed && onCatchInstead && (
-                    <NudgeCard
-                        post={similarPost}
-                        onCatchInstead={onCatchInstead}
-                        onDismiss={() => setNudgeDismissed(true)}
-                    />
-                )}
                 <PostCard
                     // Header
                     showBackButton={true}
@@ -136,6 +132,20 @@ export default function UnifiedPreviewScreen({
                 />
             </ScrollView>
 
+            {isPost && similarPost && !nudgeDismissed && onCatchInstead && (
+                <View style={[styles.nudgeOverlay, { bottom: insets.bottom + 10 }]}>
+                    <NudgeCard
+                        post={similarPost}
+                        onCatchInstead={onCatchInstead}
+                        onDismiss={() => setNudgeDismissed(true)}
+                        onNotAMatch={() => {
+                            setNudgeDismissed(true)
+                            onNotAMatch?.()
+                        }}
+                    />
+                </View>
+            )}
+
             <ListSelectionBottomSheet
                 visible={showListSelection}
                 onClose={() => setShowListSelection(false)}
@@ -154,5 +164,10 @@ const styles = StyleSheet.create({
     scrollContent: {
         padding: 10,
         paddingBottom: 40,
+    },
+    nudgeOverlay: {
+        position: 'absolute',
+        left: 10,
+        right: 10,
     },
 })

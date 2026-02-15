@@ -18,9 +18,10 @@ interface NudgeCardProps {
     post: Post
     onCatchInstead: (post: Post) => void
     onDismiss: () => void
+    onNotAMatch: () => void
 }
 
-export default function NudgeCard({ post, onCatchInstead, onDismiss }: NudgeCardProps) {
+export default function NudgeCard({ post, onCatchInstead, onDismiss, onNotAMatch }: NudgeCardProps) {
     return (
         <View style={styles.container}>
             <TouchableOpacity style={styles.dismissButton} onPress={onDismiss}>
@@ -64,9 +65,9 @@ export default function NudgeCard({ post, onCatchInstead, onDismiss }: NudgeCard
                 />
             </TouchableOpacity>
 
-            <Text style={styles.hint}>
-                Catch this thread instead of creating a duplicate
-            </Text>
+            <TouchableOpacity onPress={onNotAMatch} activeOpacity={0.6}>
+                <Text style={styles.notAMatch}>Not the same place</Text>
+            </TouchableOpacity>
         </View>
     )
 }
@@ -131,10 +132,11 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: colors.primary,
     },
-    hint: {
-        fontSize: 11,
+    notAMatch: {
+        fontSize: 12,
         color: colors.textTertiary,
-        marginTop: 8,
+        marginTop: 10,
         textAlign: 'center',
+        textDecorationLine: 'underline',
     },
 })

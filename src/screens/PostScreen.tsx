@@ -8,6 +8,7 @@ import { colors } from '@/theme/colors'
 import { Post } from '@/types'
 import { validateCatch } from '@/utils/catchValidation'
 import { getPostsInRadius } from '@/utils/geospatialQueries'
+import { uploadTrainingPair } from '@/services/trainingData'
 import { cropToSquare } from '@/utils/imageProcessing'
 import { checkBlur } from '@/utils/imageValidation'
 import { addPostToList } from '@/utils/listUtils'
@@ -39,7 +40,7 @@ export default function PostScreen() {
     const [catchTarget, setCatchTarget] = useState<Post | null>(null)
     const processingRef = useRef(false)
     const router = useRouter()
-    const { user } = useAuth()
+    const { user, dataContributionEnabled } = useAuth()
     const { notifyPostEvent } = usePost()
 
     // Use shared sensor hook
@@ -231,6 +232,32 @@ export default function PostScreen() {
         // Switch to catch mode — keep the captured image, target this post
         setCatchTarget(post)
         setSimilarPost(null)
+    }
+
+    const handleNotAMatch = () => {
+        const post = similarPost
+        setSimilarPost(null)
+
+        if (!dataContributionEnabled || !post || !capturedImage || !location || !user) return
+
+        // Upload as hard negative in background — model thought they matched, user disagreed
+        const meta = {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            heading: capturedHeading ?? undefined,
+            pitch: capturedPitch ?? undefined,
+            date: new Date(),
+        }
+        uploadTrainingPair(
+            post.id,
+            null,
+            post.thumbnailURL || post.photoURL,
+            capturedImage,
+            meta,
+            meta,
+            'HARD_NEGATIVE',
+            user.uid
+        )
     }
 
     const handleCatchConfirm = async (caption?: string, listIds?: Set<string>) => {
@@ -526,6 +553,7 @@ export default function PostScreen() {
                 loadingLocation={loadingLocation}
                 similarPost={similarPost}
                 onCatchInstead={handleCatchInstead}
+                onNotAMatch={handleNotAMatch}
             />
         )
     }
