@@ -2,24 +2,28 @@
  * Image Processing Utility
  *
  * Handles image manipulation for posts and catches:
- * - Crops images to 1:1 square aspect ratio
+ * - Crops captured photos to match the camera preview's visible square guide
+ * - Accounts for "cover" scaling that hides edges of the 4:3 sensor feed
  * - Resizes to 1080x1080px for consistent uploads
  * - Compresses JPEGs to reduce storage costs
- *
- * All post images in the app are stored as 1080x1080px squares.
  */
 
 import * as ImageManipulator from 'expo-image-manipulator'
-import { Image } from 'react-native'
+import { Dimensions, Image } from 'react-native'
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 
 /**
- * Processes an image captured with ratio="1:1" camera mode
- * Since the camera outputs a square image already, we just resize and compress
+ * Crops a captured photo to a square matching what was visible in the camera
+ * preview's square guide, then resizes to 1080x1080.
+ *
+ * The camera preview fills the screen via "cover" scaling, which crops the
+ * sides of the 4:3 sensor feed on tall screens. takePictureAsync() returns the
+ * full sensor output though, so we must replicate that crop here.
  */
 export async function cropToSquare(uri: string): Promise<string> {
     try {
-        // Get captured image dimensions
-        const { width: imageWidth, height: imageHeight } = await new Promise<{
+        const { width: photoWidth, height: photoHeight } = await new Promise<{
             width: number
             height: number
         }>((resolve, reject) => {
@@ -30,36 +34,32 @@ export async function cropToSquare(uri: string): Promise<string> {
             )
         })
 
-        // If image is already square (or very close), just resize
-        const aspectRatio = imageWidth / imageHeight
-        const isSquare = aspectRatio > 0.95 && aspectRatio < 1.05
+        // The camera preview uses "cover" scaling to fill the screen.
+        // Compute the same scale factor to find what was actually visible.
+        const coverScale = Math.max(
+            screenWidth / photoWidth,
+            screenHeight / photoHeight
+        )
 
-        if (isSquare) {
-            const result = await ImageManipulator.manipulateAsync(
-                uri,
-                [{ resize: { width: 1080, height: 1080 } }],
-                {
-                    compress: 0.7,
-                    format: ImageManipulator.SaveFormat.JPEG,
-                }
-            )
-            return result.uri
-        }
+        // The square guide on screen is screenWidth x screenWidth.
+        // Convert to photo-pixel coordinates.
+        const cropSize = Math.min(
+            Math.round(screenWidth / coverScale),
+            Math.min(photoWidth, photoHeight)
+        )
 
-        // Fallback: center crop to square if ratio="1:1" didn't work
-        const size = Math.min(imageWidth, imageHeight)
-        const originX = (imageWidth - size) / 2
-        const originY = (imageHeight - size) / 2
+        const originX = Math.round((photoWidth - cropSize) / 2)
+        const originY = Math.round((photoHeight - cropSize) / 2)
 
         const result = await ImageManipulator.manipulateAsync(
             uri,
             [
                 {
                     crop: {
-                        originX: Math.round(originX),
-                        originY: Math.round(originY),
-                        width: Math.round(size),
-                        height: Math.round(size),
+                        originX,
+                        originY,
+                        width: cropSize,
+                        height: cropSize,
                     },
                 },
                 { resize: { width: 1080, height: 1080 } },
