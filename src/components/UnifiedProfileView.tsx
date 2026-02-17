@@ -24,7 +24,7 @@ import {
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/services/firebase'
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
@@ -63,6 +63,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     const [followerCount, setFollowerCount] = useState<number>(0)
     const [followingCount, setFollowingCount] = useState<number>(0)
     const [isFollowing, setIsFollowing] = useState<boolean>(false)
+    const followActionPending = useRef(false)
     const [posts, setPosts] = useState<Post[]>([])
     const [catches, setCatches] = useState<Post[]>([])
     const [loading, setLoading] = useState(true)
@@ -504,6 +505,13 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         const userInList = followList.find(u => u.id === targetUserId)
         if (!userInList) return
 
+        // Optimistic update immediately
+        setFollowList(followList.map(u =>
+            u.id === targetUserId
+                ? { ...u, isFollowing: !u.isFollowing }
+                : u
+        ))
+
         try {
             if (userInList.isFollowing) {
                 const unfollowUserFn = httpsCallable(functions, 'unfollowUser')
@@ -512,21 +520,24 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                 const followUserFn = httpsCallable(functions, 'followUser')
                 await followUserFn({ targetUserId })
             }
-
-            // Update the list
-            setFollowList(followList.map(u =>
-                u.id === targetUserId
-                    ? { ...u, isFollowing: !u.isFollowing }
-                    : u
-            ))
         } catch (error) {
             console.error('Error toggling follow:', error)
+            // Revert optimistic update
+            setFollowList(prev => prev.map(u =>
+                u.id === targetUserId
+                    ? { ...u, isFollowing: userInList.isFollowing }
+                    : u
+            ))
             Alert.alert('Error', 'Failed to update follow status')
         }
     }
 
     const handleFollowToggle = async () => {
         if (!user || !userId) return
+
+        // Debounce with ref — non-blocking, just skips duplicate in-flight calls
+        if (followActionPending.current) return
+        followActionPending.current = true
 
         // Optimistic update
         const wasFollowing = isFollowing
@@ -547,6 +558,8 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             setIsFollowing(wasFollowing)
             setFollowerCount((prev) => wasFollowing ? prev + 1 : Math.max(0, prev - 1))
             Alert.alert('Error', 'Failed to update follow status. Please try again.')
+        } finally {
+            followActionPending.current = false
         }
     }
 

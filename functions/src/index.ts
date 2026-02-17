@@ -1420,11 +1420,7 @@ export const followUser = functions.https.onCall(async (data, context) => {
                 throw new functions.https.HttpsError('not-found', 'Target user not found')
             }
 
-            const currentFollowing: string[] = currentUserDoc.data()?.following || []
-            if (currentFollowing.includes(targetUserId)) {
-                throw new functions.https.HttpsError('already-exists', 'Already following this user')
-            }
-
+            // arrayUnion is idempotent — always write both sides to self-heal any inconsistency
             transaction.update(currentUserRef, {
                 following: admin.firestore.FieldValue.arrayUnion(targetUserId),
             })
@@ -1492,11 +1488,7 @@ export const unfollowUser = functions.https.onCall(async (data, context) => {
                 throw new functions.https.HttpsError('not-found', 'Target user not found')
             }
 
-            const currentFollowing: string[] = currentUserDoc.data()?.following || []
-            if (!currentFollowing.includes(targetUserId)) {
-                throw new functions.https.HttpsError('not-found', 'Not following this user')
-            }
-
+            // arrayRemove is idempotent — always write both sides to self-heal any inconsistency
             transaction.update(currentUserRef, {
                 following: admin.firestore.FieldValue.arrayRemove(targetUserId),
             })

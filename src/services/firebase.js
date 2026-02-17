@@ -49,7 +49,7 @@ if (Platform.OS !== 'web') {
         // Bridge native tokens to JS SDK via CustomProvider
         const customProvider = new CustomProvider({
             getToken: async () => {
-                const { token } = await rnAppCheck.getToken(true)
+                const { token } = await rnFirebaseAppCheck.getToken(rnAppCheck, true)
                 return {
                     token,
                     expireTimeMillis: Date.now() + 3600000, // 1 hour

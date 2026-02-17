@@ -7,24 +7,18 @@
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log",
-    "android": "expo run:android",
-    "ios": "expo run:ios"
+    "logs": "firebase functions:log"
   },
   "engines": {
     "node": "20"
   },
   "main": "lib/index.js",
   "dependencies": {
-    "firebase": "^12.5.0",
     "firebase-admin": "^11.0.0",
     "firebase-functions": "^3.14.1",
     "fs-extra": "^11.3.3",
     "geofire-common": "^6.0.0",
-    "sharp": "^0.34.5",
-    "expo": "~54.0.23",
-    "react": "19.1.0",
-    "react-native": "0.81.5"
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",

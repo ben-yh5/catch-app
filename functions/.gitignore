@@ -6,3 +6,7 @@
 typings/
 
 node_modules/
+
+# Expo native build artifacts (should not be in functions/)
+ios/
+android/
