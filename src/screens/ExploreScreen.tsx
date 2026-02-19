@@ -1,15 +1,19 @@
 import ExploreSection from '@/components/ExploreSection'
+import LocationSearchBar from '@/components/LocationSearchBar'
 import NotificationInbox from '@/components/NotificationInbox'
+import RecommendedPostCard from '@/components/RecommendedPostCard'
 import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
-import { db } from '@/services/firebase'
+import { useRecommendedFeed } from '@/hooks/useRecommendedFeed'
+import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
-import { List, Post } from '@/types'
+import { List, Post, RecommendedPost } from '@/types'
 import { calculateDistance, getPostsInRadius } from '@/utils/geospatialQueries'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
+import { httpsCallable } from 'firebase/functions'
 import {
     collection,
     doc,
@@ -20,9 +24,10 @@ import {
     query,
     where,
 } from 'firebase/firestore'
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
     ActivityIndicator,
+    FlatList,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -57,6 +62,9 @@ export default function ExploreScreen() {
     // Thread modal state
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
+
+    // Recommended feed
+    const recommendedFeed = useRecommendedFeed()
 
     const requestLocationPermission = async () => {
         setIsLocating(true)
@@ -209,13 +217,17 @@ export default function ExploreScreen() {
             fetchFeaturedLists(),
             fetchTrendingPosts(),
             fetchNewPosts(),
-            userLocation ? fetchNearPosts() : Promise.resolve()
+            userLocation ? fetchNearPosts() : Promise.resolve(),
+            recommendedFeed.refresh(),
         ])
         setRefreshing(false)
     }
 
     const handlePostPress = (postId: string) => {
-        const post = trendingPosts.find(p => p.id === postId) || newPosts.find(p => p.id === postId) || nearPosts.find(p => p.id === postId)
+        const post = trendingPosts.find(p => p.id === postId)
+            || newPosts.find(p => p.id === postId)
+            || nearPosts.find(p => p.id === postId)
+            || recommendedFeed.posts.find(p => p.id === postId)
         if (post) {
             setSelectedPost(post)
             setModalVisible(true)
@@ -235,6 +247,37 @@ export default function ExploreScreen() {
         setNewPosts(del)
         setNearPosts(del)
     }
+
+    const handleSearchLocationSelect = useCallback((location: { text: string; place_name: string; center: [number, number]; place_type: string[] }) => {
+        const isCityLevel = location.place_type?.some(t =>
+            ['place', 'locality', 'region', 'district'].includes(t)
+        )
+
+        if (isCityLevel) {
+            const recordCityIntentFn = httpsCallable(functions, 'recordCityIntent')
+            recordCityIntentFn({
+                cityName: location.text,
+                latitude: location.center[1],  // Mapbox returns [lng, lat]
+                longitude: location.center[0],
+            }).catch(err => console.error('Error recording city intent:', err))
+        }
+
+        router.push({
+            pathname: '/(tabs)/map',
+            params: {
+                centerLat: location.center[1].toString(),
+                centerLng: location.center[0].toString(),
+            }
+        })
+    }, [router])
+
+    const renderRecommendedCard = useCallback(({ item }: { item: RecommendedPost }) => (
+        <RecommendedPostCard
+            post={item}
+            onPress={() => handlePostPress(item.id)}
+            isOwnPost={item.authorId === user?.uid}
+        />
+    ), [user?.uid, handlePostPress])
 
     const renderFeaturedListSection = () => {
         if (loadingLists) return null; // Simplified loading for lists
@@ -282,6 +325,54 @@ export default function ExploreScreen() {
         )
     }
 
+    const listHeaderComponent = useMemo(() => (
+        <>
+            <View style={styles.searchBarContainer}>
+                <LocationSearchBar
+                    onLocationSelect={handleSearchLocationSelect}
+                    userLocation={userLocation ? { longitude: userLocation.longitude, latitude: userLocation.latitude } : null}
+                />
+            </View>
+
+            {renderFeaturedListSection()}
+
+            <ExploreSection title="Trending" emoji="🔥" posts={trendingPosts} onPostPress={handlePostPress} onSeeAllPress={() => router.push({ pathname: '/(tabs)/map', params: { filter: 'trending' } })} loading={loadingTrending} />
+
+            <ExploreSection title="New" emoji="⚡" posts={newPosts} onPostPress={handlePostPress} onSeeAllPress={() => router.push({ pathname: '/(tabs)/map', params: { filter: 'new' } })} loading={loadingNew} />
+
+            <ExploreSection title="Near You" emoji="📍" posts={nearPosts} onPostPress={handlePostPress} onSeeAllPress={() => router.push({ pathname: '/(tabs)/map', params: { filter: 'near', panToUser: 'true' } })} loading={loadingNear || isLocating} />
+
+            {!loadingNear && !isLocating && !userLocation && (
+                <View style={styles.section}>
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>Enable location to see catches nearby</Text>
+                        <TouchableOpacity onPress={requestLocationPermission}><Text style={styles.seeAll}>Enable Location</Text></TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
+            {/* For You section header */}
+            {recommendedFeed.loading ? (
+                <View style={styles.forYouLoading}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+            ) : recommendedFeed.posts.length > 0 ? (
+                <View style={styles.forYouHeader}>
+                    <Text style={styles.forYouTitle}>For You</Text>
+                    <Text style={styles.forYouSubtitle}>Based on who you follow and places you explore</Text>
+                </View>
+            ) : (
+                <View style={styles.forYouEmpty}>
+                    <Text style={styles.emptyText}>Follow users and search cities to get personalized recommendations</Text>
+                </View>
+            )}
+        </>
+    ), [
+        handleSearchLocationSelect, userLocation, featuredLists, loadingLists,
+        trendingPosts, loadingTrending, newPosts, loadingNew, nearPosts,
+        loadingNear, isLocating, recommendedFeed.loading, recommendedFeed.posts.length,
+    ])
+
     const isLoading = loadingLists && loadingTrending && loadingNew && loadingNear
 
     if (isLoading && !refreshing) {
@@ -314,27 +405,27 @@ export default function ExploreScreen() {
 
             <NotificationInbox visible={showNotifications} onClose={() => setShowNotifications(false)} />
 
-            <ScrollView
-                style={styles.scrollView}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-            >
-                {renderFeaturedListSection()}
-
-                <ExploreSection title="Trending" emoji="🔥" posts={trendingPosts} onPostPress={handlePostPress} onSeeAllPress={() => router.push({ pathname: '/(tabs)/map', params: { filter: 'trending' } })} loading={loadingTrending} />
-
-                <ExploreSection title="New" emoji="⚡" posts={newPosts} onPostPress={handlePostPress} onSeeAllPress={() => router.push({ pathname: '/(tabs)/map', params: { filter: 'new' } })} loading={loadingNew} />
-
-                <ExploreSection title="Near You" emoji="📍" posts={nearPosts} onPostPress={handlePostPress} onSeeAllPress={() => router.push({ pathname: '/(tabs)/map', params: { filter: 'near', panToUser: 'true' } })} loading={loadingNear || isLocating} />
-
-                {!loadingNear && !isLocating && !userLocation && (
-                    <View style={styles.section}>
-                        <View style={styles.emptyContainer}>
-                            <Text style={styles.emptyText}>Enable location to see catches nearby</Text>
-                            <TouchableOpacity onPress={requestLocationPermission}><Text style={styles.seeAll}>Enable Location</Text></TouchableOpacity>
+            <FlatList
+                data={recommendedFeed.posts}
+                renderItem={renderRecommendedCard}
+                keyExtractor={(item) => `rec-${item.id}`}
+                ListHeaderComponent={listHeaderComponent}
+                ListFooterComponent={
+                    recommendedFeed.loadingMore ? (
+                        <View style={styles.footerLoader}>
+                            <ActivityIndicator size="small" color={colors.primary} />
                         </View>
-                    </View>
-                )}
-            </ScrollView>
+                    ) : null
+                }
+                onEndReached={() => {
+                    if (recommendedFeed.hasMore && !recommendedFeed.loadingMore) {
+                        recommendedFeed.loadMore()
+                    }
+                }}
+                onEndReachedThreshold={0.3}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+                style={styles.scrollView}
+            />
 
             <ThreadModal visible={modalVisible} post={selectedPost} onClose={() => { setModalVisible(false); setSelectedPost(null) }} onPostUpdate={handlePostUpdate} onPostDelete={handlePostDelete} />
         </View>
@@ -415,4 +506,11 @@ const styles = StyleSheet.create({
     listMeta: { fontSize: 12, color: colors.textTertiary },
     emptyContainer: { padding: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, marginHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, gap: 8 },
     emptyText: { color: colors.textSecondary, fontSize: 14, textAlign: 'center' },
+    searchBarContainer: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, zIndex: 100 },
+    forYouHeader: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 16 },
+    forYouTitle: { fontSize: 20, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
+    forYouSubtitle: { fontSize: 13, color: colors.textTertiary },
+    forYouLoading: { paddingVertical: 32, alignItems: 'center' },
+    forYouEmpty: { padding: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, marginHorizontal: 16, marginTop: 24, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+    footerLoader: { paddingVertical: 20, alignItems: 'center' },
 })

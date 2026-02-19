@@ -107,5 +107,13 @@ service cloud.firestore {
       // No client access — only written by Cloud Functions (admin SDK)
       allow read, write: if false;
     }
+
+    // User recommendations collection (managed by Cloud Functions only)
+    match /user_recommendations/{userId} {
+      // Only the user themselves can read their recommendations
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Only Cloud Functions (admin SDK) can write
+      allow create, update, delete: if false;
+    }
   }
 }

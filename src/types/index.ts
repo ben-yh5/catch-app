@@ -55,6 +55,18 @@ export interface PostSummary {
 }
 
 /**
+ * RecommendedPost - Post with recommendation metadata
+ *
+ * Returned by the getRecommendedFeed Cloud Function.
+ * Extends Post with a reason label explaining why this post was recommended.
+ */
+export interface RecommendedPost extends Post {
+    reasonLabel: string       // "Posted by @jane", "Trending in Tokyo"
+    reasonType: 'social' | 'city_trending'
+    score: number
+}
+
+/**
  * List - Collection of posts curated by a user
  *
  * Lists can be:
