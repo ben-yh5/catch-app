@@ -9,7 +9,6 @@ import { colors } from '@/theme/colors'
 import { Post } from '@/types'
 import { getPostsInViewport as fetchViewportPosts, getPostLocations } from '@/utils/geospatialQueries'
 import { getPostBountyStatus } from '@/utils/postClassification'
-import { batchGetPosts } from '@/utils/postUtils'
 import { Ionicons } from '@expo/vector-icons'
 import Mapbox, { Camera, CircleLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
 import * as Location from 'expo-location'
@@ -59,7 +58,7 @@ export default function MapScreen() {
     const [locationLoading, setLocationLoading] = useState(true)
     const [initialLocation, setInitialLocation] = useState<Location.LocationObject | null>(null)
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
-    const { getCachedPosts, cachePosts, caughtThreadIds } = usePost()
+    const { cachePosts, caughtThreadIds } = usePost()
     const lastFetchRef = useRef<number>(0)
     const fetchTimeoutRef = useRef<any>(undefined)
     const FILTER_DEBOUNCE = 600 // reduced to 600ms for snappier feel
@@ -332,7 +331,7 @@ export default function MapScreen() {
 
             // visibleBounds is [[east, north], [west, south]] (NE, SW) in some versions
             // OR [[neLng, neLat], [swLng, swLat]]
-            // We need to parse correctly. 
+            // We need to parse correctly.
             // Standard Mapbox: [ne, sw] arrays.
 
             // Assume [NE, SW] based on common RNMapbox usage
@@ -355,48 +354,29 @@ export default function MapScreen() {
                 west: Math.min(lng1, lng2)
             }
 
-            // 1. Get Location Data (Cached by bounds in utils)
-            const postLocations = await fetchViewportPosts(bounds)
-            // console.log(`Found ${postLocations.length} post locations in viewport`)
-
-            const postIds = postLocations.map(loc => loc.postId)
-
-            // 2. Check Local Cache for Post Data
-            const { found, missing } = getCachedPosts(postIds)
-            // console.log(`Cache hit: ${found.length}, Missing: ${missing.length}`)
-
-            // 3. Fetch Missing Posts
-            let fetchedPosts: Post[] = []
-            if (missing.length > 0) {
-                fetchedPosts = await batchGetPosts(missing)
-                // Cache the newly fetched posts
-                cachePosts(fetchedPosts)
-            }
-
-            // 4. Merge and Display
-            const allPosts = [...found, ...fetchedPosts]
-
-            // IMPORTANT: Merge valid location data from the geospatial query into the post objects
-            // The Firestore 'posts' doc might not have lat/long or it might be stale/private
-            const mergedPosts = allPosts.map(post => {
-                const loc = postLocations.find((l: any) => l.postId === post.id)
-                if (loc) {
-                    return {
-                        ...post,
-                        latitude: loc.latitude,
-                        longitude: loc.longitude,
-                        // Ensure hasLocation is true if we found a location
-                        hasLocation: true
-                    }
-                }
-                return post
+            // Single enriched call: locations + summaries, pre-filtered to originals
+            const enrichedLocations = await fetchViewportPosts(bounds, {
+                includeSummary: true,
+                filterOriginal: true,
             })
 
-            const filteredPosts = mergedPosts
-                .filter(p => p.isOriginal) // Only show original posts
-                .filter(p => p.latitude && p.longitude) // Ensure they have valid coordinates
+            // Convert enriched locations to Post objects for existing rendering code
+            const posts: Post[] = enrichedLocations
+                .filter(loc => loc.summary)
+                .map(loc => ({
+                    ...loc.summary!,
+                    id: loc.postId,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    hasLocation: true,
+                    parentPostId: null,
+                    rootPostId: null,
+                } as Post))
 
-            const sortedPosts = applySorting(filteredPosts, activeFilter)
+            // Cache posts so ThreadModal can use them without re-fetching
+            cachePosts(posts)
+
+            const sortedPosts = applySorting(posts, activeFilter)
             setVisiblePosts(sortedPosts)
 
         } catch (error) {
@@ -405,7 +385,7 @@ export default function MapScreen() {
         } finally {
             setLoadingPosts(false)
         }
-    }, [activeFilter, applySorting, getCachedPosts, cachePosts, isListMode])
+    }, [activeFilter, applySorting, cachePosts, isListMode])
 
     // Handle map movement - Auto Fetch with Debounce
     const handleCameraChanged = useCallback((state: any) => {

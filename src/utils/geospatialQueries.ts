@@ -1,5 +1,6 @@
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { distanceBetween } from 'geofire-common'
+import { PostSummary } from '@/types'
 
 const functions = getFunctions()
 
@@ -23,22 +24,34 @@ export interface PostLocation {
     geohash: string
 }
 
+export interface EnrichedPostLocation extends PostLocation {
+    summary?: PostSummary
+}
+
+export interface AreaQueryOptions {
+    includeSummary?: boolean
+    filterOriginal?: boolean
+}
+
 // Cache for viewport queries (5 minutes)
 const CACHE_DURATION = 5 * 60 * 1000
-const cache = new Map<string, { data: PostLocation[]; timestamp: number }>()
+const cache = new Map<string, { data: EnrichedPostLocation[]; timestamp: number }>()
 
-function getCacheKey(bounds: MapBounds): string {
+function getCacheKey(bounds: MapBounds, options?: AreaQueryOptions): string {
     // Round to 3 decimal places (~100m precision) for cache key
-    return `v2:${bounds.north.toFixed(3)},${bounds.south.toFixed(3)},${bounds.east.toFixed(3)},${bounds.west.toFixed(3)}`
+    const base = `v2:${bounds.north.toFixed(3)},${bounds.south.toFixed(3)},${bounds.east.toFixed(3)},${bounds.west.toFixed(3)}`
+    if (options?.includeSummary) return base + ':s'
+    return base
 }
 
 /**
  * Get posts within a map viewport
  */
 export async function getPostsInViewport(
-    bounds: MapBounds
-): Promise<PostLocation[]> {
-    const cacheKey = getCacheKey(bounds)
+    bounds: MapBounds,
+    options?: AreaQueryOptions
+): Promise<EnrichedPostLocation[]> {
+    const cacheKey = getCacheKey(bounds, options)
     const cached = cache.get(cacheKey)
 
     // Return cached data if fresh
@@ -67,7 +80,7 @@ export async function getPostsInViewport(
             centerLat,
             centerLng,
             radiusInMeters: bufferRadius
-        })
+        }, options)
 
         // Optional: Filter results to strictly match the rectangular bounds
         // This removes points that are in the circle but outside the rectangle
@@ -103,15 +116,20 @@ export async function getPostsInViewport(
  * Get posts within a circular radius
  */
 export async function getPostsInRadius(
-    area: CircleArea
-): Promise<PostLocation[]> {
+    area: CircleArea,
+    options?: AreaQueryOptions
+): Promise<EnrichedPostLocation[]> {
     try {
         const getPostsInArea = httpsCallable<
-            CircleArea,
-            { posts: PostLocation[]; count: number }
+            CircleArea & AreaQueryOptions,
+            { posts: EnrichedPostLocation[]; count: number }
         >(functions, 'getPostsInArea')
 
-        const result = await getPostsInArea(area)
+        const result = await getPostsInArea({
+            ...area,
+            includeSummary: options?.includeSummary,
+            filterOriginal: options?.filterOriginal,
+        })
         return result.data.posts
     } catch (error) {
         console.error('Error fetching posts in radius:', error)

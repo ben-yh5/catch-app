@@ -157,23 +157,32 @@ export default function ExploreScreen() {
         if (!userLocation) return
         try {
             setLoadingNear(true)
-            const postLocations = await getPostsInRadius({
-                centerLat: userLocation.latitude,
-                centerLng: userLocation.longitude,
-                radiusInMeters: NEARBY_RADIUS_METERS,
-            })
-            const postIds = postLocations.map(l => l.postId).slice(0, POSTS_LIMIT)
-            const postDocs = await Promise.all(postIds.map(id => getDoc(doc(db, 'posts', id))))
+            const enrichedLocations = await getPostsInRadius(
+                {
+                    centerLat: userLocation.latitude,
+                    centerLng: userLocation.longitude,
+                    radiusInMeters: NEARBY_RADIUS_METERS,
+                },
+                { includeSummary: true, filterOriginal: true }
+            )
 
-            const posts = postDocs.filter(d => d.exists()).map(d => {
-                const data = d.data()
-                const loc = postLocations.find(l => l.postId === d.id)
-                return {
-                    id: d.id,
-                    ...data,
-                    distance: loc ? calculateDistance(userLocation.latitude, userLocation.longitude, loc.latitude, loc.longitude) : 0
-                } as Post & { distance: number }
-            })
+            const posts = enrichedLocations
+                .filter(loc => loc.summary)
+                .slice(0, POSTS_LIMIT)
+                .map(loc => ({
+                    ...loc.summary!,
+                    id: loc.postId,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    hasLocation: true,
+                    parentPostId: null,
+                    rootPostId: null,
+                    distance: calculateDistance(
+                        userLocation.latitude, userLocation.longitude,
+                        loc.latitude, loc.longitude
+                    ),
+                } as Post & { distance: number }))
+
             posts.sort((a, b) => a.distance - b.distance)
             setNearPosts(posts)
         } catch (e) {

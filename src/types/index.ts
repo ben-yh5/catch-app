@@ -36,6 +36,25 @@ export interface Post {
 }
 
 /**
+ * PostSummary - Lightweight post data returned alongside location data
+ * from getPostsInArea when includeSummary is true.
+ * Contains enough data for map pins + CompactPostCard rendering.
+ */
+export interface PostSummary {
+    id: string
+    authorId: string
+    authorUsername: string
+    caption: string
+    photoURL: string
+    thumbnailURL?: string
+    catchCount: number
+    createdAt: number    // epoch millis (converted server-side)
+    isOriginal: boolean
+    isPioneer?: boolean
+    lastCaughtAt?: number // epoch millis
+}
+
+/**
  * List - Collection of posts curated by a user
  *
  * Lists can be:

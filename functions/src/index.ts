@@ -1161,6 +1161,65 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
             )
         }
 
+        // Optional: enrich locations with post summary data
+        // filterOriginal implies includeSummary (need post data to filter)
+        const shouldEnrich = data.includeSummary || data.filterOriginal
+
+        if (shouldEnrich && postLocations.length > 0) {
+            const postIds = postLocations.map((loc: any) => loc.postId)
+            const postRefs = postIds.map((id: string) =>
+                db.collection('posts').doc(id)
+            )
+
+            // Batch fetch post documents using admin SDK getAll (chunks of 100)
+            const ENRICH_BATCH_SIZE = 100
+            const postDataMap = new Map<string, any>()
+
+            for (let i = 0; i < postRefs.length; i += ENRICH_BATCH_SIZE) {
+                const chunk = postRefs.slice(i, i + ENRICH_BATCH_SIZE)
+                const snapshots = await db.getAll(...chunk)
+                snapshots.forEach(snap => {
+                    if (snap.exists) {
+                        postDataMap.set(snap.id, snap.data())
+                    }
+                })
+            }
+
+            // Attach summaries to location data
+            postLocations = postLocations
+                .map((loc: any) => {
+                    const postData = postDataMap.get(loc.postId)
+                    if (!postData) return null // Post deleted between queries
+
+                    return {
+                        ...loc,
+                        summary: {
+                            id: loc.postId,
+                            authorId: postData.authorId,
+                            authorUsername: postData.authorUsername,
+                            caption: postData.caption || '',
+                            photoURL: postData.photoURL,
+                            thumbnailURL: postData.thumbnailURL || null,
+                            catchCount: postData.catchCount || 0,
+                            createdAt: postData.createdAt?.toMillis?.() ?? null,
+                            isOriginal: postData.isOriginal ?? true,
+                            isPioneer: postData.isPioneer || false,
+                            lastCaughtAt: postData.lastCaughtAt?.toMillis?.() ?? null,
+                        },
+                    }
+                })
+                .filter((loc: any) => loc !== null)
+
+            // Server-side isOriginal filter
+            if (data.filterOriginal) {
+                postLocations = postLocations.filter(
+                    (loc: any) => loc.summary?.isOriginal === true
+                )
+            }
+
+            functions.logger.info(`Enriched ${postLocations.length} posts with summaries`)
+        }
+
         return {
             posts: postLocations,
             count: postLocations.length
