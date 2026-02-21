@@ -64,11 +64,13 @@ export default function MapScreen() {
     const FILTER_DEBOUNCE = 600 // reduced to 600ms for snappier feel
 
     // List Focus Mode State
-    const { listId, postId, filter, panToUser } = useLocalSearchParams<{
+    const { listId, postId, filter, panToUser, centerLat, centerLng } = useLocalSearchParams<{
         listId: string;
         postId: string;
         filter: string;
         panToUser: string;
+        centerLat: string;
+        centerLng: string;
     }>()
     const [activeList, setActiveList] = useState<any | null>(null)
     const [listPosts, setListPosts] = useState<Post[]>([])
@@ -132,6 +134,29 @@ export default function MapScreen() {
             }, 500)
         }
     }, [filter, panToUser, userLocation])
+
+    // Handle search location from Explore tab
+    useEffect(() => {
+        if (!centerLat || !centerLng || locationLoading) return
+        const lat = parseFloat(centerLat)
+        const lng = parseFloat(centerLng)
+        if (isNaN(lat) || isNaN(lng)) return
+
+        // Wait for map and camera to be ready, then animate
+        const timer = setTimeout(() => {
+            if (cameraRef.current) {
+                cameraRef.current.setCamera({
+                    centerCoordinate: [lng, lat],
+                    zoomLevel: 12,
+                    animationDuration: 1000,
+                })
+                setTimeout(() => {
+                    loadVisiblePosts()
+                }, 1500)
+            }
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [centerLat, centerLng, locationLoading])
 
     // Handle List Focus Mode
     useEffect(() => {
