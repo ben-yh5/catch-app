@@ -1566,6 +1566,249 @@ export const unfollowUser = functions.https.onCall(async (data, context) => {
     }
 })
 
+// ─── Account Deletion ───────────────────────────────────────────────────────
+
+/**
+ * HTTPS Callable Function: Permanently deletes a user's account and all associated data
+ *
+ * Deletion order:
+ * 1. All user's posts (triggers onPostDeleted for thread promotion, cleanup)
+ * 2. Remove from other users' followers/following arrays
+ * 3. User's lists
+ * 4. Notifications subcollection
+ * 5. user_recommendations, rate_limits, usernames index, training_pairs
+ * 6. Storage files
+ * 7. User document
+ * 8. Firebase Auth account (last)
+ */
+export const deleteAccount = functions
+    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .https.onCall(async (_data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            'unauthenticated',
+            'Must be logged in to delete account'
+        )
+    }
+
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'deleteAccount', RATE_LIMITS.SETUP)
+
+    const userId = context.auth.uid
+    const db = admin.firestore()
+    const bucket = admin.storage().bucket()
+
+    functions.logger.info(`[deleteAccount] Starting account deletion for user ${userId}`)
+
+    // Read user doc first to get username for cleanup later
+    let username: string | null = null
+    try {
+        const userDoc = await db.collection('users').doc(userId).get()
+        if (userDoc.exists) {
+            username = userDoc.data()?.username?.toLowerCase() || null
+        }
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error reading user doc:', error)
+    }
+
+    // 1. Delete all user's posts (onPostDeleted handles thread promotion, location cleanup, list removal)
+    try {
+        const postsQuery = await db.collection('posts')
+            .where('authorId', '==', userId)
+            .get()
+
+        functions.logger.info(`[deleteAccount] Deleting ${postsQuery.size} posts`)
+        for (const postDoc of postsQuery.docs) {
+            await postDoc.ref.delete()
+        }
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error deleting posts:', error)
+    }
+
+    // 2. Remove from other users' followers arrays
+    try {
+        const followersQuery = await db.collection('users')
+            .where('followers', 'array-contains', userId)
+            .get()
+
+        if (!followersQuery.empty) {
+            const batches: admin.firestore.WriteBatch[] = [db.batch()]
+            let opCount = 0
+            for (const doc of followersQuery.docs) {
+                if (opCount >= 500) {
+                    batches.push(db.batch())
+                    opCount = 0
+                }
+                batches[batches.length - 1].update(doc.ref, {
+                    followers: admin.firestore.FieldValue.arrayRemove(userId),
+                })
+                opCount++
+            }
+            for (const batch of batches) {
+                await batch.commit()
+            }
+            functions.logger.info(`[deleteAccount] Removed from ${followersQuery.size} users' followers`)
+        }
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error cleaning followers:', error)
+    }
+
+    // 3. Remove from other users' following arrays
+    try {
+        const followingQuery = await db.collection('users')
+            .where('following', 'array-contains', userId)
+            .get()
+
+        if (!followingQuery.empty) {
+            const batches: admin.firestore.WriteBatch[] = [db.batch()]
+            let opCount = 0
+            for (const doc of followingQuery.docs) {
+                if (opCount >= 500) {
+                    batches.push(db.batch())
+                    opCount = 0
+                }
+                batches[batches.length - 1].update(doc.ref, {
+                    following: admin.firestore.FieldValue.arrayRemove(userId),
+                })
+                opCount++
+            }
+            for (const batch of batches) {
+                await batch.commit()
+            }
+            functions.logger.info(`[deleteAccount] Removed from ${followingQuery.size} users' following`)
+        }
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error cleaning following:', error)
+    }
+
+    // 4. Delete user's lists
+    try {
+        const listsQuery = await db.collection('lists')
+            .where('userId', '==', userId)
+            .get()
+
+        if (!listsQuery.empty) {
+            const batches: admin.firestore.WriteBatch[] = [db.batch()]
+            let opCount = 0
+            for (const doc of listsQuery.docs) {
+                if (opCount >= 500) {
+                    batches.push(db.batch())
+                    opCount = 0
+                }
+                batches[batches.length - 1].delete(doc.ref)
+                opCount++
+            }
+            for (const batch of batches) {
+                await batch.commit()
+            }
+            functions.logger.info(`[deleteAccount] Deleted ${listsQuery.size} lists`)
+        }
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error deleting lists:', error)
+    }
+
+    // 5. Delete notifications subcollection
+    try {
+        const notifsQuery = await db.collection('users').doc(userId)
+            .collection('notifications')
+            .get()
+
+        if (!notifsQuery.empty) {
+            const batches: admin.firestore.WriteBatch[] = [db.batch()]
+            let opCount = 0
+            for (const doc of notifsQuery.docs) {
+                if (opCount >= 500) {
+                    batches.push(db.batch())
+                    opCount = 0
+                }
+                batches[batches.length - 1].delete(doc.ref)
+                opCount++
+            }
+            for (const batch of batches) {
+                await batch.commit()
+            }
+            functions.logger.info(`[deleteAccount] Deleted ${notifsQuery.size} notifications`)
+        }
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error deleting notifications:', error)
+    }
+
+    // 6. Delete user_recommendations, rate_limits, username index
+    try {
+        await db.collection('user_recommendations').doc(userId).delete()
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error deleting recommendations:', error)
+    }
+
+    try {
+        await db.collection('rate_limits').doc(userId).delete()
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error deleting rate limits:', error)
+    }
+
+    if (username) {
+        try {
+            await db.collection('usernames').doc(username).delete()
+            functions.logger.info(`[deleteAccount] Deleted username index: ${username}`)
+        } catch (error) {
+            functions.logger.error('[deleteAccount] Error deleting username index:', error)
+        }
+    }
+
+    // 7. Delete training_pairs contributed by this user
+    try {
+        const trainingQuery = await db.collection('training_pairs')
+            .where('userId', '==', userId)
+            .get()
+
+        if (!trainingQuery.empty) {
+            const batches: admin.firestore.WriteBatch[] = [db.batch()]
+            let opCount = 0
+            for (const doc of trainingQuery.docs) {
+                if (opCount >= 500) {
+                    batches.push(db.batch())
+                    opCount = 0
+                }
+                batches[batches.length - 1].delete(doc.ref)
+                opCount++
+            }
+            for (const batch of batches) {
+                await batch.commit()
+            }
+            functions.logger.info(`[deleteAccount] Deleted ${trainingQuery.size} training pairs`)
+        }
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error deleting training pairs:', error)
+    }
+
+    // 8. Delete Storage files
+    try {
+        await bucket.deleteFiles({ prefix: `posts/${userId}/` })
+        functions.logger.info(`[deleteAccount] Deleted Storage files for posts/${userId}/`)
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error deleting storage files:', error)
+    }
+
+    // 9. Delete user document
+    try {
+        await db.collection('users').doc(userId).delete()
+        functions.logger.info(`[deleteAccount] Deleted user document`)
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error deleting user doc:', error)
+    }
+
+    // 10. Delete Firebase Auth account (must be last)
+    try {
+        await admin.auth().deleteUser(userId)
+        functions.logger.info(`[deleteAccount] Deleted Firebase Auth account`)
+    } catch (error) {
+        functions.logger.error('[deleteAccount] Error deleting auth account:', error)
+    }
+
+    functions.logger.info(`[deleteAccount] Account deletion complete for user ${userId}`)
+    return { success: true }
+})
+
 // ─── Recommendation System (Phase 1) ────────────────────────────────────────
 
 /** Maximum active cities per user */

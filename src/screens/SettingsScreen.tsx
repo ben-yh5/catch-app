@@ -1,10 +1,14 @@
 import { useAuth } from '@/context/AuthContext'
+import { functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
-import React from 'react'
-import { Alert, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
+import { httpsCallable } from 'firebase/functions'
+import React, { useState } from 'react'
+import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+
+const PRIVACY_POLICY_URL = '#'
 
 export default function SettingsScreen() {
     const {
@@ -16,6 +20,45 @@ export default function SettingsScreen() {
     } = useAuth()
     const router = useRouter()
     const insets = useSafeAreaInsets()
+    const [deleting, setDeleting] = useState(false)
+
+    const handleDeleteAccount = () => {
+        Alert.alert(
+            'Delete Account',
+            'This will permanently delete all your data including posts, catches, lists, and account information. This cannot be undone.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                        Alert.alert(
+                            'Are you absolutely sure?',
+                            'All your data will be permanently deleted. This action is irreversible.',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Delete Forever',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        setDeleting(true)
+                                        try {
+                                            const deleteAccountFn = httpsCallable(functions, 'deleteAccount')
+                                            await deleteAccountFn({})
+                                            // Auth state change will redirect to login
+                                        } catch (error: any) {
+                                            setDeleting(false)
+                                            Alert.alert('Error', error.message || 'Failed to delete account. Please try again.')
+                                        }
+                                    },
+                                },
+                            ]
+                        )
+                    },
+                },
+            ]
+        )
+    }
 
     const handleLogout = () => {
         Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -51,7 +94,7 @@ export default function SettingsScreen() {
                 <View style={styles.placeholder} />
             </View>
 
-            <View style={styles.content}>
+            <ScrollView style={styles.content}>
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Privacy & Data</Text>
                     <View style={styles.settingItem}>
@@ -105,6 +148,52 @@ export default function SettingsScreen() {
                     </View>
                 </View>
 
+                {/* Legal Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Legal</Text>
+                    <TouchableOpacity
+                        style={styles.settingItem}
+                        onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+                    >
+                        <View style={styles.settingTextContainer}>
+                            <Text style={styles.settingLabel}>Privacy Policy</Text>
+                        </View>
+                        <Ionicons
+                            name="open-outline"
+                            size={20}
+                            color={colors.textTertiary}
+                        />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Account Section */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Account</Text>
+                    <TouchableOpacity
+                        style={[styles.settingItem, { borderColor: colors.danger }]}
+                        onPress={handleDeleteAccount}
+                        disabled={deleting}
+                    >
+                        <View style={styles.settingTextContainer}>
+                            <Text style={[styles.settingLabel, { color: colors.danger }]}>
+                                Delete Account
+                            </Text>
+                            <Text style={styles.settingDescription}>
+                                Permanently delete all your data
+                            </Text>
+                        </View>
+                        {deleting ? (
+                            <ActivityIndicator color={colors.danger} />
+                        ) : (
+                            <Ionicons
+                                name="trash-outline"
+                                size={20}
+                                color={colors.danger}
+                            />
+                        )}
+                    </TouchableOpacity>
+                </View>
+
                 <TouchableOpacity
                     style={styles.logoutButton}
                     onPress={handleLogout}
@@ -116,7 +205,7 @@ export default function SettingsScreen() {
                     />
                     <Text style={styles.logoutButtonText}>Logout</Text>
                 </TouchableOpacity>
-            </View>
+            </ScrollView>
         </View>
     )
 }
