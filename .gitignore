@@ -60,3 +60,5 @@ training_data/
 assets/models/view_encoder_tuned.tflite
 __pycache__/
 *.pyc
+
+*.h5

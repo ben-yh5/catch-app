@@ -7,15 +7,20 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Define the model architecture (Must match training script)
+# Must match training scripts
+class L2Normalize(tf.keras.layers.Layer):
+    def call(self, x):
+        return tf.math.l2_normalize(x, axis=1)
+
+
 def create_encoder():
     base_model = tf.keras.applications.MobileNetV2(
-        input_shape=(224, 224, 3), 
-        include_top=False, 
+        input_shape=(224, 224, 3),
+        include_top=False,
         pooling='avg'
     )
-    # Re-build the model to ensure a clean state
-    return tf.keras.Model(inputs=base_model.input, outputs=base_model.output)
+    normalized = L2Normalize()(base_model.output)
+    return tf.keras.Model(inputs=base_model.input, outputs=normalized)
 
 def export_model(model_name, weights_path=None, output_dir='../assets/models'):
     print(f"🚀 Starting model export for: {model_name}")
