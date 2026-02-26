@@ -15,11 +15,11 @@ jest.mock('expo-camera', () => ({
 jest.mock('expo-location', () => ({
     useForegroundPermissions: () => [{ granted: true }, jest.fn()],
     getCurrentPositionAsync: jest.fn(),
-    Accuracy: { Balanced: 3 },
+    Accuracy: { Balanced: 3, Highest: 6 },
 }));
 
 jest.mock('../../context/AuthContext', () => ({
-    useAuth: () => ({ user: { uid: 'test-uid' } }),
+    useAuth: () => ({ user: { uid: 'test-uid' }, dataContributionEnabled: false }),
 }));
 
 jest.mock('../../context/PostContext', () => ({
@@ -52,15 +52,52 @@ jest.mock('../../services/firebase', () => ({
 
 jest.mock('firebase/firestore', () => ({
     getDoc: jest.fn(),
+    getDocs: jest.fn(() => Promise.resolve({ docs: [] })),
     doc: jest.fn(),
     collection: jest.fn(),
     addDoc: jest.fn(),
+    query: jest.fn(),
+    where: jest.fn(),
+    documentId: jest.fn(),
 }));
 
 jest.mock('firebase/storage', () => ({
     ref: jest.fn(),
     uploadBytes: jest.fn(),
     getDownloadURL: jest.fn(),
+}));
+
+jest.mock('../../utils/catchValidation', () => ({
+    validateCatch: jest.fn(),
+}));
+
+jest.mock('../../utils/geospatialQueries', () => ({
+    getPostsInRadius: jest.fn(() => Promise.resolve([])),
+}));
+
+jest.mock('../../services/trainingData', () => ({
+    uploadTrainingPair: jest.fn(),
+}));
+
+jest.mock('../../utils/listUtils', () => ({
+    addPostToList: jest.fn(),
+}));
+
+jest.mock('../../utils/visualMatcher', () => ({
+    findMostSimilar: jest.fn(() => Promise.resolve(null)),
+}));
+
+jest.mock('geofire-common', () => ({
+    geohashForLocation: jest.fn(() => 'abc123'),
+}));
+
+jest.mock('@/theme/colors', () => ({
+    colors: {
+        background: '#000',
+        primary: '#007AFF',
+        textPrimary: '#fff',
+        textTertiary: '#999',
+    },
 }));
 
 jest.spyOn(require('react-native').Alert, 'alert');
