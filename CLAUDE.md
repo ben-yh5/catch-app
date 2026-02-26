@@ -8,11 +8,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Tech Stack
 
-- **Framework**: React Native with Expo SDK 54
-- **Routing**: Expo Router (file-based routing)
-- **Backend**: Firebase (Authentication, Firestore, Storage, Cloud Functions)
-- **Language**: TypeScript
+- **Framework**: React Native 0.81 with Expo SDK 54
+- **Language**: TypeScript 5.9
+- **Routing**: Expo Router 6 (file-based routing)
+- **Backend**: Firebase 12 (Authentication, Firestore, Storage, Cloud Functions)
 - **State Management**: React Context (AuthContext, PostContext)
+
+### Client Stack
+
+| Layer | Libraries |
+|---|---|
+| **UI & Layout** | `react-native-safe-area-context`, `expo-blur`, `expo-splash-screen`, `expo-status-bar`, `@expo/vector-icons`, `expo-symbols` |
+| **Navigation** | `expo-router`, `@react-navigation/native`, `@react-navigation/bottom-tabs`, `react-native-screens`, `react-native-pager-view`, `react-native-tab-view` |
+| **Animations & Gestures** | `react-native-reanimated`, `react-native-gesture-handler`, `@gorhom/bottom-sheet` |
+| **Maps & Location** | `react-native-maps`, `@rnmapbox/maps`, `expo-location`, `geofire-common` |
+| **Camera & Media** | `expo-camera`, `expo-image`, `expo-image-picker`, `expo-image-manipulator` |
+| **Firebase** | `firebase` (JS SDK), `@react-native-firebase/app`, `@react-native-firebase/app-check` |
+| **Auth** | `@react-native-google-signin/google-signin` (native Google Sign-In) |
+| **Notifications** | `expo-notifications` (FCM/APNs, not Expo push) |
+| **Device APIs** | `expo-sensors`, `expo-haptics`, `expo-device`, `expo-file-system`, `expo-linking`, `expo-web-browser` |
+| **ML** | `react-native-fast-tflite`, `react-native-worklets` |
+| **Storage** | `@react-native-async-storage/async-storage` |
+
+### Server Stack (Cloud Functions)
+
+| Layer | Libraries |
+|---|---|
+| **Runtime** | Node 20, `firebase-functions` 3.x |
+| **Admin SDK** | `firebase-admin` 11.x |
+| **Image Processing** | `sharp` (thumbnail/medium generation) |
+| **Geospatial** | `geofire-common` (geohash queries) |
+| **File System** | `fs-extra` |
+
+### Dev & Testing
+
+| Tool | Libraries |
+|---|---|
+| **Testing** | `jest`, `jest-expo`, `@testing-library/react-native`, `@firebase/rules-unit-testing` |
+| **Linting** | `eslint`, `eslint-config-expo`, `@typescript-eslint/parser` |
+| **Build** | `expo-dev-client`, EAS Build |
 
 ## Development Commands
 

@@ -1,8 +1,11 @@
 import 'dotenv/config'
 
+const variant = process.env.APP_VARIANT;
+const suffix = variant ? `.${variant}` : '';
+
 export default {
     expo: {
-        name: 'catch-app',
+        name: variant ? `catch-app (${variant})` : 'catch-app',
         slug: 'catch-app',
         owner: 'staticvoid12',
         version: '1.0.0',
@@ -12,12 +15,12 @@ export default {
         userInterfaceStyle: 'automatic',
         newArchEnabled: true,
         ios: {
-            bundleIdentifier: 'app.catchapp.mobile',
+            bundleIdentifier: `app.catchapp.mobile${suffix}`,
             supportsTablet: true,
             googleServicesFile: './GoogleService-Info.plist', // Download from Firebase Console
         },
         android: {
-            package: 'app.catchapp.mobile',
+            package: `app.catchapp.mobile${suffix}`,
             googleServicesFile: process.env.GOOGLE_SERVICES_JSON || './google-services.json',
             adaptiveIcon: {
                 backgroundColor: '#E6F4FE',
