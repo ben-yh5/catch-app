@@ -1,6 +1,6 @@
 import ExploreSection from '@/components/ExploreSection'
 import LocationSearchBar from '@/components/LocationSearchBar'
-import NotificationInbox from '@/components/NotificationInbox'
+import ActivityFeed from '@/components/NotificationInbox'
 import RecommendedPostCard from '@/components/RecommendedPostCard'
 import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
@@ -388,10 +388,10 @@ export default function ExploreScreen() {
             <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                 <Text style={styles.headerTitle}>Explore</Text>
                 <View style={styles.headerRight}>
-                    <View style={styles.contributionBadge}>
+                    <TouchableOpacity style={styles.contributionBadge} onPress={() => setShowNotifications(true)}>
                         <Text style={styles.contributionEmoji}>🏆</Text>
                         <Text style={styles.contributionText}>{contribution}</Text>
-                    </View>
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.notificationButton} onPress={() => setShowNotifications(true)}>
                         <Ionicons name="notifications-outline" size={24} color={colors.textPrimary} />
                         {unreadCount > 0 && (
@@ -403,7 +403,7 @@ export default function ExploreScreen() {
                 </View>
             </View>
 
-            <NotificationInbox visible={showNotifications} onClose={() => setShowNotifications(false)} />
+            <ActivityFeed visible={showNotifications} onClose={() => setShowNotifications(false)} />
 
             <FlatList
                 data={recommendedFeed.posts}

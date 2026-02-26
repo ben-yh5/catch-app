@@ -4,7 +4,7 @@ export default {
     expo: {
         name: 'catch-app',
         slug: 'catch-app',
-        owner: 'your-expo-username', // Replace with your Expo username if using EAS
+        owner: 'staticvoid12',
         version: '1.0.0',
         orientation: 'portrait',
         icon: './assets/images/icon.png',
@@ -18,7 +18,7 @@ export default {
         },
         android: {
             package: 'app.catchapp.mobile',
-            googleServicesFile: './google-services.json',
+            googleServicesFile: process.env.GOOGLE_SERVICES_JSON || './google-services.json',
             adaptiveIcon: {
                 backgroundColor: '#E6F4FE',
                 foregroundImage: './assets/images/android-icon-foreground.png',
@@ -66,6 +66,10 @@ export default {
             typedRoutes: true,
             reactCompiler: true,
         },
-        extra: {},
+        extra: {
+            "eas": {
+                "projectId": "7d162c30-e195-4cf1-929d-9e3e2c6ebcda"
+            }
+        },
     },
 }

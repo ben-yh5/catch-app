@@ -544,6 +544,19 @@ export const onPostCreated = functions.firestore
                 await postRef.update({
                     contributionEarned: catchPoints,
                 })
+
+                // Log xp_catch to catcher's activity feed
+                try {
+                    await db.collection('users').doc(authorId).collection('notifications').add({
+                        type: 'xp_catch',
+                        amount: catchPoints,
+                        postId: rootPostId || postData.parentPostId,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        read: true,
+                    })
+                } catch (e) {
+                    functions.logger.error(`[onPostCreated] Failed to create xp_catch notification`, e)
+                }
             }
 
             // Handle ORIGINAL posts
@@ -608,6 +621,20 @@ export const onPostCreated = functions.firestore
                 })
 
                 functions.logger.info(`Post ${postId} isPioneer=${isPioneer}, awarded ${contributionAmount} contribution to ${authorId}`)
+
+                // Log xp_post to author's activity feed
+                try {
+                    await db.collection('users').doc(authorId).collection('notifications').add({
+                        type: 'xp_post',
+                        amount: contributionAmount,
+                        isPioneer,
+                        postId,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        read: true,
+                    })
+                } catch (e) {
+                    functions.logger.error(`[onPostCreated] Failed to create xp_post notification`, e)
+                }
 
                 // Send notifications to followers
                 const authorDoc = await userRef.get()

@@ -40,6 +40,7 @@ interface AuthContextType {
     contribution: number
     totalPosts: number
     totalCatches: number
+    updateStats: (stats: { contribution: number; totalPosts: number; totalCatches: number }) => void
 
     // Notifications
     notifications: any[] // Using any to avoid circular deps or dup types for now, will fix
@@ -150,7 +151,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             const q = query(
                 collection(db, 'users', user.uid, 'notifications'),
                 // orderBy('createdAt', 'desc'), // Temporarily disabled to rule out index issues
-                limit(50)
+                limit(100)
             )
 
             unsubscribe = onSnapshot(q, (snapshot) => {
@@ -366,6 +367,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }
 
+    const updateStats = (stats: { contribution: number; totalPosts: number; totalCatches: number }) => {
+        setContribution(stats.contribution)
+        setTotalPosts(stats.totalPosts)
+        setTotalCatches(stats.totalCatches)
+    }
+
     /**
      * Update data contribution setting
      */
@@ -396,6 +403,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             contribution,
             totalPosts,
             totalCatches,
+            updateStats,
             notifications,
             unreadCount,
             notificationSettings,

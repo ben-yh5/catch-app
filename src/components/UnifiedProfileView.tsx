@@ -1,3 +1,4 @@
+import ActivityFeed from '@/components/NotificationInbox'
 import ThreadModal from '@/components/ThreadModal'
 import AppButton from '@/components/ui/AppButton'
 import { useAuth } from '@/context/AuthContext'
@@ -50,7 +51,7 @@ const { width } = Dimensions.get('window')
 const POSTS_PER_PAGE = 20
 
 export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileViewProps) {
-    const { user } = useAuth()
+    const { user, updateStats } = useAuth()
     const { updateLastFetch, isStale } = usePost()
     const router = useRouter()
     const navigation = useNavigation()
@@ -78,6 +79,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     const [refreshing, setRefreshing] = useState(false)
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
+    const [showActivityFeed, setShowActivityFeed] = useState(false)
     const [showStaleIndicator, setShowStaleIndicator] = useState(false)
     const [staleRefreshing, setStaleRefreshing] = useState(false)
     const [searchVisible, setSearchVisible] = useState(false)
@@ -106,6 +108,15 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                 setTotalPosts(userData.totalPosts || 0)
                 setFollowerCount(userData.followers?.length || 0)
                 setFollowingCount(userData.following?.length || 0)
+
+                // Sync stats to AuthContext so Explore page stays in sync
+                if (isOwnProfile) {
+                    updateStats({
+                        contribution: userData.contribution || 0,
+                        totalPosts: userData.totalPosts || 0,
+                        totalCatches: userData.totalCatches || 0,
+                    })
+                }
 
                 // Check if current user is following this profile
                 if (!isOwnProfile && user) {
@@ -608,7 +619,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                 <View style={styles.statRow}>
                                     <TouchableOpacity
                                         style={styles.statItem}
-                                        onPress={() => Alert.alert('Breakdown', `${totalPosts} Posts\n${totalCatches} Catches`)}
+                                        onPress={() => setShowActivityFeed(true)}
                                     >
                                         <Text style={styles.statNumber}>
                                             {contribution}
@@ -839,6 +850,8 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                     </TouchableOpacity>
                 </View>
             )}
+
+            <ActivityFeed visible={showActivityFeed} onClose={() => setShowActivityFeed(false)} />
 
             <Modal
                 visible={searchVisible}
