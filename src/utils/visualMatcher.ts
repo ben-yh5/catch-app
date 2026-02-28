@@ -140,16 +140,6 @@ export const verifyViewSimilarity = async (
     return similarity;
 };
 
-/**
- * Extracts a single embedding vector from an image.
- */
-export const getImageEmbedding = async (uri: string): Promise<Float32Array> => {
-    const tflite = await loadVerifierModel();
-    const tensor = await imageToTensor(uri);
-    const result = await tflite.run([tensor]);
-    return new Float32Array(result[0] as Float32Array);
-};
-
 /** Nudge similarity threshold (lower than catch validation — loose matching for suggestions) */
 export const NUDGE_SIMILARITY_THRESHOLD = 0.50;
 

@@ -31,13 +31,3 @@ export function getPostBountyStatus(post: Post): BountyStatus {
     return 'normal'
 }
 
-/**
- * Returns the catch point multiplier for a given bounty status.
- */
-export function getCatchMultiplier(status: BountyStatus): number {
-    switch (status) {
-        case 'bounty': return CONTRIBUTION.BOUNTY_MULTIPLIER
-        case 'trending': return CONTRIBUTION.TRENDING_MULTIPLIER
-        default: return 1
-    }
-}

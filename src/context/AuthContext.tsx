@@ -134,23 +134,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         let unsubscribe: (() => void) | undefined
 
-        import('firebase/firestore').then(({ collection, query, orderBy, onSnapshot, limit, addDoc, serverTimestamp }) => {
+        import('firebase/firestore').then(({ collection, query, onSnapshot, limit }) => {
             console.log(`[AuthContext] Setting up listener for: users/${user.uid}/notifications`)
-
-            // Verify permissions by attempting a write (DEBUG ONLY - REMOVE LATER)
-            /*
-            addDoc(collection(db, 'users', user.uid, 'notifications'), {
-                type: 'system',
-                title: 'Test Notification',
-                body: 'This is a test to verify permissions',
-                createdAt: serverTimestamp(),
-                read: false
-            }).catch(e => console.error('[AuthContext] Test write failed:', e))
-            */
 
             const q = query(
                 collection(db, 'users', user.uid, 'notifications'),
-                // orderBy('createdAt', 'desc'), // Temporarily disabled to rule out index issues
                 limit(100)
             )
 

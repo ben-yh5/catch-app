@@ -247,7 +247,6 @@ export default function MapScreen() {
                         }
                     }
                 }
-                // setShowListModal(true) // Disable auto-open per user request
             }
         } catch (error) {
             console.error('Error fetching list details:', error)

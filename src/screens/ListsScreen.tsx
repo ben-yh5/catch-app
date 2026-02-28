@@ -107,11 +107,6 @@ export default function ListsScreen() {
         }
     }
 
-    // Don't sync pager automatically - let user swipe control it
-    // useEffect(() => {
-    //     pagerRef.current?.setPage(activeTab === 'my' ? 0 : 1)
-    // }, [activeTab])
-
     useEffect(() => {
         fetchLists()
     }, [fetchLists])

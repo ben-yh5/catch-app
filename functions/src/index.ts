@@ -130,34 +130,6 @@ function verifyAppCheck(context: functions.https.CallableContext): void {
 }
 
 /**
- * Calculates the distance between two geographic coordinates using the Haversine formula
- * @param lat1 - Latitude of first point
- * @param lon1 - Longitude of first point
- * @param lat2 - Latitude of second point
- * @param lon2 - Longitude of second point
- * @returns Distance in meters between the two points
- */
-function getDistanceInMeters(
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number
-): number {
-    const R = 6371e3 // Earth's radius in meters
-    const φ1 = (lat1 * Math.PI) / 180
-    const φ2 = (lat2 * Math.PI) / 180
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180
-
-    const a =
-        Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-        Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-    return R * c
-}
-
-/**
  * HTTPS Callable Function: Validates if a user is close enough to catch a post
  *
  * Security: Post coordinates are stored in a private collection (post_locations) that
@@ -250,7 +222,7 @@ export const validateCatch = functions.https.onCall(async (data, context) => {
         const locationData = locationQuery.docs[0].data()
         const { latitude: postLat, longitude: postLng } = locationData
 
-        const distance = getDistanceInMeters(userLat, userLng, postLat, postLng)
+        const distance = distanceBetween([userLat, userLng], [postLat, postLng]) * 1000 // km to meters
         const isValid = distance <= CATCH_RADIUS_METERS
 
         return {
@@ -1260,96 +1232,6 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
         )
     }
 })
-
-/**
- * HTTPS Callable Function: Recalculates user stats based on their posts
- *
- * Fixes inaccuracies in totalPosts, totalCatches, and contribution scores
- * by re-tallying all documents in the posts collection.
- * Restricted to the authenticated user's own data only.
- *
- * @returns Object with the new stats
- */
-export const recountUserData = functions.https.onCall(async (_data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError(
-            'unauthenticated',
-            'Must be logged in to recount data'
-        )
-    }
-
-    verifyAppCheck(context)
-    await checkRateLimit(context.auth.uid, 'recountUserData', RATE_LIMITS.EXPENSIVE)
-
-    // Only allow recounting own data — prevents any user from overwriting another's stats
-    const targetUserId = context.auth.uid
-
-    try {
-        const db = admin.firestore()
-        const postsQuery = await db.collection('posts')
-            .where('authorId', '==', targetUserId)
-            .get()
-
-        let totalPosts = 0
-        let totalCatches = 0
-        let calculatedContribution = 0
-
-        const batch = db.batch()
-        let batchCount = 0
-
-        for (const doc of postsQuery.docs) {
-            const postData = doc.data()
-
-            if (postData.isOriginal) {
-                totalPosts++
-                calculatedContribution += (postData.contributionEarned || 0)
-            } else {
-                totalCatches++
-                // Catches are worth fixed amount
-                // If the catch post doesn't have contributionEarned stored, we assume the constant
-                const catchValue = CONTRIBUTION.CATCH
-                calculatedContribution += catchValue
-
-                // Self-healing: if catch didn't store its value, store it now
-                // so onPostDeleted works correctly in the future
-                if (postData.contributionEarned !== catchValue) {
-                    batch.update(doc.ref, { contributionEarned: catchValue })
-                    batchCount++
-                }
-            }
-        }
-
-        // Commit any fixes to post documents
-        if (batchCount > 0) {
-            await batch.commit()
-            functions.logger.info(`Fixed contributionEarned on ${batchCount} catch posts`)
-        }
-
-        // Update user stats
-        await db.collection('users').doc(targetUserId).update({
-            totalPosts,
-            totalCatches,
-            contribution: calculatedContribution
-        })
-
-        return {
-            success: true,
-            stats: {
-                totalPosts,
-                totalCatches,
-                contribution: calculatedContribution
-            }
-        }
-    } catch (error) {
-        functions.logger.error('Error recounting user data:', error)
-        throw new functions.https.HttpsError(
-            'internal',
-            'Failed to recount user data'
-        )
-    }
-})
-
-// backfillThumbnails: REMOVED — one-time migration completed, unauthenticated HTTP endpoint was a security risk
 
 /**
  * HTTPS Callable Function: Atomically sets up a username for a new user

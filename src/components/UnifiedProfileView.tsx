@@ -411,34 +411,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         setSearchVisible(false)
         setSearchQuery('')
         setSearchResults([])
-        if (selectedUserId === user?.uid) {
-            // Already on own profile, but if we are in "Other User" view and select self, we should probably navigate to main profile tab or just stay here?
-            // The requirement says "Other User Profile" screen.
-            // If we are in ProfileScreen (own), and select self, do nothing.
-            // If we are in ProfileScreen (own), and select other, push /user-profile.
-            if (isOwnProfile) {
-                return
-            } else {
-                // If in other profile and select self, maybe go back? Or push new screen?
-                // For now let's just push /user-profile?userId=...
-                // But wait, if it's self, we should probably go to the main profile tab?
-                // Let's stick to the existing behavior: push /user-profile
-                // Actually, existing behavior was:
-                // if (userId === user?.uid) return
-                // router.push(...)
-            }
-        }
-
-        if (selectedUserId === user?.uid) {
-            if (!isOwnProfile) {
-                // If we are viewing someone else, and click ourselves, maybe we should just go back to the main profile tab?
-                // But we are in a stack.
-                // Let's just do nothing for now if it's self, as per original code.
-                return
-            }
-            return
-        }
-
+        if (selectedUserId === user?.uid) return
         router.push(`/user-profile?userId=${selectedUserId}` as any)
     }
 
