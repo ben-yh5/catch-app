@@ -114,7 +114,7 @@ function RootLayoutNav() {
 
                 // Navigate to user profile if notification contains userId
                 if (data.userId) {
-                    router.push(`/user-profile?userId=${data.userId}` as any)
+                    router.push({ pathname: '/user-profile', params: { userId: data.userId } } as any)
                 }
             }
         )

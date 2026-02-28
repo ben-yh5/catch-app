@@ -115,5 +115,11 @@ service cloud.firestore {
       // Only Cloud Functions (admin SDK) can write
       allow create, update, delete: if false;
     }
+
+    // Reports collection (managed by Cloud Functions only)
+    match /reports/{reportId} {
+      // No client access — only written/read by Cloud Functions (admin SDK)
+      allow read, write: if false;
+    }
   }
 }

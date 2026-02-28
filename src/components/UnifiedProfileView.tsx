@@ -1,4 +1,5 @@
 import ActivityFeed from '@/components/NotificationInbox'
+import ReportBottomSheet from '@/components/ReportBottomSheet'
 import ThreadModal from '@/components/ThreadModal'
 import AppButton from '@/components/ui/AppButton'
 import { useAuth } from '@/context/AuthContext'
@@ -90,6 +91,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     const [followListType, setFollowListType] = useState<'followers' | 'following'>('followers')
     const [followList, setFollowList] = useState<{ id: string; username: string; isFollowing: boolean }[]>([])
     const [followListLoading, setFollowListLoading] = useState(false)
+    const [reportVisible, setReportVisible] = useState(false)
     const flatListRef = React.useRef<FlatList>(null)
     const searchInputRef = React.useRef<TextInput>(null)
 
@@ -412,11 +414,11 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         setSearchQuery('')
         setSearchResults([])
         if (selectedUserId === user?.uid) return
-        router.push(`/user-profile?userId=${selectedUserId}` as any)
+        router.push({ pathname: '/user-profile', params: { userId: selectedUserId } } as any)
     }
 
     const handleReport = () => {
-        Alert.alert('Report User', 'This feature is coming soon! (TODO)')
+        setReportVisible(true)
     }
 
     const handleShowFollowList = async (type: 'followers' | 'following') => {
@@ -931,7 +933,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                         onPress={() => {
                                             setFollowListVisible(false)
                                             if (userItem.id === user?.uid) return
-                                            router.push(`/user-profile?userId=${userItem.id}` as any)
+                                            router.push({ pathname: '/user-profile', params: { userId: userItem.id } } as any)
                                         }}
                                     >
                                         <View style={styles.searchResultAvatar}>
@@ -971,6 +973,13 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                     </View>
                 </View>
             </Modal>
+
+            <ReportBottomSheet
+                visible={reportVisible}
+                onClose={() => setReportVisible(false)}
+                targetUserId={userId}
+                targetUsername={username}
+            />
         </>
     )
 }

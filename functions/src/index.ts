@@ -1475,6 +1475,82 @@ export const unfollowUser = functions.https.onCall(async (data, context) => {
     }
 })
 
+// ─── Report User ────────────────────────────────────────────────────────────
+
+export const reportUser = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError(
+            'unauthenticated',
+            'Must be logged in to report a user'
+        )
+    }
+
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'reportUser', RATE_LIMITS.SETUP)
+
+    const { targetUserId, reason, details } = data
+    const reporterId = context.auth.uid
+
+    functions.logger.info('[reportUser] Received data:', { targetUserId, reason, details: typeof details, reporterId })
+
+    if (!targetUserId || typeof targetUserId !== 'string') {
+        functions.logger.warn('[reportUser] Invalid targetUserId:', targetUserId)
+        throw new functions.https.HttpsError('invalid-argument', 'Target user ID is required')
+    }
+
+    if (targetUserId === reporterId) {
+        functions.logger.warn('[reportUser] Self-report attempt')
+        throw new functions.https.HttpsError('invalid-argument', 'Cannot report yourself')
+    }
+
+    const VALID_REASONS = ['harassment', 'spam', 'impersonation', 'inappropriate_content', 'other']
+    if (!reason || !VALID_REASONS.includes(reason)) {
+        functions.logger.warn('[reportUser] Invalid reason:', reason)
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid report reason')
+    }
+
+    const sanitizedDetails = (typeof details === 'string') ? details.trim().slice(0, 500) : ''
+
+    try {
+        const db = admin.firestore()
+
+        const targetDoc = await db.collection('users').doc(targetUserId).get()
+        if (!targetDoc.exists) {
+            throw new functions.https.HttpsError('not-found', 'User not found')
+        }
+
+        const existingReport = await db.collection('reports')
+            .where('reporterId', '==', reporterId)
+            .where('targetUserId', '==', targetUserId)
+            .where('targetType', '==', 'user')
+            .limit(1)
+            .get()
+
+        if (!existingReport.empty) {
+            throw new functions.https.HttpsError('already-exists', 'You have already reported this user')
+        }
+
+        await db.collection('reports').add({
+            reporterId,
+            targetUserId,
+            targetType: 'user',
+            reason,
+            details: sanitizedDetails,
+            status: 'pending',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+
+        functions.logger.info(`[reportUser] User ${reporterId} reported user ${targetUserId} for ${reason}`)
+        return { success: true }
+    } catch (error: any) {
+        if (error instanceof functions.https.HttpsError) {
+            throw error
+        }
+        functions.logger.error('Error reporting user:', error)
+        throw new functions.https.HttpsError('internal', 'Failed to submit report')
+    }
+})
+
 // ─── Account Deletion ───────────────────────────────────────────────────────
 
 /**
