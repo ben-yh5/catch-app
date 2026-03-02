@@ -1,11 +1,11 @@
+import ExploreSearchBar from '@/components/ExploreSearchBar'
 import ExploreSection from '@/components/ExploreSection'
-import LocationSearchBar from '@/components/LocationSearchBar'
 import ActivityFeed from '@/components/NotificationInbox'
 import RecommendedPostCard from '@/components/RecommendedPostCard'
 import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
 import { useRecommendedFeed } from '@/hooks/useRecommendedFeed'
-import { db, functions } from '@/services/firebase'
+import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { List, Post, RecommendedPost } from '@/types'
 import { calculateDistance, getPostsInRadius } from '@/utils/geospatialQueries'
@@ -13,7 +13,6 @@ import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
-import { httpsCallable } from 'firebase/functions'
 import {
     collection,
     doc,
@@ -248,27 +247,8 @@ export default function ExploreScreen() {
         setNearPosts(del)
     }
 
-    const handleSearchLocationSelect = useCallback((location: { text: string; place_name: string; center: [number, number]; place_type: string[] }) => {
-        const isCityLevel = location.place_type?.some(t =>
-            ['place', 'locality', 'region', 'district'].includes(t)
-        )
-
-        if (isCityLevel) {
-            const recordCityIntentFn = httpsCallable(functions, 'recordCityIntent')
-            recordCityIntentFn({
-                cityName: location.text,
-                latitude: location.center[1],  // Mapbox returns [lng, lat]
-                longitude: location.center[0],
-            }).catch(err => console.error('Error recording city intent:', err))
-        }
-
-        router.push({
-            pathname: '/(tabs)/map',
-            params: {
-                centerLat: location.center[1].toString(),
-                centerLng: location.center[0].toString(),
-            }
-        })
+    const handleSearch = useCallback((queryText: string) => {
+        router.push({ pathname: '/(tabs)/map', params: { searchQuery: queryText } })
     }, [router])
 
     const renderRecommendedCard = useCallback(({ item }: { item: RecommendedPost }) => (
@@ -328,9 +308,9 @@ export default function ExploreScreen() {
     const listHeaderComponent = useMemo(() => (
         <>
             <View style={styles.searchBarContainer}>
-                <LocationSearchBar
-                    onLocationSelect={handleSearchLocationSelect}
-                    userLocation={userLocation ? { longitude: userLocation.longitude, latitude: userLocation.latitude } : null}
+                <ExploreSearchBar
+                    onSubmit={handleSearch}
+                    onClear={() => {}}
                 />
             </View>
 
@@ -368,7 +348,7 @@ export default function ExploreScreen() {
             )}
         </>
     ), [
-        handleSearchLocationSelect, userLocation, featuredLists, loadingLists,
+        handleSearch, userLocation, featuredLists, loadingLists,
         trendingPosts, loadingTrending, newPosts, loadingNew, nearPosts,
         loadingNear, isLocating, recommendedFeed.loading, recommendedFeed.posts.length,
     ])

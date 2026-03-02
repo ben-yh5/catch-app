@@ -74,6 +74,34 @@ export interface RecommendedPost extends Post {
  * - Public (isPublic=true) - visible to all users
  * - Special "Saved" list (isSavedList=true) - auto-created default list
  */
+/**
+ * SearchPost - Post data returned by the searchPosts Cloud Function
+ *
+ * Includes location metadata (city, country) and visual metadata (tags, scene)
+ * from the vector search index. Uses `postId` (not `id`) matching the response.
+ */
+export interface SearchPost {
+    postId: string
+    authorId: string
+    authorUsername: string
+    caption: string
+    photoURL: string
+    thumbnailURL: string | null
+    mediumURL: string | null
+    catchCount: number
+    isPioneer: boolean
+    isOriginal: boolean
+    createdAt: any
+    city: string | null
+    country: string | null
+    tags: string[]
+    scene: string | null
+    distanceKm: number | null
+    latitude: number
+    longitude: number
+    vectorDistance: number
+}
+
 export interface List {
     id: string
     name: string

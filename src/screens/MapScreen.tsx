@@ -4,9 +4,9 @@ import MapHUD from '@/components/MapHUD'
 import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
-import { db } from '@/services/firebase'
+import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
-import { Post } from '@/types'
+import { Post, SearchPost } from '@/types'
 import { getPostsInViewport as fetchViewportPosts, getPostLocations } from '@/utils/geospatialQueries'
 import { getPostBountyStatus } from '@/utils/postClassification'
 import { Ionicons } from '@expo/vector-icons'
@@ -14,6 +14,7 @@ import Mapbox, { Camera, CircleLayer, LocationPuck, MapView, ShapeSource, Symbol
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { arrayRemove, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
@@ -64,13 +65,12 @@ export default function MapScreen() {
     const FILTER_DEBOUNCE = 600 // reduced to 600ms for snappier feel
 
     // List Focus Mode State
-    const { listId, postId, filter, panToUser, centerLat, centerLng } = useLocalSearchParams<{
+    const { listId, postId, filter, panToUser, searchQuery } = useLocalSearchParams<{
         listId: string;
         postId: string;
         filter: string;
         panToUser: string;
-        centerLat: string;
-        centerLng: string;
+        searchQuery: string;
     }>()
     const [activeList, setActiveList] = useState<any | null>(null)
     const [listPosts, setListPosts] = useState<Post[]>([])
@@ -80,6 +80,13 @@ export default function MapScreen() {
     // Thread modal state
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [showThreadModal, setShowThreadModal] = useState(false)
+
+    // Search mode state
+    const [isSearchMode, setIsSearchMode] = useState(false)
+    const isSearchModeRef = useRef(false)
+    const [searchPostResults, setSearchPostResults] = useState<Post[]>([])
+    const [searchLoading, setSearchLoading] = useState(false)
+    const [activeSearchQuery, setActiveSearchQuery] = useState('')
 
     // Get user's current location
     useEffect(() => {
@@ -135,28 +142,12 @@ export default function MapScreen() {
         }
     }, [filter, panToUser, userLocation])
 
-    // Handle search location from Explore tab
+    // Handle search query from Explore tab deep link
     useEffect(() => {
-        if (!centerLat || !centerLng || locationLoading) return
-        const lat = parseFloat(centerLat)
-        const lng = parseFloat(centerLng)
-        if (isNaN(lat) || isNaN(lng)) return
-
-        // Wait for map and camera to be ready, then animate
-        const timer = setTimeout(() => {
-            if (cameraRef.current) {
-                cameraRef.current.setCamera({
-                    centerCoordinate: [lng, lat],
-                    zoomLevel: 12,
-                    animationDuration: 1000,
-                })
-                setTimeout(() => {
-                    loadVisiblePosts()
-                }, 1500)
-            }
-        }, 500)
-        return () => clearTimeout(timer)
-    }, [centerLat, centerLng, locationLoading])
+        if (searchQuery && searchQuery.trim().length > 0 && !locationLoading) {
+            handleSearch(searchQuery)
+        }
+    }, [searchQuery, locationLoading])
 
     // Handle List Focus Mode
     useEffect(() => {
@@ -338,7 +329,7 @@ export default function MapScreen() {
 
     // Fetch posts in current viewport
     const loadVisiblePosts = useCallback(async () => {
-        if (!mapRef.current || isListMode) return
+        if (!mapRef.current || isListMode || isSearchModeRef.current) return
 
         // Debounce if called too frequently (unless forced)
         const now = Date.now()
@@ -413,6 +404,7 @@ export default function MapScreen() {
 
     // Handle map movement - Auto Fetch with Debounce
     const handleCameraChanged = useCallback((state: any) => {
+        if (isSearchModeRef.current) return
         // Only fetch if idle (interaction ended)
         if (!state.gestures.isGestureActive) {
             // We use a timeout to debounce the fetch
@@ -457,12 +449,11 @@ export default function MapScreen() {
     }
     // Handle post press from bottom sheet
     const handlePostPress = (postId: string) => {
-        const post = sortedVisiblePosts.find((p) => p.id === postId)
+        const posts = isSearchMode ? searchPostResults : sortedVisiblePosts
+        const post = posts.find((p) => p.id === postId)
         if (post) {
             setSelectedPost(post)
-            if (!isListMode) {
-                setShowThreadModal(true)
-            }
+            setShowThreadModal(true)
         }
     }
 
@@ -577,31 +568,85 @@ export default function MapScreen() {
         }
     }
 
-    const handleLocationSelect = (location: any) => {
-        if (!cameraRef.current) return
+    // Search mode handlers
+    const handleSearch = useCallback(async (queryText: string) => {
+        isSearchModeRef.current = true
+        setIsSearchMode(true)
+        setSearchLoading(true)
+        setActiveSearchQuery(queryText)
+        setSearchPostResults([])
 
-        if (location.bbox) {
-            // Use fitBounds if bbox is available
-            cameraRef.current.fitBounds(
-                [location.bbox[2], location.bbox[3]], // NE: [maxX, maxY]
-                [location.bbox[0], location.bbox[1]], // SW: [minX, minY]
-                [50, 20, 50, 20], // padding [top, right, bottom, left]
-                1000 // duration
-            )
-        } else {
-            // Fallback to center implementation
-            cameraRef.current.setCamera({
-                centerCoordinate: location.center,
-                zoomLevel: 12, // Default zoom if no bbox
-                animationDuration: 1000,
+        try {
+            const searchPostsFn = httpsCallable(functions, 'searchPosts')
+            const result = await searchPostsFn({
+                query: queryText,
+                ...(userLocation ? {
+                    location: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
+                } : {}),
             })
-        }
+            const { posts } = result.data as { posts: SearchPost[] }
 
-        // Trigger search in this area after animation
-        setTimeout(() => {
-            loadVisiblePosts()
-        }, 1200)
-    }
+            // Convert SearchPost[] → Post[] for map pins and bottom sheet
+            const converted: Post[] = posts
+                .filter(sp => sp.latitude && sp.longitude)
+                .map(sp => ({
+                    id: sp.postId,
+                    authorId: sp.authorId,
+                    authorUsername: sp.authorUsername,
+                    photoURL: sp.photoURL,
+                    caption: sp.caption,
+                    hasLocation: true,
+                    catchCount: sp.catchCount,
+                    parentPostId: null,
+                    rootPostId: null,
+                    isOriginal: sp.isOriginal,
+                    createdAt: sp.createdAt,
+                    thumbnailURL: sp.thumbnailURL ?? undefined,
+                    mediumURL: sp.mediumURL ?? undefined,
+                    isPioneer: sp.isPioneer,
+                    latitude: sp.latitude,
+                    longitude: sp.longitude,
+                } as Post))
+
+            setSearchPostResults(converted)
+            setVisiblePosts(converted)
+
+            // Fit camera to show all result pins
+            if (converted.length > 0 && cameraRef.current) {
+                const lats = converted.map(p => p.latitude!)
+                const lngs = converted.map(p => p.longitude!)
+
+                if (converted.length === 1) {
+                    cameraRef.current.setCamera({
+                        centerCoordinate: [lngs[0], lats[0]],
+                        zoomLevel: 14,
+                        animationDuration: 1000,
+                    })
+                } else {
+                    cameraRef.current.fitBounds(
+                        [Math.max(...lngs), Math.max(...lats)], // NE
+                        [Math.min(...lngs), Math.min(...lats)], // SW
+                        [80, 40, 200, 40], // padding: top (HUD), right, bottom (sheet), left
+                        1000,
+                    )
+                }
+            }
+        } catch (error) {
+            console.error('Search error:', error)
+        } finally {
+            setSearchLoading(false)
+        }
+    }, [userLocation])
+
+    const handleSearchClear = useCallback(() => {
+        isSearchModeRef.current = false
+        setIsSearchMode(false)
+        setSearchPostResults([])
+        setActiveSearchQuery('')
+        router.setParams({ searchQuery: '' })
+        // Resume normal map behavior
+        loadVisiblePosts()
+    }, [loadVisiblePosts, router])
 
 
 
@@ -612,11 +657,11 @@ export default function MapScreen() {
 
             {/* Map HUD (Search + Filters) */}
             <MapHUD
-                onLocationSelect={handleLocationSelect}
-                userLocation={userLocation ? {
-                    latitude: userLocation.coords.latitude,
-                    longitude: userLocation.coords.longitude
-                } : null}
+                onSearch={handleSearch}
+                onSearchClear={handleSearchClear}
+                searchLoading={searchLoading}
+                searchQuery={searchQuery || ''}
+                isSearchMode={isSearchMode}
                 activeFilter={activeFilter}
                 onFilterChange={handleFilterChange}
             />
@@ -759,14 +804,15 @@ export default function MapScreen() {
             {/* Bottom Sheet */}
             {!locationLoading && (
                 <MapBottomSheet
-                    posts={sortedVisiblePosts}
-                    loading={loadingPosts}
+                    posts={isSearchMode ? searchPostResults : sortedVisiblePosts}
+                    loading={isSearchMode ? searchLoading : loadingPosts}
                     onPostPress={handlePostPress}
                     onJumpToLocation={handleJumpToLocation}
                     selectedPostId={selectedPostId}
-                    title={activeList?.name}
-                    onClose={handleListClose}
-                    isListMode={isListMode}
+                    title={isSearchMode ? `"${activeSearchQuery}"` : activeList?.name}
+                    subtitle={isSearchMode ? `${searchPostResults.length} result${searchPostResults.length !== 1 ? 's' : ''}` : undefined}
+                    onClose={isSearchMode ? handleSearchClear : handleListClose}
+                    isListMode={isListMode || isSearchMode}
                 />
             )}
 

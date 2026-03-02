@@ -12,6 +12,7 @@ interface MapBottomSheetProps {
     onJumpToLocation: (latitude: number, longitude: number) => void;
     selectedPostId?: string | null;
     title?: string;
+    subtitle?: string;
     onClose?: () => void;
     isListMode?: boolean;
 }
@@ -23,6 +24,7 @@ export default function MapBottomSheet({
     onJumpToLocation,
     selectedPostId,
     title,
+    subtitle,
     onClose,
     isListMode,
 }: MapBottomSheetProps) {
@@ -51,7 +53,10 @@ export default function MapBottomSheet({
             </View>
             {isListMode ? (
                 <View style={styles.listHeaderContainer}>
-                    <Text style={styles.listTitle} numberOfLines={1}>{title || 'List'}</Text>
+                    <View style={styles.listTitleContainer}>
+                        <Text style={styles.listTitle} numberOfLines={1}>{title || 'List'}</Text>
+                        {subtitle && <Text style={styles.listSubtitle}>{subtitle}</Text>}
+                    </View>
                     {onClose && (
                         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                             <Text style={styles.closeButtonText}>Close</Text>
@@ -186,11 +191,18 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingBottom: 4,
     },
+    listTitleContainer: {
+        flex: 1,
+    },
     listTitle: {
         fontSize: 18,
         fontWeight: '700',
         color: colors.textPrimary,
-        flex: 1,
+    },
+    listSubtitle: {
+        fontSize: 13,
+        color: colors.textTertiary,
+        marginTop: 2,
     },
     closeButton: {
         padding: 4,

@@ -2,19 +2,25 @@ import { BlurView } from 'expo-blur'
 import React from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import ExploreSearchBar from './ExploreSearchBar'
 import FilterPills, { FilterType } from './FilterPills'
-import LocationSearchBar from './LocationSearchBar'
 
 interface MapHUDProps {
-    onLocationSelect: (location: any) => void
-    userLocation: { longitude: number; latitude: number } | null
+    onSearch: (query: string) => void
+    onSearchClear: () => void
+    searchLoading?: boolean
+    searchQuery?: string
+    isSearchMode?: boolean
     activeFilter: FilterType
     onFilterChange: (filter: FilterType) => void
 }
 
 export default function MapHUD({
-    onLocationSelect,
-    userLocation,
+    onSearch,
+    onSearchClear,
+    searchLoading,
+    searchQuery,
+    isSearchMode,
     activeFilter,
     onFilterChange
 }: MapHUDProps) {
@@ -23,30 +29,29 @@ export default function MapHUD({
     return (
         <View style={[styles.container, { top: insets.top + 10 }]}>
             <View style={styles.islandContainer}>
-                {/* 
-                  BlurView provides the glass effect.
-                  intensity={80} provides a nice strong blur.
-                  tint="systemMaterial" adapts to light/dark mode on iOS.
-                */}
                 <BlurView
                     intensity={Platform.OS === 'ios' ? 80 : 100}
                     tint="systemMaterialDark"
                     style={styles.blurContainer}
                 >
                     <View style={styles.contentContainer}>
-                        <LocationSearchBar
-                            onLocationSelect={onLocationSelect}
-                            userLocation={userLocation}
+                        <ExploreSearchBar
+                            onSubmit={onSearch}
+                            onClear={onSearchClear}
+                            loading={searchLoading}
+                            initialQuery={searchQuery}
                             containerStyle={styles.searchBarContainer}
                             inputContainerStyle={styles.searchInputContainer}
                         />
 
-                        <View style={styles.filterContainer}>
-                            <FilterPills
-                                activeFilter={activeFilter}
-                                onFilterChange={onFilterChange}
-                            />
-                        </View>
+                        {!isSearchMode && (
+                            <View style={styles.filterContainer}>
+                                <FilterPills
+                                    activeFilter={activeFilter}
+                                    onFilterChange={onFilterChange}
+                                />
+                            </View>
+                        )}
                     </View>
                 </BlurView>
             </View>
@@ -67,7 +72,6 @@ const styles = StyleSheet.create({
         width: '100%',
         borderRadius: 28,
         overflow: 'hidden',
-        // Use a slightly dark semi-transparent bg for Android fallback, or transparent for iOS
         backgroundColor: Platform.OS === 'android' ? 'rgba(30,30,30,0.9)' : 'transparent',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
@@ -75,7 +79,7 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 8,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.15)', // Lighter border for contrast in dark mode
+        borderColor: 'rgba(255,255,255,0.15)',
     },
     blurContainer: {
         width: '100%',
@@ -89,7 +93,6 @@ const styles = StyleSheet.create({
         marginHorizontal: 4,
     },
     searchInputContainer: {
-        // Use a semi-transparent black for dark mode alignment
         backgroundColor: 'rgba(0,0,0,0.2)',
         borderWidth: 0,
     },

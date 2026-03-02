@@ -11,11 +11,24 @@
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { distanceBetween, geohashForLocation, geohashQueryBounds } from 'geofire-common'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { onImageUpload } from './triggers/onImageUpload'
 
 admin.initializeApp()
 
 export { onImageUpload }
+
+// Gemini SDK (lazy-init to avoid cold start cost when unused)
+let genAI: GoogleGenerativeAI | null = null
+
+function getGenAI(): GoogleGenerativeAI {
+    if (!genAI) {
+        const key = process.env.GEMINI_API_KEY
+        if (!key) throw new Error('GEMINI_API_KEY not set')
+        genAI = new GoogleGenerativeAI(key)
+    }
+    return genAI
+}
 
 /** Maximum distance (in meters) a user must be from a post location to catch it */
 const CATCH_RADIUS_METERS = 100
@@ -578,6 +591,106 @@ export const onPostCreated = functions.firestore
                         }
                         if (!isPioneer) break
                     }
+
+                    // --- AI Search: Enrich post with metadata + embedding ---
+                    // Runs async after Pioneer classification. Each step is independent
+                    // and wrapped in try/catch so failures don't block post creation.
+                    const locationDocRef = locationQuery.docs[0].ref
+                    const enrichmentUpdate: Record<string, any> = {}
+
+                    // 1. Reverse geocode via Nominatim (free, no API key)
+                    try {
+                        const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?lat=${newPostLocation.latitude}&lon=${newPostLocation.longitude}&format=json&addressdetails=1`
+                        const geoResponse = await fetch(nominatimUrl, {
+                            headers: { 'User-Agent': 'CatchApp/1.0' },
+                        })
+                        if (geoResponse.ok) {
+                            const geoData = await geoResponse.json()
+                            enrichmentUpdate.locationMeta = {
+                                country: geoData.address?.country || null,
+                                city: geoData.address?.city || geoData.address?.town || geoData.address?.village || null,
+                                neighborhood: geoData.address?.suburb || geoData.address?.neighbourhood || null,
+                                street: geoData.address?.road || null,
+                                formattedAddress: geoData.display_name || null,
+                            }
+                        }
+                    } catch (e) {
+                        functions.logger.warn(`[onPostCreated] Nominatim geocoding failed for post ${postId}`, e)
+                    }
+
+                    // 2. Vision auto-tagging via Gemini Flash
+                    try {
+                        const photoPath = postData.photoURL
+                        // Extract Storage path from download URL
+                        const storagePathMatch = photoPath?.match(/\/o\/(.+?)\?/)
+                        if (storagePathMatch) {
+                            const storagePath = decodeURIComponent(storagePathMatch[1])
+                            const bucket = admin.storage().bucket()
+                            const [imageBuffer] = await Promise.race([
+                                bucket.file(storagePath).download(),
+                                new Promise<never>((_, reject) =>
+                                    setTimeout(() => reject(new Error('Image download timeout')), 10000)
+                                ),
+                            ])
+                            const imageBase64 = imageBuffer.toString('base64')
+
+                            const model = getGenAI().getGenerativeModel({ model: 'gemini-2.0-flash' })
+                            const result = await Promise.race([
+                                model.generateContent([
+                                    { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
+                                    'Analyze this travel/location photo. Return ONLY valid JSON, no markdown:\n{\n  "tags": ["tag1", "tag2"],\n  "scene": "one-line scene description",\n  "landmark": "name or null",\n  "mood": "one-word mood"\n}',
+                                ]),
+                                new Promise<never>((_, reject) =>
+                                    setTimeout(() => reject(new Error('Gemini timeout')), 15000)
+                                ),
+                            ])
+
+                            const text = result.response.text()
+                            // Strip markdown code fences if present
+                            const jsonStr = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
+                            const visualMeta = JSON.parse(jsonStr)
+                            enrichmentUpdate.visualMeta = {
+                                tags: Array.isArray(visualMeta.tags) ? visualMeta.tags : [],
+                                scene: typeof visualMeta.scene === 'string' ? visualMeta.scene : null,
+                                landmark: typeof visualMeta.landmark === 'string' ? visualMeta.landmark : null,
+                                mood: typeof visualMeta.mood === 'string' ? visualMeta.mood : null,
+                            }
+                        }
+                    } catch (e) {
+                        functions.logger.warn(`[onPostCreated] Vision tagging failed for post ${postId}`, e)
+                    }
+
+                    // 3. Generate text embedding via OpenAI
+                    try {
+                        const embeddingParts = [
+                            postData.caption,
+                            enrichmentUpdate.locationMeta?.formattedAddress,
+                            enrichmentUpdate.locationMeta?.city,
+                            enrichmentUpdate.visualMeta?.scene,
+                            enrichmentUpdate.visualMeta?.tags?.join(', '),
+                            enrichmentUpdate.visualMeta?.mood,
+                            enrichmentUpdate.visualMeta?.landmark,
+                        ].filter(Boolean)
+
+                        if (embeddingParts.length > 0) {
+                            const embeddingText = embeddingParts.join('. ')
+                            const embModel = getGenAI().getGenerativeModel({ model: 'gemini-embedding-001' })
+                            const embResult = await embModel.embedContent({ content: { role: 'user', parts: [{ text: embeddingText }] }, outputDimensionality: 768 } as any)
+                            enrichmentUpdate.embedding = admin.firestore.FieldValue.vector(
+                                embResult.embedding.values
+                            )
+                        }
+                    } catch (e) {
+                        functions.logger.warn(`[onPostCreated] Embedding generation failed for post ${postId}`, e)
+                    }
+
+                    // Write all enrichment data in a single update
+                    if (Object.keys(enrichmentUpdate).length > 0) {
+                        enrichmentUpdate.metadataVersion = 1
+                        await locationDocRef.update(enrichmentUpdate)
+                        functions.logger.info(`[onPostCreated] Enriched post ${postId} with ${Object.keys(enrichmentUpdate).join(', ')}`)
+                    }
+                    // --- End AI Search enrichment ---
                 }
 
                 // Update post with isPioneer flag and initial contributionEarned
@@ -2144,3 +2257,277 @@ export const getRecommendedFeed = functions.https.onCall(async (data, context) =
         throw new functions.https.HttpsError('internal', 'Failed to get recommended feed')
     }
 })
+
+/**
+ * Semantic search across posts using vector similarity.
+ * Embeds the user's query and finds nearest matches in post_locations.
+ */
+export const searchPosts = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Must be logged in')
+    }
+    verifyAppCheck(context)
+    await checkRateLimit(context.auth.uid, 'searchPosts', RATE_LIMITS.GENERAL)
+
+    const { query, location } = data
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+        throw new functions.https.HttpsError('invalid-argument', 'Query is required')
+    }
+    if (query.length > 200) {
+        throw new functions.https.HttpsError('invalid-argument', 'Query too long')
+    }
+
+    const hasLocation = location && typeof location.lat === 'number' && typeof location.lng === 'number'
+    const db = admin.firestore()
+
+    try {
+        // 1. Embed the search query
+        const embModel = getGenAI().getGenerativeModel({ model: 'gemini-embedding-001' })
+        const embResult = await embModel.embedContent({ content: { role: 'user', parts: [{ text: query.trim() }] }, outputDimensionality: 768 } as any)
+        const queryVector = embResult.embedding.values
+
+        // 2. Vector similarity search via Firestore findNearest
+        const vectorQuery = db.collection('post_locations').findNearest({
+            vectorField: 'embedding',
+            queryVector,
+            limit: 50,
+            distanceMeasure: 'COSINE',
+            distanceResultField: 'vectorDistance',
+        })
+        const snapshot = await vectorQuery.get()
+
+        // 3. Compute geo distance + re-rank if user location available
+        let locationResults = snapshot.docs.map(doc => {
+            const d = doc.data()
+            let distanceKm: number | null = null
+            if (hasLocation) {
+                distanceKm = distanceBetween(
+                    [location.lat, location.lng],
+                    [d.latitude, d.longitude]
+                )
+            }
+            return { id: doc.id, ...d, distanceKm }
+        })
+
+        if (hasLocation) {
+            // Re-rank: boost nearby results using log-scaled distance penalty
+            // 1km → 1.09x, 10km → 1.31x, 100km → 1.60x, 1000km → 1.90x
+            locationResults.sort((a: any, b: any) => {
+                const aScore = (a.vectorDistance || 0) * (1 + Math.log10(1 + (a.distanceKm || 0)) * 0.3)
+                const bScore = (b.vectorDistance || 0) * (1 + Math.log10(1 + (b.distanceKm || 0)) * 0.3)
+                return aScore - bScore
+            })
+        }
+
+        // Filter by relevance: cosine distance > 0.6 means weak/unrelated match
+        locationResults = locationResults.filter((r: any) => (r.vectorDistance || 0) < 0.6)
+
+        // Take top 50 after re-ranking
+        locationResults = locationResults.slice(0, 50)
+
+        if (locationResults.length === 0) {
+            return { posts: [] }
+        }
+
+        // 4. Batch fetch post documents for summaries
+        const postIds = locationResults.map((r: any) => r.postId)
+        const postMap: Record<string, any> = {}
+
+        for (let i = 0; i < postIds.length; i += 100) {
+            const batch = postIds.slice(i, i + 100)
+            const refs = batch.map((id: string) => db.collection('posts').doc(id))
+            const docs = await db.getAll(...refs)
+            for (const doc of docs) {
+                if (doc.exists) {
+                    postMap[doc.id] = doc.data()
+                }
+            }
+        }
+
+        // 5. Return merged results
+        const posts = locationResults
+            .filter((r: any) => postMap[r.postId])
+            .map((r: any) => {
+                const post = postMap[r.postId]
+                return {
+                    postId: r.postId,
+                    authorId: post.authorId,
+                    authorUsername: post.authorUsername,
+                    caption: post.caption,
+                    photoURL: post.photoURL,
+                    thumbnailURL: post.thumbnailURL || null,
+                    mediumURL: post.mediumURL || null,
+                    catchCount: post.catchCount || 0,
+                    isPioneer: post.isPioneer || false,
+                    isOriginal: post.isOriginal,
+                    createdAt: post.createdAt,
+                    city: r.locationMeta?.city || null,
+                    country: r.locationMeta?.country || null,
+                    tags: r.visualMeta?.tags || [],
+                    scene: r.visualMeta?.scene || null,
+                    distanceKm: r.distanceKm !== null ? Math.round(r.distanceKm * 10) / 10 : null,
+                    latitude: r.latitude,
+                    longitude: r.longitude,
+                    vectorDistance: r.vectorDistance || 0,
+                }
+            })
+
+        functions.logger.info(`[searchPosts] Query "${query}" returned ${posts.length} results`)
+        return { posts }
+    } catch (error: any) {
+        const msg = error?.message || String(error)
+        functions.logger.error('Error in searchPosts:', msg, error)
+        throw new functions.https.HttpsError('internal', `Search failed: ${msg}`)
+    }
+})
+
+// ============================================================================
+// BACKFILL EMBEDDINGS
+// One-time admin function to enrich existing post_locations with
+// locationMeta, visualMeta, and vector embeddings for search.
+// ============================================================================
+export const backfillEmbeddings = functions
+    .runWith({ timeoutSeconds: 540, memory: '1GB' })
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Must be authenticated')
+        }
+
+        const db = admin.firestore()
+        const snapshot = await db.collection('post_locations').get()
+
+        let processed = 0
+        let skipped = 0
+        let errors = 0
+
+        for (const doc of snapshot.docs) {
+            const locData = doc.data()
+
+            // Skip docs that already have an embedding
+            if (locData.embedding) {
+                skipped++
+                continue
+            }
+
+            try {
+                const enrichmentUpdate: Record<string, any> = {}
+
+                // 1. Reverse geocode if missing locationMeta
+                if (!locData.locationMeta && locData.latitude && locData.longitude) {
+                    try {
+                        const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?lat=${locData.latitude}&lon=${locData.longitude}&format=json&addressdetails=1`
+                        const geoResponse = await fetch(nominatimUrl, {
+                            headers: { 'User-Agent': 'CatchApp/1.0' },
+                        })
+                        if (geoResponse.ok) {
+                            const geoData = await geoResponse.json()
+                            enrichmentUpdate.locationMeta = {
+                                country: geoData.address?.country || null,
+                                city: geoData.address?.city || geoData.address?.town || geoData.address?.village || null,
+                                neighborhood: geoData.address?.suburb || geoData.address?.neighbourhood || null,
+                                street: geoData.address?.road || null,
+                                formattedAddress: geoData.display_name || null,
+                            }
+                        }
+                        // Nominatim rate limit: 1 req/sec
+                        await new Promise(resolve => setTimeout(resolve, 1100))
+                    } catch (e) {
+                        functions.logger.warn(`[backfill] Geocoding failed for ${doc.id}`, e)
+                    }
+                }
+
+                // 2. Vision tagging if missing visualMeta
+                if (!locData.visualMeta && locData.postId) {
+                    try {
+                        const postDoc = await db.collection('posts').doc(locData.postId).get()
+                        const postData = postDoc.data()
+                        const photoPath = postData?.photoURL
+                        const storagePathMatch = photoPath?.match(/\/o\/(.+?)\?/)
+                        if (storagePathMatch) {
+                            const storagePath = decodeURIComponent(storagePathMatch[1])
+                            const bucket = admin.storage().bucket()
+                            const [imageBuffer] = await Promise.race([
+                                bucket.file(storagePath).download(),
+                                new Promise<never>((_, reject) =>
+                                    setTimeout(() => reject(new Error('Image download timeout')), 10000)
+                                ),
+                            ])
+                            const imageBase64 = imageBuffer.toString('base64')
+
+                            const model = getGenAI().getGenerativeModel({ model: 'gemini-2.0-flash' })
+                            const result = await Promise.race([
+                                model.generateContent([
+                                    { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
+                                    'Analyze this travel/location photo. Return ONLY valid JSON, no markdown:\n{\n  "tags": ["tag1", "tag2"],\n  "scene": "one-line scene description",\n  "landmark": "name or null",\n  "mood": "one-word mood"\n}',
+                                ]),
+                                new Promise<never>((_, reject) =>
+                                    setTimeout(() => reject(new Error('Gemini timeout')), 15000)
+                                ),
+                            ])
+
+                            const text = result.response.text()
+                            const jsonStr = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
+                            const visualMeta = JSON.parse(jsonStr)
+                            enrichmentUpdate.visualMeta = {
+                                tags: Array.isArray(visualMeta.tags) ? visualMeta.tags : [],
+                                scene: typeof visualMeta.scene === 'string' ? visualMeta.scene : null,
+                                landmark: typeof visualMeta.landmark === 'string' ? visualMeta.landmark : null,
+                                mood: typeof visualMeta.mood === 'string' ? visualMeta.mood : null,
+                            }
+                        }
+                    } catch (e) {
+                        functions.logger.warn(`[backfill] Vision tagging failed for ${doc.id}`, e)
+                    }
+                }
+
+                // 3. Generate embedding from all available text
+                try {
+                    const meta = enrichmentUpdate.locationMeta || locData.locationMeta || {}
+                    const visual = enrichmentUpdate.visualMeta || locData.visualMeta || {}
+
+                    // Fetch caption from posts collection
+                    let caption = ''
+                    if (locData.postId) {
+                        const postDoc = await db.collection('posts').doc(locData.postId).get()
+                        caption = postDoc.data()?.caption || ''
+                    }
+
+                    const embeddingParts = [
+                        caption,
+                        meta.formattedAddress,
+                        meta.city,
+                        visual.scene,
+                        visual.tags?.join(', '),
+                        visual.mood,
+                        visual.landmark,
+                    ].filter(Boolean)
+
+                    if (embeddingParts.length > 0) {
+                        const embeddingText = embeddingParts.join('. ')
+                        const embModel = getGenAI().getGenerativeModel({ model: 'gemini-embedding-001' })
+                        const embResult = await embModel.embedContent({ content: { role: 'user', parts: [{ text: embeddingText }] }, outputDimensionality: 768 } as any)
+                        enrichmentUpdate.embedding = admin.firestore.FieldValue.vector(
+                            embResult.embedding.values
+                        )
+                    }
+                } catch (e) {
+                    functions.logger.warn(`[backfill] Embedding failed for ${doc.id}`, e)
+                }
+
+                // 4. Write updates
+                if (Object.keys(enrichmentUpdate).length > 0) {
+                    enrichmentUpdate.metadataVersion = 1
+                    await doc.ref.update(enrichmentUpdate)
+                    processed++
+                    functions.logger.info(`[backfill] Enriched ${doc.id} (${processed}/${snapshot.docs.length - skipped})`)
+                }
+            } catch (e) {
+                errors++
+                functions.logger.warn(`[backfill] Failed for ${doc.id}`, e)
+            }
+        }
+
+        const summary = { processed, skipped, errors, total: snapshot.docs.length }
+        functions.logger.info(`[backfill] Complete:`, summary)
+        return summary
+    })
