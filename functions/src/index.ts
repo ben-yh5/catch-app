@@ -11,7 +11,7 @@
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { distanceBetween, geohashForLocation, geohashQueryBounds } from 'geofire-common'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI, TaskType } from '@google/generative-ai'
 import { onImageUpload } from './triggers/onImageUpload'
 
 admin.initializeApp()
@@ -675,7 +675,7 @@ export const onPostCreated = functions.firestore
                         if (embeddingParts.length > 0) {
                             const embeddingText = embeddingParts.join('. ')
                             const embModel = getGenAI().getGenerativeModel({ model: 'gemini-embedding-001' })
-                            const embResult = await embModel.embedContent({ content: { role: 'user', parts: [{ text: embeddingText }] }, outputDimensionality: 768 } as any)
+                            const embResult = await embModel.embedContent({ content: { role: 'user', parts: [{ text: embeddingText }] }, taskType: TaskType.RETRIEVAL_DOCUMENT, outputDimensionality: 768 } as any)
                             enrichmentUpdate.embedding = admin.firestore.FieldValue.vector(
                                 embResult.embedding.values
                             )
@@ -2281,12 +2281,30 @@ export const searchPosts = functions.https.onCall(async (data, context) => {
     const db = admin.firestore()
 
     try {
-        // 1. Embed the search query
+        // 1. Expand short queries for better semantic coverage
+        let searchText = query.trim()
+        if (searchText.split(/\s+/).length <= 4) {
+            try {
+                const flashModel = getGenAI().getGenerativeModel({ model: 'gemini-2.0-flash' })
+                const expansion = await flashModel.generateContent(
+                    `You are a search query expander for a travel photo app. Given the short search query below, output a single comma-separated list of 5-8 related phrases that someone might use to describe travel photos matching this query. Include synonyms, related visual descriptions, and broader concepts. Output ONLY the comma-separated list, nothing else.\n\nQuery: "${searchText}"`
+                )
+                const expanded = expansion.response.text().trim()
+                if (expanded.length > 0 && expanded.length < 500) {
+                    searchText = `${searchText}, ${expanded}`
+                    functions.logger.info(`[searchPosts] Expanded query: "${query}" → "${searchText}"`)
+                }
+            } catch (e) {
+                functions.logger.warn('[searchPosts] Query expansion failed, using raw query', e)
+            }
+        }
+
+        // 2. Embed the search query
         const embModel = getGenAI().getGenerativeModel({ model: 'gemini-embedding-001' })
-        const embResult = await embModel.embedContent({ content: { role: 'user', parts: [{ text: query.trim() }] }, outputDimensionality: 768 } as any)
+        const embResult = await embModel.embedContent({ content: { role: 'user', parts: [{ text: searchText }] }, taskType: TaskType.RETRIEVAL_QUERY, outputDimensionality: 768 } as any)
         const queryVector = embResult.embedding.values
 
-        // 2. Vector similarity search via Firestore findNearest
+        // 3. Vector similarity search via Firestore findNearest
         const vectorQuery = db.collection('post_locations').findNearest({
             vectorField: 'embedding',
             queryVector,
@@ -2296,7 +2314,7 @@ export const searchPosts = functions.https.onCall(async (data, context) => {
         })
         const snapshot = await vectorQuery.get()
 
-        // 3. Compute geo distance + re-rank if user location available
+        // 4. Compute geo distance + re-rank if user location available
         let locationResults = snapshot.docs.map(doc => {
             const d = doc.data()
             let distanceKm: number | null = null
@@ -2319,8 +2337,15 @@ export const searchPosts = functions.https.onCall(async (data, context) => {
             })
         }
 
-        // Filter by relevance: cosine distance > 0.6 means weak/unrelated match
-        locationResults = locationResults.filter((r: any) => (r.vectorDistance || 0) < 0.6)
+        // Log vectorDistance distribution for debugging relevance
+        const distances = locationResults.map((r: any) => (r.vectorDistance || 0).toFixed(3))
+        functions.logger.info(`[searchPosts] vectorDistances for "${query}": [${distances.join(', ')}]`)
+
+        // Filter by relevance: cosine distance > 0.50 means weak/unrelated match
+        // Empirical: closely matching posts ~0.2-0.3, loosely related ~0.4-0.5
+        const beforeCount = locationResults.length
+        locationResults = locationResults.filter((r: any) => (r.vectorDistance || 0) < 0.50)
+        functions.logger.info(`[searchPosts] Relevance filter: ${beforeCount} → ${locationResults.length} (cutoff 0.50)`)
 
         // Take top 50 after re-ranking
         locationResults = locationResults.slice(0, 50)
@@ -2393,6 +2418,9 @@ export const backfillEmbeddings = functions
             throw new functions.https.HttpsError('unauthenticated', 'Must be authenticated')
         }
 
+        const force = data?.force === true // Re-generate embeddings even if they exist
+        const embeddingsOnly = data?.embeddingsOnly === true // Skip geocoding/vision, only redo embeddings
+
         const db = admin.firestore()
         const snapshot = await db.collection('post_locations').get()
 
@@ -2403,8 +2431,8 @@ export const backfillEmbeddings = functions
         for (const doc of snapshot.docs) {
             const locData = doc.data()
 
-            // Skip docs that already have an embedding
-            if (locData.embedding) {
+            // Skip docs that already have an embedding (unless force mode)
+            if (locData.embedding && !force) {
                 skipped++
                 continue
             }
@@ -2413,7 +2441,7 @@ export const backfillEmbeddings = functions
                 const enrichmentUpdate: Record<string, any> = {}
 
                 // 1. Reverse geocode if missing locationMeta
-                if (!locData.locationMeta && locData.latitude && locData.longitude) {
+                if (!embeddingsOnly && !locData.locationMeta && locData.latitude && locData.longitude) {
                     try {
                         const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?lat=${locData.latitude}&lon=${locData.longitude}&format=json&addressdetails=1`
                         const geoResponse = await fetch(nominatimUrl, {
@@ -2437,7 +2465,7 @@ export const backfillEmbeddings = functions
                 }
 
                 // 2. Vision tagging if missing visualMeta
-                if (!locData.visualMeta && locData.postId) {
+                if (!embeddingsOnly && !locData.visualMeta && locData.postId) {
                     try {
                         const postDoc = await db.collection('posts').doc(locData.postId).get()
                         const postData = postDoc.data()
@@ -2505,7 +2533,7 @@ export const backfillEmbeddings = functions
                     if (embeddingParts.length > 0) {
                         const embeddingText = embeddingParts.join('. ')
                         const embModel = getGenAI().getGenerativeModel({ model: 'gemini-embedding-001' })
-                        const embResult = await embModel.embedContent({ content: { role: 'user', parts: [{ text: embeddingText }] }, outputDimensionality: 768 } as any)
+                        const embResult = await embModel.embedContent({ content: { role: 'user', parts: [{ text: embeddingText }] }, taskType: TaskType.RETRIEVAL_DOCUMENT, outputDimensionality: 768 } as any)
                         enrichmentUpdate.embedding = admin.firestore.FieldValue.vector(
                             embResult.embedding.values
                         )
