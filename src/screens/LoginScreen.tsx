@@ -1,13 +1,13 @@
 import UnifiedAuthLayout from '@/components/UnifiedAuthLayout'
 import AppButton from '@/components/ui/AppButton'
 import AppInput from '@/components/ui/AppInput'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import {
-    Alert,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -20,11 +20,12 @@ export default function LoginScreen() {
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
     const { login, loginWithGoogle } = useAuth()
+    const { showToast } = useToast()
     const router = useRouter()
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert('Error', 'Please fill in all fields')
+            showToast('warning', 'Please fill in all fields')
             return
         }
 
@@ -33,7 +34,7 @@ export default function LoginScreen() {
             await login(email, password)
             // Navigation will be handled automatically by auth state change
         } catch (error: any) {
-            Alert.alert('Login Failed', error.message)
+            showToast('error', 'Login Failed', error.message)
         } finally {
             setLoading(false)
         }
@@ -45,7 +46,7 @@ export default function LoginScreen() {
             await loginWithGoogle()
             // Navigation will be handled automatically by auth state change
         } catch (error: any) {
-            Alert.alert('Google Sign-In Failed', error.message)
+            showToast('error', 'Google Sign-In Failed', error.message)
         } finally {
             setLoading(false)
         }

@@ -3,6 +3,7 @@ import { colors } from '@/theme/colors';
 import React from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import FeaturedPostCard from './FeaturedPostCard';
+import { ExploreSectionSkeleton } from './ui/Skeleton';
 
 const CARD_SIZE = 240;
 const CARD_MARGIN = 12;
@@ -33,14 +34,7 @@ export default function ExploreSection({
                         <Text style={styles.title}>{title}</Text>
                     </View>
                 </View>
-                <FlatList
-                    horizontal
-                    data={[1, 2, 3]}
-                    keyExtractor={(item) => `skeleton-${item}`}
-                    renderItem={() => <View style={[styles.card, styles.skeleton]} />}
-                    contentContainerStyle={styles.listContent}
-                    showsHorizontalScrollIndicator={false}
-                />
+                <ExploreSectionSkeleton />
             </View>
         );
     }

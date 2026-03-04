@@ -20,6 +20,7 @@
 
 import CatchBadge from '@/components/ui/CatchBadge'
 import CaughtBadge from '@/components/ui/CaughtBadge'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
 import { useCatchFlow } from '@/hooks/useCatchFlow'
@@ -61,6 +62,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ListSelectionBottomSheet from './ListSelectionBottomSheet'
 import UnifiedCameraView from './UnifiedCameraView'
 import UnifiedPreviewScreen from './UnifiedPreviewScreen'
+import { ThreadModalSkeleton } from './ui/Skeleton'
 
 interface ThreadModalProps {
     visible: boolean
@@ -83,6 +85,7 @@ export default function ThreadModal({
 }: ThreadModalProps) {
     const { user, dataContributionEnabled } = useAuth()
     const { notifyPostEvent } = usePost()
+    const { showToast } = useToast()
     const router = useRouter()
     const insets = useSafeAreaInsets()
 
@@ -132,14 +135,14 @@ export default function ThreadModal({
             })
 
             // Navigate to new catch
-            setTimeout(() => {
+            requestAnimationFrame(() => {
                 const newIndex = updatedThreadPosts.length - 1
                 setCurrentIndex(newIndex)
                 flatListRef.current?.scrollToIndex({
                     index: newIndex,
                     animated: true,
                 })
-            }, 100)
+            })
         }
     })
 
@@ -158,8 +161,7 @@ export default function ThreadModal({
         if (threadPosts.length > 0 && initialPostId) {
             const index = threadPosts.findIndex((p) => p.id === initialPostId)
             if (index >= 0 && flatListRef.current) {
-                // Small delay to ensure FlatList is ready
-                setTimeout(() => {
+                requestAnimationFrame(() => {
                     const validIndex = index >= 0 ? index : 0
                     if (validIndex < threadPosts.length) {
                         flatListRef.current?.scrollToIndex({
@@ -168,7 +170,7 @@ export default function ThreadModal({
                         })
                         setCurrentIndex(validIndex)
                     }
-                }, 100)
+                })
             }
         }
     }, [threadPosts, initialPostId])
@@ -239,7 +241,7 @@ export default function ThreadModal({
 
             if (posts.length === 0) {
                 // No posts found in thread, close modal with error
-                Alert.alert('Error', 'This shot is no longer available')
+                showToast('error', 'This shot is no longer available')
                 onClose()
                 setLoadingThread(false)
                 return
@@ -254,7 +256,7 @@ export default function ThreadModal({
             setCurrentIndex(validIndex)
         } catch (error) {
             console.error('Error fetching thread:', error)
-            Alert.alert('Error', 'Failed to load shot details')
+            showToast('error', 'Failed to load shot details')
             onClose()
         } finally {
             setLoadingThread(false)
@@ -345,7 +347,7 @@ export default function ThreadModal({
 
     const handleGetDirections = async () => {
         if (!postLocation) {
-            Alert.alert('Location Not Available', 'Location data is not available for this post.')
+            showToast('warning', 'Location not available for this post')
             return
         }
 
@@ -374,7 +376,7 @@ export default function ThreadModal({
             }
         } catch (error) {
             console.error('Error opening directions:', error)
-            Alert.alert('Error', 'Could not open maps application.')
+            showToast('error', 'Could not open maps application')
         }
     }
 
@@ -397,7 +399,7 @@ export default function ThreadModal({
 
     const handleShare = async () => {
         setShowOptionsMenu(false)
-        Alert.alert('Share', 'Share functionality coming soon!')
+        showToast('info', 'Share functionality coming soon!')
     }
 
     const handleDeletePost = async () => {
@@ -464,12 +466,12 @@ export default function ThreadModal({
                 setCurrentIndex(newThreadPosts.length - 1)
             }
 
-            Alert.alert('Success', 'Post deleted successfully')
+            showToast('success', 'Post deleted successfully')
             onPostDelete?.(currentPost.id)
             notifyPostEvent('delete', currentPost.id, currentPost.authorId)
         } catch (error) {
             console.error('Error deleting post:', error)
-            Alert.alert('Error', 'Error deleting post. Please try again.')
+            showToast('error', 'Failed to delete post. Please try again.')
         }
     }
 
@@ -595,12 +597,7 @@ export default function ThreadModal({
             <View style={styles.modalOverlay}>
                 <View style={[styles.modalContent, { paddingTop: insets.top + 10 }]}>
                     {loadingThread ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator
-                                size="large"
-                                color={colors.primary}
-                            />
-                        </View>
+                        <ThreadModalSkeleton />
                     ) : (
                         <View style={styles.contentContainer}>
                             {/* Post Card */}

@@ -1,3 +1,4 @@
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
@@ -18,6 +19,7 @@ export default function SettingsScreen() {
         notificationSettings,
         toggleNotificationSetting
     } = useAuth()
+    const { showToast } = useToast()
     const router = useRouter()
     const insets = useSafeAreaInsets()
     const [deleting, setDeleting] = useState(false)
@@ -48,7 +50,7 @@ export default function SettingsScreen() {
                                             // Auth state change will redirect to login
                                         } catch (error: any) {
                                             setDeleting(false)
-                                            Alert.alert('Error', error.message || 'Failed to delete account. Please try again.')
+                                            showToast('error', 'Delete Failed', error.message || 'Please try again.')
                                         }
                                     },
                                 },
@@ -70,7 +72,7 @@ export default function SettingsScreen() {
                     try {
                         await logout()
                     } catch (error: any) {
-                        Alert.alert('Error', error.message)
+                        showToast('error', 'Logout Failed', error.message)
                     }
                 },
             },

@@ -13,6 +13,7 @@ import { cropToSquare } from '@/utils/imageProcessing'
 import { checkBlur } from '@/utils/imageValidation'
 import { addPostToList } from '@/utils/listUtils'
 import { findMostSimilar } from '@/utils/visualMatcher'
+import { useToast } from '@/components/ui/Toast'
 import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
@@ -42,6 +43,7 @@ export default function PostScreen() {
     const router = useRouter()
     const { user, dataContributionEnabled } = useAuth()
     const { notifyPostEvent } = usePost()
+    const { showToast } = useToast()
 
     // Use shared sensor hook
     const {
@@ -119,10 +121,7 @@ export default function PostScreen() {
             }
         } catch (error) {
             console.error('Error getting device location:', error)
-            Alert.alert(
-                'Location Error',
-                'Could not get your current location. New posts require an accurate location. Please try again or move to an area with better signal.'
-            )
+            showToast('error', 'Location Error', 'Could not get your current location. Please try again or move to an area with better signal.')
             return null
         }
     }
@@ -170,7 +169,7 @@ export default function PostScreen() {
         } catch (error) {
             console.error('Error in handlePhotoTaken:', error)
             if (processingRef.current) {
-                Alert.alert('Error', 'Failed to process photo. Please try again.')
+                showToast('error', 'Failed to process photo. Please try again.')
             }
         } finally {
             processingRef.current = false
@@ -262,7 +261,7 @@ export default function PostScreen() {
 
     const handleCatchConfirm = async (caption?: string, listIds?: Set<string>) => {
         if (!user || !capturedImage || !catchTarget || !location) {
-            Alert.alert('Error', 'Missing information to complete catch.')
+            showToast('error', 'Missing information to complete catch.')
             return
         }
 
@@ -273,7 +272,7 @@ export default function PostScreen() {
             const validation = await validateCatch(catchTarget.id, location.latitude, location.longitude)
             if (!validation.isValid) {
                 setUploading(false)
-                Alert.alert('Too Far Away', `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m.`)
+                showToast('warning', 'Too Far Away', `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m.`)
                 return
             }
 
@@ -281,7 +280,7 @@ export default function PostScreen() {
             const isSharpEnough = await checkBlur(capturedImage)
             if (!isSharpEnough) {
                 setUploading(false)
-                Alert.alert('Too Blurry', 'Your photo is too blurry. Please steady your hand and try again.')
+                showToast('warning', 'Too Blurry', 'Please steady your hand and try again.')
                 return
             }
 
@@ -330,7 +329,7 @@ export default function PostScreen() {
                 ).catch(e => console.error('Error adding to lists:', e))
             }
 
-            Alert.alert('Caught!', 'Location caught! +14 Contribution')
+            showToast('success', 'Location caught!', '+14 Contribution')
 
             // Reset state
             setCapturedImage(null)
@@ -343,7 +342,7 @@ export default function PostScreen() {
         } catch (error: any) {
             console.error('Error in catch confirm:', error)
             setUploading(false)
-            Alert.alert('Error', `Failed: ${error.message || 'Unknown error'}`)
+            showToast('error', 'Catch Failed', error.message || 'Unknown error')
         }
     }
 
@@ -361,7 +360,7 @@ export default function PostScreen() {
 
     const handlePost = async (caption?: string, listIds?: Set<string>) => {
         if (!user || !capturedImage) {
-            Alert.alert('Error', 'User not authenticated or no image captured')
+            showToast('error', 'User not authenticated or no image captured')
             return
         }
 
@@ -378,7 +377,7 @@ export default function PostScreen() {
         // Check for blur
         const isSharpEnough = await checkBlur(capturedImage)
         if (!isSharpEnough) {
-            Alert.alert('Too Blurry', 'Your photo is too blurry. Please steady your hand and try again.')
+            showToast('warning', 'Too Blurry', 'Please steady your hand and try again.')
             return
         }
 
@@ -478,7 +477,7 @@ export default function PostScreen() {
                 ? 'You mapped a new area! You are the first to post here.'
                 : 'You added to the map! Nice shot.'
 
-            Alert.alert(alertTitle, alertMsg)
+            showToast('success', alertTitle, alertMsg)
 
             // Reset state
             setCapturedImage(null)
@@ -493,10 +492,7 @@ export default function PostScreen() {
         } catch (error: any) {
             console.error('Error posting:', error)
             setUploading(false)
-            Alert.alert(
-                'Error',
-                `Failed to create post: ${error.message || 'Unknown error'}`
-            )
+            showToast('error', 'Post Failed', error.message || 'Unknown error')
         }
     }
 

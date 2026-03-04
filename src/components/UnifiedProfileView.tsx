@@ -2,6 +2,7 @@ import ActivityFeed from '@/components/NotificationInbox'
 import ReportBottomSheet from '@/components/ReportBottomSheet'
 import ThreadModal from '@/components/ThreadModal'
 import AppButton from '@/components/ui/AppButton'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { PostEvent, usePost, usePostEvents } from '@/context/PostContext'
 import { db } from '@/services/firebase'
@@ -41,6 +42,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import CompactPostCard from './CompactPostCard'
+import { CompactPostCardSkeleton, ProfileSkeleton } from './ui/Skeleton'
 
 interface ProfileViewProps {
     userId: string
@@ -52,6 +54,7 @@ const POSTS_PER_PAGE = 20
 
 export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileViewProps) {
     const { user, updateStats } = useAuth()
+    const { showToast } = useToast()
     const { updateLastFetch, isStale } = usePost()
     const router = useRouter()
     const navigation = useNavigation()
@@ -477,7 +480,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             setFollowList(users)
         } catch (error) {
             console.error('Error fetching follow list:', error)
-            Alert.alert('Error', 'Failed to load list')
+            showToast('error', 'Failed to load list')
         } finally {
             setFollowListLoading(false)
         }
@@ -513,7 +516,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                     ? { ...u, isFollowing: userInList.isFollowing }
                     : u
             ))
-            Alert.alert('Error', 'Failed to update follow status')
+            showToast('error', 'Failed to update follow status')
         }
     }
 
@@ -542,7 +545,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             // Revert optimistic update on error
             setIsFollowing(wasFollowing)
             setFollowerCount((prev) => wasFollowing ? prev + 1 : Math.max(0, prev - 1))
-            Alert.alert('Error', 'Failed to update follow status. Please try again.')
+            showToast('error', 'Failed to update follow status')
         } finally {
             followActionPending.current = false
         }
@@ -587,6 +590,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         />
                     }
                     ListHeaderComponent={
+                        loading ? <ProfileSkeleton /> :
                         <View style={styles.profileInfo}>
                             <View style={styles.statsContainer}>
                                 <Text style={styles.username}>@{username}</Text>
@@ -680,18 +684,26 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         </View>
                     }
                     ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <Ionicons
-                                name="images-outline"
-                                size={80}
-                                color={colors.textTertiary}
-                            />
-                            <Text style={styles.emptyText}>
-                                {activeTab === 'posts'
-                                    ? 'No posts yet'
-                                    : 'No catches yet'}
-                            </Text>
-                        </View>
+                        loading ? (
+                            <View>
+                                <CompactPostCardSkeleton />
+                                <CompactPostCardSkeleton />
+                                <CompactPostCardSkeleton />
+                            </View>
+                        ) : (
+                            <View style={styles.emptyContainer}>
+                                <Ionicons
+                                    name="images-outline"
+                                    size={80}
+                                    color={colors.textTertiary}
+                                />
+                                <Text style={styles.emptyText}>
+                                    {activeTab === 'posts'
+                                        ? 'No posts yet'
+                                        : 'No catches yet'}
+                                </Text>
+                            </View>
+                        )
                     }
                     onEndReached={handleEndReached}
                     onEndReachedThreshold={0.5}
@@ -715,7 +727,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         <TouchableOpacity
                             onPress={() => {
                                 setSearchVisible(true)
-                                setTimeout(() => searchInputRef.current?.focus(), 100)
+                                requestAnimationFrame(() => searchInputRef.current?.focus())
                             }}
                             style={styles.searchButton}
                         >

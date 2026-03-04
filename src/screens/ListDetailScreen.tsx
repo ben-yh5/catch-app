@@ -1,5 +1,7 @@
 import CompactPostCard from '@/components/CompactPostCard'
 import ThreadModal from '@/components/ThreadModal'
+import { ListDetailSkeleton } from '@/components/ui/Skeleton'
+import { useToast } from '@/components/ui/Toast'
 import ViewToggle from '@/components/ViewToggle'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
@@ -37,6 +39,7 @@ const { width } = Dimensions.get('window')
 
 export default function ListDetailScreen() {
     const { user } = useAuth()
+    const { showToast } = useToast()
     const insets = useSafeAreaInsets()
     const router = useRouter()
     const params = useLocalSearchParams()
@@ -56,7 +59,7 @@ export default function ListDetailScreen() {
             // Fetch list document
             const listDoc = await getDoc(doc(db, 'lists', listId))
             if (!listDoc.exists()) {
-                Alert.alert('Error', 'List not found')
+                showToast('error', 'List not found')
                 router.back()
                 return
             }
@@ -101,7 +104,7 @@ export default function ListDetailScreen() {
             }
         } catch (error) {
             console.error('Error fetching list:', error)
-            Alert.alert('Error', 'Failed to load list')
+            showToast('error', 'Failed to load list')
         } finally {
             setLoading(false)
         }
@@ -131,7 +134,7 @@ export default function ListDetailScreen() {
                         router.back()
                     } catch (error) {
                         console.error('Error deleting list:', error)
-                        Alert.alert('Error', 'Failed to delete list')
+                        showToast('error', 'Failed to delete list')
                     }
                 },
             },
@@ -160,7 +163,7 @@ export default function ListDetailScreen() {
                         )
                     } catch (error) {
                         console.error('Error removing post:', error)
-                        Alert.alert('Error', 'Failed to remove post')
+                        showToast('error', 'Failed to remove post')
                     }
                 },
             },
@@ -206,8 +209,8 @@ export default function ListDetailScreen() {
 
     if (loading || !list) {
         return (
-            <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
-                <ActivityIndicator size="large" color={colors.primary} />
+            <View style={[styles.container, { paddingTop: insets.top }]}>
+                <ListDetailSkeleton />
             </View>
         )
     }

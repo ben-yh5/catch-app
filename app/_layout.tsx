@@ -11,6 +11,7 @@ import { Platform } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import 'react-native-reanimated'
 
+import { ToastProvider } from '@/components/ui/Toast'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { PostProvider } from '@/context/PostContext'
 import { useColorScheme } from '@/hooks/use-color-scheme'
@@ -211,7 +212,9 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <AuthProvider>
                 <PostProvider>
-                    <RootLayoutNav />
+                    <ToastProvider>
+                        <RootLayoutNav />
+                    </ToastProvider>
                 </PostProvider>
             </AuthProvider>
         </GestureHandlerRootView>

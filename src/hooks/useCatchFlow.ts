@@ -1,3 +1,4 @@
+import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
 import { usePost } from '@/context/PostContext';
 import { useDeviceSensors } from '@/hooks/useDeviceSensors';
@@ -30,6 +31,7 @@ interface UseCatchFlowProps {
 export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlowProps) {
     const { user, dataContributionEnabled } = useAuth();
     const { notifyPostEvent } = usePost();
+    const { showToast } = useToast();
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
     // UI state
@@ -87,7 +89,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
             console.error('Error processing catch photo:', error);
             setCatchMode(false);
             stopSensors();
-            Alert.alert('Error', 'Failed to process photo.');
+            showToast('error', 'Failed to process photo');
         }
     };
 
@@ -107,13 +109,13 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
 
     const handleConfirmCatch = async (caption?: string, listIds?: Set<string>) => {
         if (!rootPost || !catchImageUri || !catchLocation || !user) {
-            Alert.alert('Error', 'Missing information to complete catch.');
+            showToast('error', 'Missing information to complete catch');
             return;
         }
 
         // Prevent self-catch (UI should already disable the button, but guard here too)
         if (rootPost.authorId === user.uid) {
-            Alert.alert('Not Allowed', 'You cannot catch your own post.');
+            showToast('warning', 'Not Allowed', 'You cannot catch your own post.');
             return;
         }
 
@@ -126,7 +128,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
             if (!validation.isValid) {
                 setUploading(false);
                 setStatusMessage('');
-                Alert.alert('Too Far Away', `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m.`);
+                showToast('warning', 'Too Far Away', `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m.`);
                 return;
             }
 
@@ -136,7 +138,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
             if (!isBrightEnough) {
                 setUploading(false);
                 setStatusMessage('');
-                Alert.alert('Too Dark', 'Your photo is too dark. Please try again with better lighting.');
+                showToast('warning', 'Too Dark', 'Please try again with better lighting.');
                 return;
             }
 
@@ -144,7 +146,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
             if (!isSharpEnough) {
                 setUploading(false);
                 setStatusMessage('');
-                Alert.alert('Too Blurry', 'Your photo is too blurry. Please steady your hand and try again.');
+                showToast('warning', 'Too Blurry', 'Please steady your hand and try again.');
                 return;
             }
 
@@ -159,7 +161,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
                 if (headingDiff > HEADING_THRESHOLD) {
                     setUploading(false);
                     setStatusMessage('');
-                    Alert.alert('Wrong Direction', `Face the original view (off by ${Math.round(headingDiff)}°).`);
+                    showToast('warning', 'Wrong Direction', `Face the original view (off by ${Math.round(headingDiff)}°).`);
                     return;
                 }
             }
@@ -169,7 +171,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
                 if (pitchDiff > PITCH_THRESHOLD) {
                     setUploading(false);
                     setStatusMessage('');
-                    Alert.alert('Wrong Angle', `Try to match the original angle (off by ${Math.round(pitchDiff)}°).`);
+                    showToast('warning', 'Wrong Angle', `Try to match the original angle (off by ${Math.round(pitchDiff)}°).`);
                     return;
                 }
             }
@@ -183,10 +185,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
                 if (similarity < SIMILARITY_THRESHOLD) {
                     setUploading(false);
                     setStatusMessage('');
-                    Alert.alert(
-                        'Match Failed',
-                        'Your shot doesn\'t visually match the original view well enough. Try to align it more closely!'
-                    );
+                    showToast('warning', 'Match Failed', 'Your shot doesn\'t visually match the original view well enough. Try to align it more closely!');
                     return;
                 }
             } catch (aiError) {
@@ -260,7 +259,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
                 uploadTrainingPair(rootPost.id, docRef.id, rootPost.photoURL, catchImageUri, originalMeta, catchMeta, 'POSITIVE', user.uid);
             }
 
-            Alert.alert('Success!', 'Location caught! +14 Contribution (+14 XP)')
+            showToast('success', 'Location caught!', '+14 Contribution');
             onSuccess({ id: docRef.id, ...postData } as Post);
             setStatusMessage('');
             handlePreviewCancel();
@@ -269,7 +268,7 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
             console.error('Error in catch confirm:', error);
             setUploading(false);
             setStatusMessage('');
-            Alert.alert('Error', `Failed: ${error.message}`);
+            showToast('error', 'Catch Failed', error.message);
         }
     };
 

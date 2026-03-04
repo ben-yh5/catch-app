@@ -3,6 +3,7 @@ import ExploreSection from '@/components/ExploreSection'
 import ActivityFeed from '@/components/NotificationInbox'
 import RecommendedPostCard from '@/components/RecommendedPostCard'
 import ThreadModal from '@/components/ThreadModal'
+import { ExploreSkeleton, RecommendedPostSkeleton } from '@/components/ui/Skeleton'
 import { useAuth } from '@/context/AuthContext'
 import { useRecommendedFeed } from '@/hooks/useRecommendedFeed'
 import { db } from '@/services/firebase'
@@ -244,8 +245,12 @@ export default function ExploreScreen() {
 
             {/* For You section header */}
             {recommendedFeed.loading ? (
-                <View style={styles.forYouLoading}>
-                    <ActivityIndicator size="small" color={colors.primary} />
+                <View>
+                    <View style={styles.forYouHeader}>
+                        <Text style={styles.forYouTitle}>For You</Text>
+                    </View>
+                    <RecommendedPostSkeleton />
+                    <RecommendedPostSkeleton />
                 </View>
             ) : recommendedFeed.posts.length > 0 ? (
                 <View style={styles.forYouHeader}>
@@ -268,8 +273,11 @@ export default function ExploreScreen() {
 
     if (isLoading && !refreshing) {
         return (
-            <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
+            <View style={styles.container}>
+                <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+                    <Text style={styles.headerTitle}>Explore</Text>
+                </View>
+                <ExploreSkeleton />
             </View>
         )
     }

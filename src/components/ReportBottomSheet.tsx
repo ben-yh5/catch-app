@@ -1,3 +1,4 @@
+import { useToast } from '@/components/ui/Toast'
 import { functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
@@ -6,7 +7,6 @@ import { httpsCallable } from 'firebase/functions'
 import React, { useEffect, useState } from 'react'
 import {
     ActivityIndicator,
-    Alert,
     Animated,
     KeyboardAvoidingView,
     Modal,
@@ -40,6 +40,7 @@ export default function ReportBottomSheet({
     targetUserId,
     targetUsername,
 }: ReportBottomSheetProps) {
+    const { showToast } = useToast()
     const [step, setStep] = useState<'reason' | 'details'>('reason')
     const [selectedReason, setSelectedReason] = useState<string | null>(null)
     const [details, setDetails] = useState('')
@@ -80,20 +81,17 @@ export default function ReportBottomSheet({
                 details: details.trim(),
             })
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-            Alert.alert(
-                'Report Submitted',
-                'Thank you for helping keep Catch safe. We will review your report.',
-                [{ text: 'OK', onPress: onClose }]
-            )
+            showToast('success', 'Report Submitted', 'Thank you for helping keep Catch safe.')
+            onClose()
         } catch (error: any) {
             console.error('[ReportBottomSheet] Error:', error?.code, error?.message)
             const code = error?.code
             if (code === 'functions/already-exists') {
-                Alert.alert('Already Reported', 'You have already reported this user.')
+                showToast('warning', 'Already Reported', 'You have already reported this user.')
             } else if (code === 'functions/resource-exhausted') {
-                Alert.alert('Please Wait', 'Too many reports submitted. Try again later.')
+                showToast('warning', 'Please Wait', 'Too many reports submitted. Try again later.')
             } else {
-                Alert.alert('Error', error?.message || 'Failed to submit report. Please try again.')
+                showToast('error', 'Report Failed', error?.message || 'Please try again.')
             }
         } finally {
             setSubmitting(false)

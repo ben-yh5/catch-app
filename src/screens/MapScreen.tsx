@@ -2,6 +2,8 @@ import { FilterType } from '@/components/FilterPills'
 import MapBottomSheet from '@/components/MapBottomSheet'
 import MapHUD from '@/components/MapHUD'
 import ThreadModal from '@/components/ThreadModal'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
 import { db, functions } from '@/services/firebase'
@@ -17,7 +19,6 @@ import { arrayRemove, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firesto
 import { httpsCallable } from 'firebase/functions'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
-    ActivityIndicator,
     Alert,
     BackHandler,
     StyleSheet,
@@ -44,6 +45,7 @@ const MAP_COLORS = {
 
 export default function MapScreen() {
     const { user } = useAuth()
+    const { showToast } = useToast()
     const router = useRouter()
     const insets = useSafeAreaInsets()
     const mapRef = useRef<MapView>(null)
@@ -62,6 +64,8 @@ export default function MapScreen() {
     const { cachePosts, caughtThreadIds } = usePost()
     const lastFetchRef = useRef<number>(0)
     const fetchTimeoutRef = useRef<any>(undefined)
+    const isMapReadyRef = useRef(false)
+    const pendingCameraActionRef = useRef<(() => void) | null>(null)
     const FILTER_DEBOUNCE = 600 // reduced to 600ms for snappier feel
 
     // List Focus Mode State
@@ -135,10 +139,11 @@ export default function MapScreen() {
         }
 
         if (panToUser === 'true' && userLocation) {
-            // Small delay to allow map to load if needed, reuse centerOnUserLocation logic
-            setTimeout(() => {
+            if (isMapReadyRef.current) {
                 centerOnUserLocation()
-            }, 500)
+            } else {
+                pendingCameraActionRef.current = () => centerOnUserLocation()
+            }
         }
     }, [filter, panToUser, userLocation])
 
@@ -222,18 +227,20 @@ export default function MapScreen() {
                             .map(p => [p.longitude!, p.latitude!])
 
                         if (coordinates.length > 0) {
-                            // Calculate bounds manually or use fitBounds if available on camera
-                            // For simplicity, we'll center on the first post for now, 
-                            // but ideally we'd calculate the bbox
                             const firstPost = posts[0]
                             if (firstPost.latitude && firstPost.longitude) {
-                                setTimeout(() => {
+                                const panToList = () => {
                                     cameraRef.current?.setCamera({
                                         centerCoordinate: [firstPost.longitude!, firstPost.latitude!],
                                         zoomLevel: 10,
                                         animationDuration: 1000,
                                     })
-                                }, 500)
+                                }
+                                if (isMapReadyRef.current) {
+                                    panToList()
+                                } else {
+                                    pendingCameraActionRef.current = panToList
+                                }
                             }
                         }
                     }
@@ -241,7 +248,7 @@ export default function MapScreen() {
             }
         } catch (error) {
             console.error('Error fetching list details:', error)
-            Alert.alert('Error', 'Failed to load list details')
+            showToast('error', 'Failed to load list details')
         } finally {
             setLoadingPosts(false)
         }
@@ -285,19 +292,24 @@ export default function MapScreen() {
                 setVisiblePosts([post])
 
                 // Focus camera
-                if (post.latitude && post.longitude && cameraRef.current) {
-                    setTimeout(() => {
+                if (post.latitude && post.longitude) {
+                    const panToPost = () => {
                         cameraRef.current?.setCamera({
                             centerCoordinate: [post.longitude!, post.latitude!],
                             zoomLevel: 16,
                             animationDuration: 1000,
                         })
-                    }, 500)
+                    }
+                    if (isMapReadyRef.current) {
+                        panToPost()
+                    } else {
+                        pendingCameraActionRef.current = panToPost
+                    }
                 }
             }
         } catch (error) {
             console.error('Error fetching post for locate:', error)
-            Alert.alert('Error', 'Failed to locate post')
+            showToast('error', 'Failed to locate post')
         } finally {
             setLoadingPosts(false)
         }
@@ -415,17 +427,19 @@ export default function MapScreen() {
         }
     }, [loadVisiblePosts])
 
-    // Initial load when map is ready
-    useEffect(() => {
-        if (!locationLoading && mapRef.current && !listId) {
-            // Small delay to ensure map is fully rendered
-            console.log('Map ready, fetching posts...')
-            setTimeout(() => {
-                loadVisiblePosts()
-            }, 1500)
+    // onDidFinishLoadingMap callback — replaces the old 1500ms setTimeout
+    const handleMapReady = useCallback(() => {
+        isMapReadyRef.current = true
+        console.log('Map ready (onDidFinishLoadingMap), fetching posts...')
+        if (!listId) {
+            loadVisiblePosts()
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [locationLoading]) // Only run once when location is ready
+        // Execute any queued camera action
+        if (pendingCameraActionRef.current) {
+            pendingCameraActionRef.current()
+            pendingCameraActionRef.current = null
+        }
+    }, [listId, loadVisiblePosts])
 
     // Memoize sorted posts to avoid infinite render loop
     const sortedVisiblePosts = React.useMemo(() => {
@@ -535,7 +549,7 @@ export default function MapScreen() {
 
         } catch (error) {
             console.error('Error removing post from list:', error)
-            Alert.alert('Error', 'Failed to remove post')
+            showToast('error', 'Failed to remove post')
         }
     }
 
@@ -547,7 +561,7 @@ export default function MapScreen() {
             handleListClose()
         } catch (error) {
             console.error('Error deleting list:', error)
-            Alert.alert('Error', 'Failed to delete list')
+            showToast('error', 'Failed to delete list')
         }
     }
 
@@ -669,7 +683,7 @@ export default function MapScreen() {
             {locationLoading ? (
                 <View style={styles.map}>
                     <View style={styles.locationLoadingOverlay}>
-                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Skeleton width={200} height={200} borderRadius={100} style={{ opacity: 0.3 }} />
                         <Text style={styles.loadingText}>Getting your location...</Text>
                     </View>
                 </View>
@@ -686,6 +700,7 @@ export default function MapScreen() {
                     // HUD ~110px. Increasing spacing per user request.
                     compassViewMargins={{ x: 16, y: insets.top + 180 }}
                     onCameraChanged={handleCameraChanged}
+                    onDidFinishLoadingMap={handleMapReady}
                 >
                     <Camera
                         ref={cameraRef}

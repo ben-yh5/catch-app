@@ -1,4 +1,5 @@
 import UnifiedAuthLayout from '@/components/UnifiedAuthLayout'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
 import { validateUsernameFormat } from '@/utils/usernameValidation'
@@ -6,7 +7,6 @@ import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import {
     ActivityIndicator,
-    Alert,
     StyleSheet,
     Text,
     TextInput,
@@ -21,6 +21,7 @@ export default function UsernameSetupScreen() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const { user } = useAuth()
+    const { showToast } = useToast()
     const router = useRouter()
 
     const handleSubmit = async () => {
@@ -49,7 +50,7 @@ export default function UsernameSetupScreen() {
             if (message.includes('already taken') || message.includes('already-exists')) {
                 setError('Username is already taken')
             } else {
-                Alert.alert('Error', message)
+                showToast('error', 'Setup Failed', message)
             }
             setLoading(false)
         }

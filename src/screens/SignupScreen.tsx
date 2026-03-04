@@ -1,6 +1,7 @@
 import UnifiedAuthLayout from '@/components/UnifiedAuthLayout'
 import AppButton from '@/components/ui/AppButton'
 import AppInput from '@/components/ui/AppInput'
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
 import { isUsernameAvailable, validateUsernameFormat } from '@/utils/usernameValidation'
@@ -8,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
 import {
-    Alert,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -23,29 +23,30 @@ export default function SignupScreen() {
     const [username, setUsername] = useState('')
     const [loading, setLoading] = useState(false)
     const { signup, loginWithGoogle } = useAuth()
+    const { showToast } = useToast()
     const router = useRouter()
 
     const handleSignup = async () => {
         // Validation
         if (!email || !password || !confirmPassword || !username) {
-            Alert.alert('Error', 'Please fill in all fields')
+            showToast('warning', 'Please fill in all fields')
             return
         }
 
         if (password !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match')
+            showToast('warning', 'Passwords do not match')
             return
         }
 
         if (password.length < 6) {
-            Alert.alert('Error', 'Password must be at least 6 characters')
+            showToast('warning', 'Password must be at least 6 characters')
             return
         }
 
         // Validate username format
         const formatError = validateUsernameFormat(username)
         if (formatError) {
-            Alert.alert('Invalid Username', formatError)
+            showToast('warning', 'Invalid Username', formatError)
             return
         }
 
@@ -54,7 +55,7 @@ export default function SignupScreen() {
             // Check if username is available
             const available = await isUsernameAvailable(username)
             if (!available) {
-                Alert.alert('Username Taken', 'This username is already in use. Please choose another.')
+                showToast('warning', 'Username Taken', 'This username is already in use. Please choose another.')
                 setLoading(false)
                 return
             }
@@ -62,7 +63,7 @@ export default function SignupScreen() {
             await signup(email, password, username)
             // Navigation will be handled automatically by auth state change
         } catch (error: any) {
-            Alert.alert('Signup Failed', error.message)
+            showToast('error', 'Signup Failed', error.message)
         } finally {
             setLoading(false)
         }
@@ -74,7 +75,7 @@ export default function SignupScreen() {
             await loginWithGoogle()
             // Navigation will be handled automatically by auth state change
         } catch (error: any) {
-            Alert.alert('Google Sign-In Failed', error.message)
+            showToast('error', 'Google Sign-In Failed', error.message)
         } finally {
             setLoading(false)
         }

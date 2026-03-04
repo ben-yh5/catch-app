@@ -5,9 +5,9 @@ import { List } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
+import { ListsTabSkeleton } from '@/components/ui/Skeleton'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
-    ActivityIndicator,
     FlatList,
     RefreshControl,
     StyleSheet,
@@ -218,9 +218,7 @@ export default function ListsScreen() {
                 {/* Page 0: My Lists */}
                 <View key="0" style={styles.pageContainer}>
                     {loading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color="#007AFF" />
-                        </View>
+                        <ListsTabSkeleton />
                     ) : (
                         <FlatList
                             data={lists}
@@ -243,9 +241,7 @@ export default function ListsScreen() {
                 {/* Page 1: Community */}
                 <View key="1" style={styles.pageContainer}>
                     {loading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color="#007AFF" />
-                        </View>
+                        <ListsTabSkeleton />
                     ) : (
                         <FlatList
                             data={lists}
