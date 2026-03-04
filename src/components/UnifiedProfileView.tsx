@@ -9,7 +9,6 @@ import { colors } from '@/theme/colors'
 import { Post } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { useIsFocused } from '@react-navigation/native'
-import * as Haptics from 'expo-haptics'
 import { useNavigation, useRouter } from 'expo-router'
 import {
     collection,
@@ -644,7 +643,6 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                         activeTab === 'posts' && styles.tabActive
                                     ]}
                                     onPress={() => {
-                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                                         setActiveTab('posts')
                                     }}
                                 >
@@ -665,7 +663,6 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                         activeTab === 'catches' && styles.tabActive
                                     ]}
                                     onPress={() => {
-                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                                         setActiveTab('catches')
                                     }}
                                 >

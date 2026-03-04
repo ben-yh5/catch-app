@@ -335,11 +335,6 @@ export default function ThreadModal({
                     )
                     setDistance(Math.round(dist))
                 }
-
-                // Ensure the post has hasLocation=true so the button shows up
-                setThreadPosts(current => current.map((p, i) =>
-                    i === 0 ? { ...p, hasLocation: true } : p
-                ))
             }
         } catch (error) {
             console.error('Error fetching post location:', error)

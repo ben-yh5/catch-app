@@ -33,6 +33,7 @@ export default function ExploreSearchBar({ onSubmit, onClear, loading, container
         const trimmed = query.trim()
         if (trimmed.length >= 2) {
             onSubmit(trimmed)
+            setQuery('')
         }
     }
 

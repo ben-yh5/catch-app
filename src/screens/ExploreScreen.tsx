@@ -8,10 +8,8 @@ import { useRecommendedFeed } from '@/hooks/useRecommendedFeed'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { List, Post, RecommendedPost } from '@/types'
-import { calculateDistance, getPostsInRadius } from '@/utils/geospatialQueries'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
-import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
 import {
     collection,
@@ -37,7 +35,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const POSTS_LIMIT = 5
-const NEARBY_RADIUS_METERS = 10000 // 10km
 
 export default function ExploreScreen() {
     const { user, contribution, unreadCount } = useAuth()
@@ -48,14 +45,10 @@ export default function ExploreScreen() {
     const [featuredLists, setFeaturedLists] = useState<List[]>([])
     const [trendingPosts, setTrendingPosts] = useState<Post[]>([])
     const [newPosts, setNewPosts] = useState<Post[]>([])
-    const [nearPosts, setNearPosts] = useState<Post[]>([])
     const [loadingLists, setLoadingLists] = useState(true)
     const [loadingTrending, setLoadingTrending] = useState(true)
     const [loadingNew, setLoadingNew] = useState(true)
-    const [loadingNear, setLoadingNear] = useState(true)
-    const [isLocating, setIsLocating] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
-    const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null)
     const [showNotifications, setShowNotifications] = useState(false)
 
     // Thread modal state
@@ -64,29 +57,6 @@ export default function ExploreScreen() {
 
     // Recommended feed
     const recommendedFeed = useRecommendedFeed()
-
-    const requestLocationPermission = async () => {
-        setIsLocating(true)
-        try {
-            const { status } = await Location.requestForegroundPermissionsAsync()
-            if (status === 'granted') {
-                const location = await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Balanced,
-                })
-                setUserLocation({
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                })
-            } else {
-                setLoadingNear(false)
-            }
-        } catch (error) {
-            console.error('Error getting location:', error)
-            setLoadingNear(false)
-        } finally {
-            setIsLocating(false)
-        }
-    }
 
     const fetchFeaturedLists = async () => {
         try {
@@ -160,55 +130,11 @@ export default function ExploreScreen() {
         }
     }
 
-    const fetchNearPosts = async () => {
-        if (!userLocation) return
-        try {
-            setLoadingNear(true)
-            const enrichedLocations = await getPostsInRadius(
-                {
-                    centerLat: userLocation.latitude,
-                    centerLng: userLocation.longitude,
-                    radiusInMeters: NEARBY_RADIUS_METERS,
-                },
-                { includeSummary: true, filterOriginal: true }
-            )
-
-            const posts = enrichedLocations
-                .filter(loc => loc.summary)
-                .slice(0, POSTS_LIMIT)
-                .map(loc => ({
-                    ...loc.summary!,
-                    id: loc.postId,
-                    latitude: loc.latitude,
-                    longitude: loc.longitude,
-                    hasLocation: true,
-                    parentPostId: null,
-                    rootPostId: null,
-                    distance: calculateDistance(
-                        userLocation.latitude, userLocation.longitude,
-                        loc.latitude, loc.longitude
-                    ),
-                } as Post & { distance: number }))
-
-            posts.sort((a, b) => a.distance - b.distance)
-            setNearPosts(posts)
-        } catch (e) {
-            console.error(e)
-        } finally {
-            setLoadingNear(false)
-        }
-    }
-
     useEffect(() => {
-        requestLocationPermission()
         fetchFeaturedLists()
         fetchTrendingPosts()
         fetchNewPosts()
     }, [])
-
-    useEffect(() => {
-        if (userLocation) fetchNearPosts()
-    }, [userLocation])
 
     const onRefresh = async () => {
         setRefreshing(true)
@@ -216,7 +142,6 @@ export default function ExploreScreen() {
             fetchFeaturedLists(),
             fetchTrendingPosts(),
             fetchNewPosts(),
-            userLocation ? fetchNearPosts() : Promise.resolve(),
             recommendedFeed.refresh(),
         ])
         setRefreshing(false)
@@ -225,7 +150,6 @@ export default function ExploreScreen() {
     const handlePostPress = (postId: string) => {
         const post = trendingPosts.find(p => p.id === postId)
             || newPosts.find(p => p.id === postId)
-            || nearPosts.find(p => p.id === postId)
             || recommendedFeed.posts.find(p => p.id === postId)
         if (post) {
             setSelectedPost(post)
@@ -237,14 +161,12 @@ export default function ExploreScreen() {
         const update = (prev: Post[]) => prev.map(p => p.id === updated.id ? updated : p)
         setTrendingPosts(update)
         setNewPosts(update)
-        setNearPosts(update)
     }
 
     const handlePostDelete = (id: string) => {
         const del = (prev: Post[]) => prev.filter(p => p.id !== id)
         setTrendingPosts(del)
         setNewPosts(del)
-        setNearPosts(del)
     }
 
     const handleSearch = useCallback((queryText: string) => {
@@ -320,17 +242,6 @@ export default function ExploreScreen() {
 
             <ExploreSection title="New" emoji="⚡" posts={newPosts} onPostPress={handlePostPress} onSeeAllPress={() => router.push({ pathname: '/(tabs)/map', params: { filter: 'new' } })} loading={loadingNew} />
 
-            <ExploreSection title="Near You" emoji="📍" posts={nearPosts} onPostPress={handlePostPress} onSeeAllPress={() => router.push({ pathname: '/(tabs)/map', params: { filter: 'near', panToUser: 'true' } })} loading={loadingNear || isLocating} />
-
-            {!loadingNear && !isLocating && !userLocation && (
-                <View style={styles.section}>
-                    <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>Enable location to see catches nearby</Text>
-                        <TouchableOpacity onPress={requestLocationPermission}><Text style={styles.seeAll}>Enable Location</Text></TouchableOpacity>
-                    </View>
-                </View>
-            )}
-
             {/* For You section header */}
             {recommendedFeed.loading ? (
                 <View style={styles.forYouLoading}>
@@ -348,12 +259,12 @@ export default function ExploreScreen() {
             )}
         </>
     ), [
-        handleSearch, userLocation, featuredLists, loadingLists,
-        trendingPosts, loadingTrending, newPosts, loadingNew, nearPosts,
-        loadingNear, isLocating, recommendedFeed.loading, recommendedFeed.posts.length,
+        handleSearch, featuredLists, loadingLists,
+        trendingPosts, loadingTrending, newPosts, loadingNew,
+        recommendedFeed.loading, recommendedFeed.posts.length,
     ])
 
-    const isLoading = loadingLists && loadingTrending && loadingNew && loadingNear
+    const isLoading = loadingLists && loadingTrending && loadingNew
 
     if (isLoading && !refreshing) {
         return (
