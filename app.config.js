@@ -64,6 +64,7 @@ export default {
             '@rnmapbox/maps',
             '@react-native-firebase/app',
             '@react-native-firebase/app-check',
+            '@sentry/react-native/expo',
         ],
         experiments: {
             typedRoutes: true,
