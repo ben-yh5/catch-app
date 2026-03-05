@@ -10,9 +10,9 @@ interface FilterPillsProps {
 }
 
 export default function FilterPills({ activeFilter, onFilterChange }: FilterPillsProps) {
-    const filters: { type: FilterType; label: string; emoji: string }[] = [
-        { type: 'trending', label: 'Trending', emoji: '🔥' },
-        { type: 'new', label: 'New', emoji: '⚡' },
+    const filters: { type: FilterType; label: string; }[] = [
+        { type: 'trending', label: 'Trending'},
+        { type: 'new', label: 'New'},
     ];
 
     return (
@@ -30,7 +30,6 @@ export default function FilterPills({ activeFilter, onFilterChange }: FilterPill
                         onPress={() => onFilterChange(filter.type)}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.emoji}>{filter.emoji}</Text>
                         <Text
                             style={[
                                 styles.label,
@@ -70,9 +69,6 @@ const styles = StyleSheet.create({
     },
     pillDisabled: {
         opacity: 0.4,
-    },
-    emoji: {
-        fontSize: 14,
     },
     label: {
         fontSize: 14,

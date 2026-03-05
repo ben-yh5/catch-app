@@ -23,7 +23,7 @@ def create_encoder():
     return tf.keras.Model(inputs=base_model.input, outputs=normalized)
 
 def export_model(model_name, weights_path=None, output_dir='../assets/models'):
-    print(f"🚀 Starting model export for: {model_name}")
+    print(f"Starting model export for: {model_name}")
     
     # 1. Create the base model architecture
     print("   Building MobileNetV2 architecture...")
@@ -33,18 +33,18 @@ def export_model(model_name, weights_path=None, output_dir='../assets/models'):
     if weights_path:
         print(f"   Loading weights from: {weights_path}")
         if not os.path.exists(weights_path):
-            print(f"❌ Error: Weights file not found at {weights_path}")
+            print(f"Error: Weights file not found at {weights_path}")
             return
         try:
             # We assume weights were saved with save_weights() or as a full model
             # This attempts to load them into our architecture
             model.load_weights(weights_path)
-            print("   ✅ Weights loaded successfully")
+            print("   Weights loaded successfully")
         except Exception as e:
-            print(f"❌ Error loading weights: {e}")
+            print(f"Error loading weights: {e}")
             return
     else:
-        print("   ⚠️  No weights provided. Exporting with ImageNet initialization (Untrained for this task!)")
+        print("   No weights provided. Exporting with ImageNet initialization (Untrained for this task!)")
 
     # 3. Convert to TFLite
     print("   Converting to TFLite...")
@@ -73,7 +73,7 @@ def export_model(model_name, weights_path=None, output_dir='../assets/models'):
     with open(final_output_path, 'wb') as f:
         f.write(tflite_model)
         
-    print(f"✅ Model exported to: {final_output_path}")
+    print(f"Model exported to: {final_output_path}")
     print(f"   Size: {len(tflite_model) / 1024:.2f} KB")
 
 if __name__ == "__main__":

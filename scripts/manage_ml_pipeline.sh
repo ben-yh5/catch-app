@@ -6,10 +6,10 @@
 # Always run from project root, regardless of where script is invoked
 cd "$(dirname "$0")/.." || exit 1
 
-echo "🧠 Catch App ML Pipeline"
+echo "Catch App ML Pipeline"
 echo "========================"
 
-PS3='👉 Select a step to run: '
+PS3='Select a step to run: '
 while true; do
     echo ""
     echo "--- Base Training (Public Dataset) ---"
@@ -26,12 +26,12 @@ while true; do
     echo "7) Export Model (Custom)"
     echo "8) Quit"
     echo ""
-    read -p "👉 Select a step to run: " opt
+    read -p "Select a step to run: " opt
 
     case $opt in
         1)
             echo ""
-            echo "⬇️  Downloading GLDv2 subset..."
+            echo "Downloading GLDv2 subset..."
             read -p "   Number of landmarks (default 500): " num_landmarks
             read -p "   Images per landmark (default 5): " imgs_per
 
@@ -48,7 +48,7 @@ while true; do
             ;;
         2)
             echo ""
-            echo "🏋️  Training base model on GLDv2..."
+            echo "Training base model on GLDv2..."
             read -p "   Epochs (default 15): " base_epochs
             read -p "   Steps per epoch (default 500): " steps
 
@@ -65,19 +65,19 @@ while true; do
             ;;
         3)
             echo ""
-            echo "⬇️  Downloading recent training pairs..."
+            echo "Downloading recent training pairs..."
             python scripts/download_data.py --limit 200
-            echo "✅ Done."
+            echo "Done."
             ;;
         4)
             echo ""
-            echo "🧹 Launching Streamlit..."
+            echo "Launching Streamlit..."
             streamlit run scripts/clean_data.py
             # Streamlit blocks, so we allow loop to continue if they kill it
             ;;
         5)
             echo ""
-            echo "🏋️  Fine-tuning on app data..."
+            echo "Fine-tuning on app data..."
 
             # Check if base weights exist
             if [ -f "models/base_weights.weights.h5" ]; then
@@ -105,7 +105,7 @@ while true; do
             ;;
         6)
             echo ""
-            echo "🧪 Testing Similarity..."
+            echo "Testing Similarity..."
             read -p "Path to Image 1: " img1
             read -p "Path to Image 2: " img2
             # Remove quotes if user dragged/dropped and added them
@@ -118,7 +118,7 @@ while true; do
             ;;
         7)
             echo ""
-            echo "📦 Exporting Model..."
+            echo "Exporting Model..."
             read -p "   Name for model (default: view_encoder): " model_name
             read -p "   Path to weights .h5 (optional, enter for ImageNet): " weights_path
 
@@ -136,11 +136,11 @@ while true; do
             $cmd
             ;;
         8)
-            echo "Bye! 👋"
+            echo "Bye!"
             break
             ;;
         *)
-            echo "❌ Invalid option"
+            echo "Invalid option"
             ;;
     esac
 done

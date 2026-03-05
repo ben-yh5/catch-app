@@ -29,7 +29,7 @@ def recount_user_stats(user_id):
     """Recounts totalPosts, totalCatches, and contribution for a user."""
     db = firestore.client()
     
-    print(f"🔍 analyzing stats for user: {user_id}...")
+    print(f"analyzing stats for user: {user_id}...")
     
     # Get all posts by this user
     posts_ref = db.collection('posts')
@@ -61,7 +61,7 @@ def recount_user_stats(user_id):
             if data.get('contributionEarned') != catch_value:
                 updates.append((doc.reference, {'contributionEarned': catch_value}))
 
-    print(f"📊 Calculated Stats:")
+    print(f"Calculated Stats:")
     print(f"   Total Posts: {total_posts}")
     print(f"   Total Catches: {total_catches}")
     print(f"   Contribution: {calculated_contribution}")
@@ -71,16 +71,16 @@ def recount_user_stats(user_id):
     user_doc = user_ref.get()
     
     if not user_doc.exists:
-        print(f"❌ User {user_id} not found!")
+        print(f"User {user_id} not found!")
         return
 
     current_data = user_doc.to_dict()
-    print(f"\n📉 Current Stats (Before):")
+    print(f"\nCurrent Stats (Before):")
     print(f"   Total Posts: {current_data.get('totalPosts', 0)}")
     print(f"   Total Catches: {current_data.get('totalCatches', 0)}")
     print(f"   Contribution: {current_data.get('contribution', 0)}")
     
-    print("\n💾 Updating user stats...", end="")
+    print("\nUpdating user stats...", end="")
     user_ref.update({
         'totalPosts': total_posts,
         'totalCatches': total_catches,
@@ -90,7 +90,7 @@ def recount_user_stats(user_id):
     
     # Apply self-healing updates
     if updates:
-        print(f"🩹 Fixing missing contributionEarned on {len(updates)} catch posts...", end="")
+        print(f"Fixing missing contributionEarned on {len(updates)} catch posts...", end="")
         batch = db.batch()
         count = 0
         for ref, data in updates:
@@ -117,7 +117,7 @@ def main():
     # Resolve username to ID if needed
     if user_id.startswith('@'):
         username = user_id[1:]
-        print(f"🔎 Resolving username @{username}...")
+        print(f"Resolving username @{username}...")
         users_ref = db.collection('users')
         query = users_ref.where('username', '==', username).limit(1).stream()
         found = False
@@ -127,7 +127,7 @@ def main():
             break
         
         if not found:
-            print(f"❌ Username @{username} not found.")
+            print(f"Username @{username} not found.")
             return
 
     recount_user_stats(user_id)

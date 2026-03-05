@@ -39,7 +39,7 @@ def delete_pair(pair_id):
     return False
 
 def main():
-    st.title("📸 Catch App Data Verifier")
+    st.title("Catch App Data Verifier")
     
     # Stats
     manifest = load_manifest()
@@ -48,7 +48,7 @@ def main():
     valid_pairs = [pid for pid in manifest.keys() if (RAW_DIR / pid).exists()]
     
     if not valid_pairs:
-        st.success("🎉 No more images to verify!")
+        st.success("No more images to verify.")
         st.info(f"Check {VERIFIED_POS_DIR} and {VERIFIED_NEG_DIR} for your data.")
         return
 
@@ -78,7 +78,7 @@ def main():
     c1, c2, c3 = st.columns([1, 1, 1])
     
     with c1:
-        if st.button("✅ Match (Positive)", type="primary", use_container_width=True):
+        if st.button("Match (Positive)", type="primary", use_container_width=True):
             if move_pair(current_pair_id, data, VERIFIED_POS_DIR):
                 st.toast(f"Moved {current_pair_id} to POSITIVE")
                 st.rerun()
@@ -86,7 +86,7 @@ def main():
                 st.error("Error moving file")
 
     with c2:
-        if st.button("❌ Hard Negative", use_container_width=True):
+        if st.button("Hard Negative (Looks close, but not exact)", use_container_width=True):
             if move_pair(current_pair_id, data, VERIFIED_NEG_DIR):
                 st.toast(f"Moved {current_pair_id} to NEGATIVE")
                 st.rerun()
@@ -94,7 +94,7 @@ def main():
                 st.error("Error moving file")
 
     with c3:
-        if st.button("🗑️ Trash (Bad Data)", use_container_width=True):
+        if st.button("Trash (Bad Data)", use_container_width=True):
             if delete_pair(current_pair_id):
                 st.toast(f"Deleted {current_pair_id}")
                 st.rerun()

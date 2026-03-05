@@ -365,7 +365,6 @@ export default function MapScreen() {
             const ne = visibleBounds[0] // [lng, lat]
             const sw = visibleBounds[1] // [lng, lat]
 
-            console.log('Visible Bounds Raw:', visibleBounds)
             // Ensure we handle both potential formats [[ne], [sw]] or [[sw], [ne]]
             // We want North (max lat), South (min lat), East (max lng), West (min lng)
 
@@ -430,7 +429,6 @@ export default function MapScreen() {
     // onDidFinishLoadingMap callback — replaces the old 1500ms setTimeout
     const handleMapReady = useCallback(() => {
         isMapReadyRef.current = true
-        console.log('Map ready (onDidFinishLoadingMap), fetching posts...')
         if (!listId) {
             loadVisiblePosts()
         }

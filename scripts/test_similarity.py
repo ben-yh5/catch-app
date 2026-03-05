@@ -43,7 +43,7 @@ def main():
     args = parser.parse_args()
 
     if not os.path.exists(args.model):
-        print(f"❌ Model not found at {args.model}")
+        print(f"Model not found at {args.model}")
         print("   Run 'Train Model' first to generate it.")
         return
 
@@ -64,13 +64,13 @@ def main():
     score = cosine_similarity(emb1, emb2)
     
     print("\n" + "="*30)
-    print(f"🔍 Similarity Score: {score:.4f}")
+    print(f"Similarity Score: {score:.4f}")
     print("="*30)
     
     if score > 0.65:
-        print("✅ MATCH (Score > 0.65)")
+        print("MATCH (Score > 0.65)")
     else:
-        print("❌ NO MATCH (Score < 0.65)")
+        print("NO MATCH (Score < 0.65)")
 
 if __name__ == "__main__":
     main()

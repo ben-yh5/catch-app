@@ -10,7 +10,6 @@ const CARD_MARGIN = 12;
 
 interface ExploreSectionProps {
     title: string;
-    emoji: string;
     posts: any[];
     onPostPress: (postId: string) => void;
     onSeeAllPress?: () => void;
@@ -19,7 +18,6 @@ interface ExploreSectionProps {
 
 export default function ExploreSection({
     title,
-    emoji,
     posts,
     onPostPress,
     onSeeAllPress,
@@ -30,7 +28,6 @@ export default function ExploreSection({
             <View style={styles.container}>
                 <View style={styles.header}>
                     <View style={styles.titleContainer}>
-                        <Text style={styles.emoji}>{emoji}</Text>
                         <Text style={styles.title}>{title}</Text>
                     </View>
                 </View>
@@ -58,7 +55,6 @@ export default function ExploreSection({
         <View style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.titleContainer}>
-                    <Text style={styles.emoji}>{emoji}</Text>
                     <Text style={styles.title}>{title}</Text>
                 </View>
                 {onSeeAllPress && (
@@ -98,9 +94,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-    },
-    emoji: {
-        fontSize: 20,
     },
     title: {
         fontSize: 20,
