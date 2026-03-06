@@ -65,6 +65,7 @@ export default {
             '@react-native-firebase/app',
             '@react-native-firebase/app-check',
             '@sentry/react-native/expo',
+            './plugins/withModularHeaders',
         ],
         experiments: {
             typedRoutes: true,
