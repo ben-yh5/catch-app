@@ -79,6 +79,8 @@ export default function AppInput({
                     placeholderTextColor={colors.textTertiary}
                     onFocus={handleFocus}
                     onBlur={handleBlur}
+                    accessibilityLabel={label || props.placeholder}
+                    accessibilityHint={error || undefined}
                     {...props}
                 />
 

@@ -58,7 +58,12 @@ export default function MapBottomSheet({
                         {subtitle && <Text style={styles.listSubtitle}>{subtitle}</Text>}
                     </View>
                     {onClose && (
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                        <TouchableOpacity
+                            onPress={onClose}
+                            style={styles.closeButton}
+                            accessibilityLabel="Close"
+                            accessibilityRole="button"
+                        >
                             <Text style={styles.closeButtonText}>Close</Text>
                         </TouchableOpacity>
                     )}

@@ -13,11 +13,15 @@ interface CaughtBadgeProps {
  */
 export default function CaughtBadge({ containerStyle, size = 20 }: CaughtBadgeProps) {
     return (
-        <View style={[
-            styles.container,
-            { width: size, height: size, borderRadius: size / 2 },
-            containerStyle
-        ]}>
+        <View
+            style={[
+                styles.container,
+                { width: size, height: size, borderRadius: size / 2 },
+                containerStyle
+            ]}
+            accessibilityLabel="You caught this"
+            accessibilityRole="image"
+        >
             <Ionicons name="checkmark" size={size * 0.6} color={colors.caughtBadgeText} />
         </View>
     );

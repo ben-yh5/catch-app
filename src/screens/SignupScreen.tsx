@@ -95,6 +95,8 @@ export default function SignupScreen() {
                     autoCapitalize="none"
                     editable={!loading}
                     leftIcon={<Ionicons name="person-outline" size={20} color={colors.textTertiary} />}
+                    accessibilityLabel="Username"
+                    accessibilityHint="Enter your desired username"
                 />
 
                 <AppInput
@@ -105,6 +107,8 @@ export default function SignupScreen() {
                     keyboardType="email-address"
                     editable={!loading}
                     leftIcon={<Ionicons name="mail-outline" size={20} color={colors.textTertiary} />}
+                    accessibilityLabel="Email"
+                    accessibilityHint="Enter your email address"
                 />
 
                 <AppInput
@@ -114,6 +118,8 @@ export default function SignupScreen() {
                     secureTextEntry
                     editable={!loading}
                     leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />}
+                    accessibilityLabel="Password"
+                    accessibilityHint="Enter your password"
                 />
 
                 <AppInput
@@ -123,6 +129,8 @@ export default function SignupScreen() {
                     secureTextEntry
                     editable={!loading}
                     leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />}
+                    accessibilityLabel="Confirm Password"
+                    accessibilityHint="Re-enter your password to confirm"
                 />
 
                 <AppButton
@@ -131,6 +139,9 @@ export default function SignupScreen() {
                     loading={loading}
                     variant="primary"
                     style={styles.marginTop}
+                    accessibilityLabel="Sign Up"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: loading }}
                 />
             </Animated.View>
 
@@ -150,6 +161,9 @@ export default function SignupScreen() {
                     loading={loading}
                     variant="outline"
                     icon={<Ionicons name="logo-google" size={18} color={colors.textPrimary} style={{ marginRight: 8 }} />}
+                    accessibilityLabel="Continue with Google"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: loading }}
                 />
             </Animated.View>
 
@@ -158,7 +172,15 @@ export default function SignupScreen() {
                 entering={FadeInDown.delay(400).duration(500)}
             >
                 <Text style={styles.loginText}>Already have an account? </Text>
-                <TouchableOpacity onPress={goToLogin} disabled={loading} activeOpacity={0.7}>
+                <TouchableOpacity
+                    onPress={goToLogin}
+                    disabled={loading}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Log In"
+                    accessibilityRole="link"
+                    accessibilityHint="Navigate to the login screen"
+                    accessibilityState={{ disabled: loading }}
+                >
                     <Text style={styles.loginLink}>Log In</Text>
                 </TouchableOpacity>
             </Animated.View>

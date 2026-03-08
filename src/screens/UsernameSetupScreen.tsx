@@ -71,6 +71,8 @@ export default function UsernameSetupScreen() {
                 autoCorrect={false}
                 editable={!loading}
                 maxLength={20}
+                accessibilityLabel="Username"
+                accessibilityHint="Choose a username, 3 to 20 characters"
             />
 
             {error && (
@@ -90,6 +92,10 @@ export default function UsernameSetupScreen() {
                 style={[styles.button, loading && styles.buttonDisabled]}
                 onPress={handleSubmit}
                 disabled={loading}
+                accessibilityLabel="Continue"
+                accessibilityRole="button"
+                accessibilityHint="Submit your chosen username"
+                accessibilityState={{ disabled: loading }}
             >
                 {loading ? (
                     <ActivityIndicator color="#fff" />

@@ -593,11 +593,14 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         loading ? <ProfileSkeleton /> :
                         <View style={styles.profileInfo}>
                             <View style={styles.statsContainer}>
-                                <Text style={styles.username}>@{username}</Text>
+                                <Text style={styles.username} accessibilityRole="header">@{username}</Text>
                                 <View style={styles.statRow}>
                                     <TouchableOpacity
                                         style={styles.statItem}
                                         onPress={() => setShowActivityFeed(true)}
+                                        accessibilityLabel={`${contribution} Contribution`}
+                                        accessibilityRole="button"
+                                        accessibilityHint="View activity feed"
                                     >
                                         <Text style={styles.statNumber}>
                                             {contribution}
@@ -609,6 +612,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                     <TouchableOpacity
                                         style={styles.statItem}
                                         onPress={() => handleShowFollowList('followers')}
+                                        accessibilityLabel={`${followerCount} Followers`}
+                                        accessibilityRole="button"
+                                        accessibilityHint="View followers list"
                                     >
                                         <Text style={styles.statNumber}>
                                             {followerCount}
@@ -620,6 +626,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                     <TouchableOpacity
                                         style={styles.statItem}
                                         onPress={() => handleShowFollowList('following')}
+                                        accessibilityLabel={`${followingCount} Following`}
+                                        accessibilityRole="button"
+                                        accessibilityHint="View following list"
                                     >
                                         <Text style={styles.statNumber}>
                                             {followingCount}
@@ -649,6 +658,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                     onPress={() => {
                                         setActiveTab('posts')
                                     }}
+                                    accessibilityLabel="Posts"
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected: activeTab === 'posts' }}
                                 >
                                     <Text
                                         style={[
@@ -669,6 +681,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                     onPress={() => {
                                         setActiveTab('catches')
                                     }}
+                                    accessibilityLabel="Catches"
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected: activeTab === 'catches' }}
                                 >
                                     <Text
                                         style={[
@@ -730,6 +745,8 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                 requestAnimationFrame(() => searchInputRef.current?.focus())
                             }}
                             style={styles.searchButton}
+                            accessibilityLabel="Search users"
+                            accessibilityRole="button"
                         >
                             <Ionicons
                                 name="search"
@@ -741,6 +758,8 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         <TouchableOpacity
                             onPress={() => router.back()}
                             style={styles.searchButton}
+                            accessibilityLabel="Go back"
+                            accessibilityRole="button"
                         >
                             <Ionicons
                                 name="chevron-back"
@@ -750,12 +769,14 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         </TouchableOpacity>
                     )}
 
-                    <Text style={styles.headerTitle}>Profile</Text>
+                    <Text style={styles.headerTitle} accessibilityRole="header">Profile</Text>
 
                     {isOwnProfile ? (
                         <TouchableOpacity
                             onPress={() => router.push('/settings' as any)}
                             style={styles.settingsButton}
+                            accessibilityLabel="Settings"
+                            accessibilityRole="button"
                         >
                             <Ionicons
                                 name="settings-outline"
@@ -767,6 +788,8 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         <TouchableOpacity
                             onPress={handleReport}
                             style={styles.settingsButton}
+                            accessibilityLabel="Report user"
+                            accessibilityRole="button"
                         >
                             <Ionicons
                                 name="flag-outline"
@@ -818,6 +841,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             setStaleRefreshing(false)
                         }}
                         disabled={staleRefreshing}
+                        accessibilityLabel={staleRefreshing ? 'Refreshing profile' : 'Refresh profile'}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: staleRefreshing }}
                     >
                         {staleRefreshing ? (
                             <ActivityIndicator size="small" color={colors.primary} />
@@ -856,6 +882,8 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                 setSearchResults([])
                             }}
                             style={styles.searchCloseButton}
+                            accessibilityLabel="Close search"
+                            accessibilityRole="button"
                         >
                             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
                         </TouchableOpacity>
@@ -870,9 +898,15 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                 onChangeText={handleSearch}
                                 autoCapitalize="none"
                                 autoCorrect={false}
+                                accessibilityLabel="Search users"
+                                accessibilityHint="Type a username to search"
                             />
                             {searchQuery.length > 0 && (
-                                <TouchableOpacity onPress={() => handleSearch('')}>
+                                <TouchableOpacity
+                                    onPress={() => handleSearch('')}
+                                    accessibilityLabel="Clear search"
+                                    accessibilityRole="button"
+                                >
                                     <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
                                 </TouchableOpacity>
                             )}
@@ -890,6 +924,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                     key={result.id}
                                     style={styles.searchResultItem}
                                     onPress={() => handleUserSelect(result.id)}
+                                    accessibilityLabel={`@${result.username}${result.id === user?.uid ? ', you' : ''}`}
+                                    accessibilityRole="button"
+                                    accessibilityHint="View user profile"
                                 >
                                     <View style={styles.searchResultAvatar}>
                                         <Ionicons name="person" size={20} color={colors.textTertiary} />
@@ -920,10 +957,12 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         <TouchableOpacity
                             onPress={() => setFollowListVisible(false)}
                             style={styles.searchCloseButton}
+                            accessibilityLabel="Close list"
+                            accessibilityRole="button"
                         >
                             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>
+                        <Text style={styles.headerTitle} accessibilityRole="header">
                             {followListType === 'followers' ? 'Followers' : 'Following'}
                         </Text>
                         <View style={{ width: 24 }} />
@@ -944,6 +983,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                             if (userItem.id === user?.uid) return
                                             router.push({ pathname: '/user-profile', params: { userId: userItem.id } } as any)
                                         }}
+                                        accessibilityLabel={`@${userItem.username}${userItem.id === user?.uid ? ', you' : ''}`}
+                                        accessibilityRole="button"
+                                        accessibilityHint="View user profile"
                                     >
                                         <View style={styles.searchResultAvatar}>
                                             <Ionicons name="person" size={20} color={colors.textTertiary} />
@@ -961,6 +1003,8 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                                 userItem.isFollowing && styles.followListButtonFollowing,
                                             ]}
                                             onPress={() => handleFollowFromList(userItem.id)}
+                                            accessibilityLabel={userItem.isFollowing ? `Unfollow @${userItem.username}` : `Follow @${userItem.username}`}
+                                            accessibilityRole="button"
                                         >
                                             <Text
                                                 style={[

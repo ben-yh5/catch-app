@@ -24,7 +24,12 @@ interface NudgeCardProps {
 export default function NudgeCard({ post, onCatchInstead, onDismiss, onNotAMatch }: NudgeCardProps) {
     return (
         <View style={styles.container}>
-            <TouchableOpacity style={styles.dismissButton} onPress={onDismiss}>
+            <TouchableOpacity
+                style={styles.dismissButton}
+                onPress={onDismiss}
+                accessibilityLabel="Dismiss suggestion"
+                accessibilityRole="button"
+            >
                 <Ionicons name="close" size={16} color={colors.textTertiary} />
             </TouchableOpacity>
 
@@ -32,11 +37,15 @@ export default function NudgeCard({ post, onCatchInstead, onDismiss, onNotAMatch
                 style={styles.content}
                 onPress={() => onCatchInstead(post)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Similar thread found by @${post.authorUsername}. Catch for ${CONTRIBUTION.CATCH} points`}
+                accessibilityHint="Catch this thread instead"
             >
                 <Image
                     source={{ uri: post.thumbnailURL || post.photoURL }}
                     style={styles.thumbnail}
                     contentFit="cover"
+                    accessibilityLabel="Similar post photo"
                 />
 
                 <View style={styles.info}>
@@ -65,7 +74,12 @@ export default function NudgeCard({ post, onCatchInstead, onDismiss, onNotAMatch
                 />
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={onNotAMatch} activeOpacity={0.6}>
+            <TouchableOpacity
+                onPress={onNotAMatch}
+                activeOpacity={0.6}
+                accessibilityRole="button"
+                accessibilityLabel="Not the same place"
+            >
                 <Text style={styles.notAMatch}>Not the same place</Text>
             </TouchableOpacity>
         </View>

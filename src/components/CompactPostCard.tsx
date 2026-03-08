@@ -23,6 +23,9 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation, highl
             style={styles.card}
             onPress={onPress}
             activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={`Post by @${post.authorUsername}${post.caption ? `, ${post.caption}` : ''}`}
+            accessibilityHint="View post details"
         >
             <View style={styles.imageContainer}>
                 <Image
@@ -31,6 +34,7 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation, highl
                     contentFit="cover"
                     cachePolicy="memory-disk"
                     priority="normal"
+                    accessibilityLabel="Post photo"
                 />
                 {highlighted && (
                     <CaughtBadge containerStyle={styles.caughtBadge} size={20} />
@@ -63,6 +67,8 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation, highl
                             }}
                             activeOpacity={0.7}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            accessibilityLabel="Jump to location"
+                            accessibilityRole="button"
                         >
                             <Ionicons name="location-sharp" size={14} color={colors.primary} />
                             <Text style={styles.locationButtonText}>Location</Text>

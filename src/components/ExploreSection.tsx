@@ -55,10 +55,15 @@ export default function ExploreSection({
         <View style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.titleContainer}>
-                    <Text style={styles.title}>{title}</Text>
+                    <Text style={styles.title} accessibilityRole="header">{title}</Text>
                 </View>
                 {onSeeAllPress && (
-                    <TouchableOpacity onPress={onSeeAllPress} activeOpacity={0.7}>
+                    <TouchableOpacity
+                        onPress={onSeeAllPress}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`See all ${title}`}
+                    >
                         <Text style={styles.seeAll}>See All →</Text>
                     </TouchableOpacity>
                 )}

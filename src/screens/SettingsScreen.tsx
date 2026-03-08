@@ -85,6 +85,8 @@ export default function SettingsScreen() {
                 <TouchableOpacity
                     onPress={() => router.back()}
                     style={styles.backButton}
+                    accessibilityLabel="Go back"
+                    accessibilityRole="button"
                 >
                     <Ionicons
                         name="arrow-back"
@@ -92,13 +94,13 @@ export default function SettingsScreen() {
                         color={colors.textPrimary}
                     />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Settings</Text>
+                <Text style={styles.headerTitle} accessibilityRole="header">Settings</Text>
                 <View style={styles.placeholder} />
             </View>
 
             <ScrollView style={styles.content}>
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Privacy & Data</Text>
+                    <Text style={styles.sectionTitle} accessibilityRole="header">Privacy & Data</Text>
                     <View style={styles.settingItem}>
                         <View style={styles.settingTextContainer}>
                             <Text style={styles.settingLabel}>Improve Catch AI</Text>
@@ -111,13 +113,16 @@ export default function SettingsScreen() {
                             onValueChange={toggleDataContribution}
                             trackColor={{ false: colors.border, true: colors.primary }}
                             thumbColor={colors.inverseTextPrimary}
+                            accessibilityLabel="Improve Catch AI"
+                            accessibilityRole="switch"
+                            accessibilityState={{ checked: dataContributionEnabled }}
                         />
                     </View>
                 </View>
 
                 {/* Notifications Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Notifications</Text>
+                    <Text style={styles.sectionTitle} accessibilityRole="header">Notifications</Text>
 
                     <View style={styles.settingItem}>
                         <View style={styles.settingTextContainer}>
@@ -131,6 +136,9 @@ export default function SettingsScreen() {
                             onValueChange={(val) => toggleNotificationSetting('notifyOnCatch', val)}
                             trackColor={{ false: colors.border, true: colors.primary }}
                             thumbColor={colors.inverseTextPrimary}
+                            accessibilityLabel="New Catches notifications"
+                            accessibilityRole="switch"
+                            accessibilityState={{ checked: notificationSettings.notifyOnCatch }}
                         />
                     </View>
 
@@ -146,16 +154,22 @@ export default function SettingsScreen() {
                             onValueChange={(val) => toggleNotificationSetting('notifyOnFollow', val)}
                             trackColor={{ false: colors.border, true: colors.primary }}
                             thumbColor={colors.inverseTextPrimary}
+                            accessibilityLabel="New Followers notifications"
+                            accessibilityRole="switch"
+                            accessibilityState={{ checked: notificationSettings.notifyOnFollow }}
                         />
                     </View>
                 </View>
 
                 {/* Legal Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Legal</Text>
+                    <Text style={styles.sectionTitle} accessibilityRole="header">Legal</Text>
                     <TouchableOpacity
                         style={styles.settingItem}
                         onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+                        accessibilityLabel="Privacy Policy"
+                        accessibilityRole="link"
+                        accessibilityHint="Opens the privacy policy in your browser"
                     >
                         <View style={styles.settingTextContainer}>
                             <Text style={styles.settingLabel}>Privacy Policy</Text>
@@ -170,11 +184,15 @@ export default function SettingsScreen() {
 
                 {/* Account Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Account</Text>
+                    <Text style={styles.sectionTitle} accessibilityRole="header">Account</Text>
                     <TouchableOpacity
                         style={[styles.settingItem, { borderColor: colors.danger }]}
                         onPress={handleDeleteAccount}
                         disabled={deleting}
+                        accessibilityLabel="Delete Account"
+                        accessibilityRole="button"
+                        accessibilityHint="Permanently delete your account and all data"
+                        accessibilityState={{ disabled: deleting }}
                     >
                         <View style={styles.settingTextContainer}>
                             <Text style={[styles.settingLabel, { color: colors.danger }]}>
@@ -199,6 +217,8 @@ export default function SettingsScreen() {
                 <TouchableOpacity
                     style={styles.logoutButton}
                     onPress={handleLogout}
+                    accessibilityLabel="Logout"
+                    accessibilityRole="button"
                 >
                     <Ionicons
                         name="log-out-outline"

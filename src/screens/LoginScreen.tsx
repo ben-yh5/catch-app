@@ -67,6 +67,8 @@ export default function LoginScreen() {
                     keyboardType="email-address"
                     editable={!loading}
                     leftIcon={<Ionicons name="mail-outline" size={20} color={colors.textTertiary} />}
+                    accessibilityLabel="Email"
+                    accessibilityHint="Enter your email address"
                 />
 
                 <AppInput
@@ -76,6 +78,8 @@ export default function LoginScreen() {
                     secureTextEntry
                     editable={!loading}
                     leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />}
+                    accessibilityLabel="Password"
+                    accessibilityHint="Enter your password"
                 />
 
                 <AppButton
@@ -84,6 +88,9 @@ export default function LoginScreen() {
                     loading={loading}
                     variant="primary"
                     style={styles.marginTop}
+                    accessibilityLabel="Log In"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: loading }}
                 />
             </Animated.View>
 
@@ -103,6 +110,9 @@ export default function LoginScreen() {
                     loading={loading}
                     variant="outline"
                     icon={<Ionicons name="logo-google" size={18} color={colors.textPrimary} style={{ marginRight: 8 }} />}
+                    accessibilityLabel="Continue with Google"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: loading }}
                 />
             </Animated.View>
 
@@ -111,7 +121,15 @@ export default function LoginScreen() {
                 entering={FadeInDown.delay(400).duration(500)}
             >
                 <Text style={styles.signupText}>Don't have an account? </Text>
-                <TouchableOpacity onPress={goToSignup} disabled={loading} activeOpacity={0.7}>
+                <TouchableOpacity
+                    onPress={goToSignup}
+                    disabled={loading}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Sign Up"
+                    accessibilityRole="link"
+                    accessibilityHint="Navigate to the sign up screen"
+                    accessibilityState={{ disabled: loading }}
+                >
                     <Text style={styles.signupLink}>Sign Up</Text>
                 </TouchableOpacity>
             </Animated.View>

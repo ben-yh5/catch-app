@@ -36,6 +36,9 @@ export default function FeaturedPostCard({
             style={[styles.card, { width: size }, containerStyle]}
             onPress={onPress}
             activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={`Post by @${post.authorUsername}${post.caption ? `, ${post.caption}` : ''}, ${post.catchCount} ${post.catchCount === 1 ? 'catch' : 'catches'}`}
+            accessibilityHint="View post"
         >
             <Image
                 source={{ uri: post.mediumURL || post.photoURL }}
@@ -43,6 +46,7 @@ export default function FeaturedPostCard({
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 priority="normal"
+                accessibilityLabel="Post photo"
             />
 
             {isOwnPost && (

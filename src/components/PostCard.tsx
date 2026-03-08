@@ -195,6 +195,8 @@ export default function PostCard({
                         <TouchableOpacity
                             style={styles.backButtonInCard}
                             onPress={onBackPress}
+                            accessibilityLabel="Go back"
+                            accessibilityRole="button"
                         >
                             <Ionicons
                                 name="arrow-back"
@@ -204,7 +206,13 @@ export default function PostCard({
                         </TouchableOpacity>
                     )}
                     {username && (
-                        <TouchableOpacity onPress={onUsernamePress} disabled={!onUsernamePress}>
+                        <TouchableOpacity
+                            onPress={onUsernamePress}
+                            disabled={!onUsernamePress}
+                            accessibilityLabel={`@${username}`}
+                            accessibilityRole="link"
+                            accessibilityHint="View profile"
+                        >
                             <Text style={styles.cardUsername}>@{username}</Text>
                         </TouchableOpacity>
                     )}
@@ -219,7 +227,12 @@ export default function PostCard({
                         <CatchBadge count={catchCount} containerStyle={styles.catchBadge} />
                     )}
                     {showBookmark && (
-                        <TouchableOpacity onPress={onBookmarkPress} style={styles.headerIconButton}>
+                        <TouchableOpacity
+                            onPress={onBookmarkPress}
+                            style={styles.headerIconButton}
+                            accessibilityLabel={bookmarked ? 'Remove bookmark' : 'Bookmark'}
+                            accessibilityRole="button"
+                        >
                             <Ionicons
                                 name={bookmarked ? 'bookmark' : 'bookmark-outline'}
                                 size={22}
@@ -229,7 +242,12 @@ export default function PostCard({
                     )}
                     {onOptionsPress && (
                         <View style={{ zIndex: 10 }}>
-                            <TouchableOpacity onPress={onOptionsPress} style={styles.headerIconButton}>
+                            <TouchableOpacity
+                                onPress={onOptionsPress}
+                                style={styles.headerIconButton}
+                                accessibilityLabel="Options menu"
+                                accessibilityRole="button"
+                            >
                                 <Ionicons
                                     name="ellipsis-horizontal"
                                     size={22}
@@ -246,7 +264,11 @@ export default function PostCard({
             {comparisonMode && originalImageUrl ? (
                 <GestureHandlerRootView style={{ width: imageSize, height: imageSize }}>
                     <GestureDetector gesture={panGesture}>
-                        <View style={[styles.comparisonContainer, { width: imageSize, height: imageSize }]}>
+                        <View
+                            style={[styles.comparisonContainer, { width: imageSize, height: imageSize }]}
+                            accessibilityLabel="Photo comparison slider"
+                            accessibilityHint="Drag to compare original and your photo"
+                        >
                             {/* Your photo (bottom layer) */}
                             <Image
                                 source={{ uri: images[0] }}
@@ -280,7 +302,7 @@ export default function PostCard({
                 <FlatList
                     ref={flatListRef}
                     data={images}
-                    renderItem={({ item }) => (
+                    renderItem={({ item, index }) => (
                         <View style={{ width: imageSize, height: imageSize }}>
                             <Image
                                 source={{ uri: item }}
@@ -288,6 +310,7 @@ export default function PostCard({
                                 contentFit="cover"
                                 cachePolicy="memory-disk"
                                 transition={200}
+                                accessibilityLabel={`Post photo ${index + 1} of ${images.length}`}
                             />
                         </View>
                     )}
@@ -308,6 +331,7 @@ export default function PostCard({
                         contentFit="cover"
                         cachePolicy="memory-disk"
                         transition={200}
+                        accessibilityLabel="Post photo"
                     />
                 </View>
             )}
@@ -325,6 +349,8 @@ export default function PostCard({
                             onChangeText={handleCaptionChange}
                             maxLength={200}
                             multiline
+                            accessibilityLabel="Caption"
+                            accessibilityHint="Add an optional caption to your post"
                         />
                     ) : caption ? (
                         <Text style={styles.caption} numberOfLines={2}>
@@ -341,7 +367,11 @@ export default function PostCard({
                 {/* Actions section */}
                 <View style={styles.actionsSection}>
                     {showProgressBar && (
-                        <View style={styles.threadProgress}>
+                        <View
+                            style={styles.threadProgress}
+                            accessibilityLabel={`Photo ${currentIndex + 1} of ${total}`}
+                            accessibilityRole="text"
+                        >
                             <View style={styles.progressBar}>
                                 <View
                                     style={[
@@ -368,6 +398,10 @@ export default function PostCard({
                                 }
                             ]}
                             onPress={onAddToListPress}
+                            accessibilityRole="button"
+                            accessibilityLabel={selectedListCount > 0
+                                ? `Saved to ${selectedListCount} ${selectedListCount === 1 ? 'list' : 'lists'}`
+                                : 'Add to List'}
                         >
                             <Ionicons
                                 name={selectedListCount > 0 ? 'bookmark' : 'bookmark-outline'}
@@ -397,6 +431,9 @@ export default function PostCard({
                             ]}
                             onPress={onActionPress}
                             disabled={actionButtonDisabled}
+                            accessibilityRole="button"
+                            accessibilityLabel={actionButtonLoading ? actionButtonLoadingText : actionButtonText}
+                            accessibilityState={{ disabled: actionButtonDisabled }}
                         >
                             {actionButtonLoading ? (
                                 <>

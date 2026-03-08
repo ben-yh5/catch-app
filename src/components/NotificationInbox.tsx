@@ -276,12 +276,22 @@ export default function ActivityFeed({
         >
             <View style={styles.container}>
                 <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                    <TouchableOpacity
+                        onPress={onClose}
+                        style={styles.closeButton}
+                        accessibilityLabel="Close"
+                        accessibilityRole="button"
+                    >
                         <Ionicons name="close" size={24} color={colors.textPrimary} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Activity</Text>
+                    <Text style={styles.headerTitle} accessibilityRole="header">Activity</Text>
                     {hydratedNotifications.length > 0 && (
-                        <TouchableOpacity onPress={handleClearAll} style={styles.clearButton}>
+                        <TouchableOpacity
+                            onPress={handleClearAll}
+                            style={styles.clearButton}
+                            accessibilityLabel="Clear all activity"
+                            accessibilityRole="button"
+                        >
                             <Ionicons name="trash-outline" size={24} color={colors.textPrimary} />
                         </TouchableOpacity>
                     )}
@@ -314,6 +324,9 @@ export default function ActivityFeed({
                         <TouchableOpacity
                             style={styles.howItWorksToggle}
                             onPress={() => setShowHowItWorks(!showHowItWorks)}
+                            accessibilityRole="button"
+                            accessibilityLabel="How Points Work"
+                            accessibilityState={{ expanded: showHowItWorks }}
                         >
                             <Text style={styles.howItWorksToggleText}>How Points Work</Text>
                             <Ionicons
@@ -372,6 +385,9 @@ export default function ActivityFeed({
                                         activeFilter === f.key && styles.filterTabActive,
                                     ]}
                                     onPress={() => setActiveFilter(f.key)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={f.label}
+                                    accessibilityState={{ selected: activeFilter === f.key }}
                                 >
                                     <Text style={[
                                         styles.filterTabText,
@@ -396,6 +412,8 @@ export default function ActivityFeed({
                                         key={item.id}
                                         style={[styles.item, !item.read && styles.unreadItem]}
                                         onPress={() => handleNotificationPress(item)}
+                                        accessibilityRole="button"
+                                        accessibilityHint="View details"
                                     >
                                         <View style={styles.avatarContainer}>
                                             {renderNotificationIcon(item)}

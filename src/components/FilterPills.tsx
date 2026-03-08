@@ -29,6 +29,9 @@ export default function FilterPills({ activeFilter, onFilterChange }: FilterPill
                         ]}
                         onPress={() => onFilterChange(filter.type)}
                         activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={filter.label}
+                        accessibilityState={{ selected: isActive }}
                     >
                         <Text
                             style={[

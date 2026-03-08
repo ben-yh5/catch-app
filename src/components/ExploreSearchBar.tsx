@@ -55,12 +55,19 @@ export default function ExploreSearchBar({ onSubmit, onClear, loading, container
                     onSubmitEditing={handleSubmit}
                     returnKeyType="search"
                     autoCorrect={false}
+                    accessibilityLabel="Search"
+                    accessibilityHint="Search for posts and locations"
                 />
                 {loading && (
-                    <ActivityIndicator size="small" color={colors.primary} style={styles.loader} />
+                    <ActivityIndicator size="small" color={colors.primary} style={styles.loader} accessibilityLabel="Searching" />
                 )}
                 {query.length > 0 && !loading && (
-                    <TouchableOpacity onPress={handleClear} style={styles.clearButton}>
+                    <TouchableOpacity
+                        onPress={handleClear}
+                        style={styles.clearButton}
+                        accessibilityLabel="Clear search"
+                        accessibilityRole="button"
+                    >
                         <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
                     </TouchableOpacity>
                 )}

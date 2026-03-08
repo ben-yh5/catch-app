@@ -71,6 +71,9 @@ function ToastItem({ toast, onDismiss }: { toast: ToastMessage; onDismiss: (id: 
                 style={[styles.toast, { borderLeftColor: accentColor }]}
                 activeOpacity={0.9}
                 onPress={() => onDismiss(toast.id)}
+                accessibilityRole="alert"
+                accessibilityLabel={`${toast.type}: ${toast.title}${toast.message ? `. ${toast.message}` : ''}`}
+                accessibilityHint="Tap to dismiss"
             >
                 <Ionicons name={iconName} size={20} color={accentColor} />
                 <View style={styles.toastTextContainer}>

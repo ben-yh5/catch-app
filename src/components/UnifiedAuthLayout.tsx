@@ -36,7 +36,7 @@ export default function UnifiedAuthLayout({
                 keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.header}>
-                    <Text style={styles.title}>{title}</Text>
+                    <Text style={styles.title} accessibilityRole="header">{title}</Text>
                     <Text style={styles.subtitle}>{subtitle}</Text>
                 </View>
 

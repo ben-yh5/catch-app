@@ -525,6 +525,7 @@ export default function ThreadModal({
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 priority="high"
+                accessibilityLabel={`Photo by ${item.authorUsername || 'unknown user'}`}
             />
             {item.authorId === user?.uid && (
                 <CaughtBadge containerStyle={styles.caughtBadgeOverlay} size={24} />
@@ -611,6 +612,8 @@ export default function ThreadModal({
                                                 setShowOptionsMenu(false)
                                                 onClose()
                                             }}
+                                            accessibilityLabel="Close"
+                                            accessibilityRole="button"
                                         >
                                             <Ionicons
                                                 name="arrow-back"
@@ -628,6 +631,9 @@ export default function ThreadModal({
                                                     })
                                                 }
                                             }}
+                                            accessibilityLabel={`@${currentPost?.authorUsername || 'unknown'}`}
+                                            accessibilityRole="link"
+                                            accessibilityHint="View profile"
                                         >
                                             <Text style={styles.cardUsername}>
                                                 @{currentPost?.authorUsername || '...'}
@@ -642,6 +648,8 @@ export default function ThreadModal({
                                         <TouchableOpacity
                                             onPress={handleSavePress}
                                             style={styles.headerIconButton}
+                                            accessibilityLabel={isSaved ? 'Remove from list' : 'Save to list'}
+                                            accessibilityRole="button"
                                         >
                                             <Ionicons
                                                 name={isSaved ? 'bookmark' : 'bookmark-outline'}
@@ -653,6 +661,9 @@ export default function ThreadModal({
                                             <TouchableOpacity
                                                 onPress={() => setShowOptionsMenu(!showOptionsMenu)}
                                                 style={styles.headerIconButton}
+                                                accessibilityLabel="Options menu"
+                                                accessibilityRole="button"
+                                                accessibilityState={{ expanded: showOptionsMenu }}
                                             >
                                                 <Ionicons
                                                     name="ellipsis-horizontal"
@@ -669,12 +680,16 @@ export default function ThreadModal({
                                                             setShowOptionsMenu(false)
                                                             setShowAddToListModal(true)
                                                         }}
+                                                        accessibilityRole="menuitem"
+                                                        accessibilityLabel="Add to List"
                                                     >
                                                         <Text style={styles.optionsMenuText}>Add to List</Text>
                                                     </TouchableOpacity>
                                                     <TouchableOpacity
                                                         style={styles.optionsMenuItem}
                                                         onPress={handleShare}
+                                                        accessibilityRole="menuitem"
+                                                        accessibilityLabel="Share"
                                                     >
                                                         <Text style={styles.optionsMenuText}>Share</Text>
                                                     </TouchableOpacity>
@@ -682,6 +697,8 @@ export default function ThreadModal({
                                                         <TouchableOpacity
                                                             style={[styles.optionsMenuItem, styles.optionsMenuItemLast]}
                                                             onPress={handleDeletePost}
+                                                            accessibilityRole="menuitem"
+                                                            accessibilityLabel="Delete post"
                                                         >
                                                             <Text style={[styles.optionsMenuText, styles.optionsMenuTextDanger]}>
                                                                 Delete
@@ -753,6 +770,9 @@ export default function ThreadModal({
                                                             animated: true,
                                                         })
                                                     }}
+                                                    accessibilityLabel={`Go to photo ${index + 1} of ${threadPosts.length}`}
+                                                    accessibilityRole="button"
+                                                    accessibilityState={{ selected: index === currentIndex }}
                                                 />
                                             ))}
                                         </View>
@@ -803,6 +823,10 @@ export default function ThreadModal({
                                             ]}
                                             onPress={handleCatchPress}
                                             disabled={threadPosts[0]?.authorId === user?.uid}
+                                            accessibilityLabel="Catch This Shot"
+                                            accessibilityRole="button"
+                                            accessibilityState={{ disabled: threadPosts[0]?.authorId === user?.uid }}
+                                            accessibilityHint="Take a photo at this location"
                                         >
                                             <Ionicons name="camera" size={20} color="#fff" />
                                             <Text style={styles.catchButtonText}>Catch This Shot</Text>
@@ -813,6 +837,8 @@ export default function ThreadModal({
                                             <TouchableOpacity
                                                 style={styles.directionsButton}
                                                 onPress={handleLocateOnMap}
+                                                accessibilityLabel="Locate on Map"
+                                                accessibilityRole="button"
                                             >
                                                 <Ionicons name="map-outline" size={20} color={colors.primary} />
                                                 <Text style={styles.directionsButtonText}>Locate on Map</Text>
@@ -824,6 +850,9 @@ export default function ThreadModal({
                                             <TouchableOpacity
                                                 style={styles.directionsButton}
                                                 onPress={handleGetDirections}
+                                                accessibilityLabel="Get directions"
+                                                accessibilityRole="button"
+                                                accessibilityHint="Opens maps application"
                                             >
                                                 <Ionicons name="navigate-outline" size={20} color={colors.primary} />
                                                 <Text style={styles.directionsButtonText}>Directions</Text>

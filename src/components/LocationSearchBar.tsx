@@ -102,12 +102,19 @@ export default function LocationSearchBar({ onLocationSelect, containerStyle, in
                     value={query}
                     onChangeText={searchPlaces}
                     returnKeyType="search"
+                    accessibilityLabel="Search locations"
+                    accessibilityHint="Search for places and addresses"
                 />
                 {loading && (
-                    <ActivityIndicator size="small" color={colors.primary} style={styles.loader} />
+                    <ActivityIndicator size="small" color={colors.primary} style={styles.loader} accessibilityLabel="Searching" />
                 )}
                 {query.length > 0 && (
-                    <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+                    <TouchableOpacity
+                        onPress={clearSearch}
+                        style={styles.clearButton}
+                        accessibilityLabel="Clear search"
+                        accessibilityRole="button"
+                    >
                         <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
                     </TouchableOpacity>
                 )}
@@ -123,6 +130,8 @@ export default function LocationSearchBar({ onLocationSelect, containerStyle, in
                             <TouchableOpacity
                                 style={styles.resultItem}
                                 onPress={() => handleSelect(item)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${item.text}, ${item.place_name}`}
                             >
                                 <Ionicons
                                     name="location-outline"

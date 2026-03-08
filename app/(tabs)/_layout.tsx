@@ -19,7 +19,7 @@ const AnimatedIcon = ({ name, color, focused }: { name: any, color: string, focu
     })
 
     return (
-        <Animated.View style={animatedStyle}>
+        <Animated.View style={animatedStyle} accessible={false}>
             <Ionicons name={name} size={28} color={color} />
         </Animated.View>
     )
@@ -37,6 +37,7 @@ export default function TabLayout() {
                 name="index"
                 options={{
                     title: 'Explore',
+                    tabBarAccessibilityLabel: 'Explore tab',
                     tabBarIcon: ({ color, focused }) => (
                         <AnimatedIcon name="compass" color={color} focused={focused} />
                     ),
@@ -46,6 +47,7 @@ export default function TabLayout() {
                 name="map"
                 options={{
                     title: 'Map',
+                    tabBarAccessibilityLabel: 'Map tab',
                     tabBarIcon: ({ color, focused }) => (
                         <AnimatedIcon name="map" color={color} focused={focused} />
                     ),
@@ -55,6 +57,7 @@ export default function TabLayout() {
                 name="post"
                 options={{
                     title: 'Post',
+                    tabBarAccessibilityLabel: 'Post tab',
                     tabBarIcon: ({ color, focused }) => (
                         <AnimatedIcon name="add-circle" color={color} focused={focused} />
                     ),
@@ -64,6 +67,7 @@ export default function TabLayout() {
                 name="lists"
                 options={{
                     title: 'Lists',
+                    tabBarAccessibilityLabel: 'Lists tab',
                     tabBarIcon: ({ color, focused }) => (
                         <AnimatedIcon name="list" color={color} focused={focused} />
                     ),
@@ -73,6 +77,7 @@ export default function TabLayout() {
                 name="profile"
                 options={{
                     title: 'Profile',
+                    tabBarAccessibilityLabel: 'Profile tab',
                     tabBarIcon: ({ color, focused }) => (
                         <AnimatedIcon name="person" color={color} focused={focused} />
                     ),

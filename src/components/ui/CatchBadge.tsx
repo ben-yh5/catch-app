@@ -14,11 +14,15 @@ interface CatchBadgeProps {
  */
 export default function CatchBadge({ count, containerStyle, variant = 'elevated' }: CatchBadgeProps) {
     return (
-        <View style={[
-            styles.container,
-            variant === 'dark' ? styles.variantDark : styles.variantElevated,
-            containerStyle
-        ]}>
+        <View
+            style={[
+                styles.container,
+                variant === 'dark' ? styles.variantDark : styles.variantElevated,
+                containerStyle
+            ]}
+            accessibilityLabel={`${count} ${count === 1 ? 'catch' : 'catches'}`}
+            accessibilityRole="text"
+        >
             <Ionicons name="trophy" size={12} color={colors.secondary} />
             <Text style={styles.count}>{count}</Text>
         </View>

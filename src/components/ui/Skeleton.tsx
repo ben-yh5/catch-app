@@ -48,6 +48,8 @@ export function Skeleton({ width, height, borderRadius = 8, style }: SkeletonPro
                 animatedStyle,
                 style,
             ]}
+            accessibilityLabel="Loading"
+            accessibilityRole="progressbar"
         />
     );
 }

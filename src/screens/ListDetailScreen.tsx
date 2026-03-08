@@ -189,6 +189,8 @@ export default function ListDetailScreen() {
                     <TouchableOpacity
                         style={styles.removeButton}
                         onPress={() => handleRemovePost(item.id)}
+                        accessibilityLabel="Remove post from list"
+                        accessibilityRole="button"
                     >
                         <Ionicons name="close-circle" size={24} color={colors.danger} />
                     </TouchableOpacity>
@@ -219,11 +221,16 @@ export default function ListDetailScreen() {
         <View style={[styles.container, { paddingTop: insets.top }]}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity
+                    onPress={() => router.back()}
+                    style={styles.backButton}
+                    accessibilityLabel="Go back"
+                    accessibilityRole="button"
+                >
                     <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
                 </TouchableOpacity>
                 <View style={styles.headerContent}>
-                    <Text style={styles.listName}>{list.name}</Text>
+                    <Text style={styles.listName} accessibilityRole="header">{list.name}</Text>
                     {list.description ? (
                         <Text style={styles.listDescription}>{list.description}</Text>
                     ) : null}
@@ -237,10 +244,17 @@ export default function ListDetailScreen() {
                         <TouchableOpacity
                             onPress={() => router.push(`/create-list?listId=${listId}` as any)}
                             style={styles.iconButton}
+                            accessibilityLabel="Edit list"
+                            accessibilityRole="button"
                         >
                             <Ionicons name="pencil" size={20} color={colors.primary} />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={handleDeleteList} style={styles.iconButton}>
+                        <TouchableOpacity
+                            onPress={handleDeleteList}
+                            style={styles.iconButton}
+                            accessibilityLabel="Delete list"
+                            accessibilityRole="button"
+                        >
                             <Ionicons name="trash-outline" size={20} color={colors.danger} />
                         </TouchableOpacity>
                     </View>

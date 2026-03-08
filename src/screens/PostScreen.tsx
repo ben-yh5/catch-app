@@ -563,7 +563,7 @@ export default function PostScreen() {
                 color="#ccc"
                 style={styles.icon}
             />
-            <Text style={styles.title}>Share a Shot</Text>
+            <Text style={styles.title} accessibilityRole="header">Share a Shot</Text>
             <Text style={styles.subtitle}>
                 Capture and share photo-worthy views around the world
             </Text>
@@ -571,6 +571,9 @@ export default function PostScreen() {
             <TouchableOpacity
                 style={styles.openCameraButton}
                 onPress={handleOpenCamera}
+                accessibilityLabel="Open Camera"
+                accessibilityRole="button"
+                accessibilityHint="Open the camera to take a photo"
             >
                 <Ionicons name="camera" size={24} color="#fff" />
                 <Text style={styles.openCameraButtonText}>Open Camera</Text>

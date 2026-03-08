@@ -22,6 +22,9 @@ export default function ViewToggle({ activeMode, onToggle, bottomOffset = 20 }: 
                 style={[styles.option, activeMode === 'map' && styles.optionActive]}
                 onPress={() => onToggle('map')}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Map view"
+                accessibilityState={{ selected: activeMode === 'map' }}
             >
                 <Ionicons
                     name="map"
@@ -35,6 +38,9 @@ export default function ViewToggle({ activeMode, onToggle, bottomOffset = 20 }: 
                 style={[styles.option, activeMode === 'list' && styles.optionActive]}
                 onPress={() => onToggle('list')}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="List view"
+                accessibilityState={{ selected: activeMode === 'list' }}
             >
                 <Ionicons
                     name="list"

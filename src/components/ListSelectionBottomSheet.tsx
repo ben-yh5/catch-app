@@ -206,6 +206,9 @@ export default function ListSelectionBottomSheet({
                 style={styles.listItem}
                 onPress={() => handleToggleList(item.id)}
                 disabled={isUpdating}
+                accessibilityRole="checkbox"
+                accessibilityLabel={`${item.name}, ${item.postIds.length} ${item.postIds.length === 1 ? 'shot' : 'shots'}`}
+                accessibilityState={{ checked: isSelected, disabled: isUpdating }}
             >
                 <View style={styles.listItemLeft}>
                     <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
@@ -258,8 +261,13 @@ export default function ListSelectionBottomSheet({
                     ]}
                 >
                     <View style={styles.header}>
-                        <Text style={styles.headerTitle}>Save to list</Text>
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                        <Text style={styles.headerTitle} accessibilityRole="header">Save to list</Text>
+                        <TouchableOpacity
+                            onPress={onClose}
+                            style={styles.closeButton}
+                            accessibilityLabel="Close"
+                            accessibilityRole="button"
+                        >
                             <Ionicons name="close" size={24} color={colors.textPrimary} />
                         </TouchableOpacity>
                     </View>

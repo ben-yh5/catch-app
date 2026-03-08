@@ -114,6 +114,7 @@ export default function UnifiedCameraView({
                                 height: CAPTURE_SIZE,
                             }}
                             contentFit="cover"
+                            accessibilityLabel="Original photo overlay for alignment"
                         />
                     </View>
                 )}
@@ -137,6 +138,8 @@ export default function UnifiedCameraView({
                 <TouchableOpacity
                     style={styles.iconButton}
                     onPress={onCancel}
+                    accessibilityLabel="Close camera"
+                    accessibilityRole="button"
                 >
                     <Ionicons name="close" size={28} color="white" />
                 </TouchableOpacity>
@@ -145,6 +148,9 @@ export default function UnifiedCameraView({
                     <TouchableOpacity
                         style={[styles.ghostToggle, !showGhost && styles.ghostToggleInactive]}
                         onPress={toggleGhost}
+                        accessibilityLabel={showGhost ? 'Hide ghost overlay' : 'Show ghost overlay'}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: showGhost }}
                     >
                         <Ionicons name={showGhost ? "eye" : "eye-off"} size={20} color="white" />
                         <Text style={styles.ghostText}>Ghost</Text>
@@ -157,6 +163,8 @@ export default function UnifiedCameraView({
                 <TouchableOpacity
                     style={styles.iconButton}
                     onPress={handleFlipCamera}
+                    accessibilityLabel={facing === 'back' ? 'Switch to front camera' : 'Switch to back camera'}
+                    accessibilityRole="button"
                 >
                     <Ionicons name="camera-reverse" size={28} color="white" />
                 </TouchableOpacity>
@@ -168,6 +176,9 @@ export default function UnifiedCameraView({
                     ]}
                     onPress={handleTakePhoto}
                     disabled={!isCameraReady}
+                    accessibilityLabel="Take photo"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !isCameraReady }}
                 >
                     <View style={styles.captureButtonInner} />
                 </TouchableOpacity>

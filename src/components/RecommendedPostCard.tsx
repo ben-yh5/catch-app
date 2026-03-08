@@ -29,6 +29,9 @@ export default function RecommendedPostCard({ post, onPress, isOwnPost }: Recomm
             style={styles.card}
             onPress={onPress}
             activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={`${post.reasonLabel}: Post by @${post.authorUsername}${post.caption ? `, ${post.caption}` : ''}`}
+            accessibilityHint="View post"
         >
             <Image
                 source={{ uri: post.mediumURL || post.photoURL }}
@@ -36,6 +39,7 @@ export default function RecommendedPostCard({ post, onPress, isOwnPost }: Recomm
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 priority="normal"
+                accessibilityLabel="Post photo"
             />
 
             {isOwnPost && (

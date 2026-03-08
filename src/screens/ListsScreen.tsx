@@ -124,6 +124,9 @@ export default function ListsScreen() {
             <TouchableOpacity
                 style={styles.listItem}
                 onPress={() => router.push(`/(tabs)/map?listId=${item.id}` as any)}
+                accessibilityLabel={`${item.name}, ${item.postIds.length} ${item.postIds.length === 1 ? 'shot' : 'shots'}${activeTab === 'community' ? `, by @${item.creatorUsername}` : ''}`}
+                accessibilityRole="button"
+                accessibilityHint="Open this list on the map"
             >
                 <View style={styles.listContent}>
                     <View style={styles.listHeader}>
@@ -167,7 +170,7 @@ export default function ListsScreen() {
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
             <View style={styles.header}>
-                <Text style={styles.title}>Lists</Text>
+                <Text style={styles.title} accessibilityRole="header">Lists</Text>
             </View>
 
             {/* Tab Switcher */}
@@ -179,6 +182,9 @@ export default function ListsScreen() {
                         pagerRef.current?.setPage(0)
                         setLoading(true)
                     }}
+                    accessibilityLabel="My Lists"
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: activeTab === 'my' }}
                 >
                     <Text style={[styles.tabText, activeTab === 'my' && styles.activeTabText]}>
                         My Lists
@@ -191,6 +197,9 @@ export default function ListsScreen() {
                         pagerRef.current?.setPage(1)
                         setLoading(true)
                     }}
+                    accessibilityLabel="Community"
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: activeTab === 'community' }}
                 >
                     <Text
                         style={[styles.tabText, activeTab === 'community' && styles.activeTabText]}
@@ -267,6 +276,9 @@ export default function ListsScreen() {
                 <TouchableOpacity
                     style={[styles.fab, { bottom: insets.bottom + 80 }]}
                     onPress={() => router.push('/create-list')}
+                    accessibilityLabel="Create new list"
+                    accessibilityRole="button"
+                    accessibilityHint="Create a new list to organize locations"
                 >
                     <Ionicons name="add" size={32} color="#fff" />
                 </TouchableOpacity>

@@ -133,6 +133,9 @@ export default function AppButton({
             onPress={handlePress}
             disabled={disabled || loading}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={loading ? `${title}, loading` : title}
+            accessibilityState={{ disabled: disabled || loading }}
             {...props}
         >
             {loading ? (

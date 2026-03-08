@@ -132,6 +132,8 @@ export default function ReportBottomSheet({
                             <TouchableOpacity
                                 onPress={() => setStep('reason')}
                                 style={styles.backButton}
+                                accessibilityLabel="Go back"
+                                accessibilityRole="button"
                             >
                                 <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
                             </TouchableOpacity>
@@ -141,7 +143,12 @@ export default function ReportBottomSheet({
                         <Text style={styles.headerTitle}>
                             Report @{targetUsername}
                         </Text>
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                        <TouchableOpacity
+                            onPress={onClose}
+                            style={styles.closeButton}
+                            accessibilityLabel="Close"
+                            accessibilityRole="button"
+                        >
                             <Ionicons name="close" size={24} color={colors.textPrimary} />
                         </TouchableOpacity>
                     </View>
@@ -159,6 +166,8 @@ export default function ReportBottomSheet({
                                     key={reason.key}
                                     style={styles.reasonItem}
                                     onPress={() => handleSelectReason(reason.key)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={reason.label}
                                 >
                                     <Ionicons
                                         name={reason.icon}
@@ -203,6 +212,8 @@ export default function ReportBottomSheet({
                                 value={details}
                                 onChangeText={setDetails}
                                 textAlignVertical="top"
+                                accessibilityLabel="Report details"
+                                accessibilityHint="Add optional details about this report"
                             />
                             <Text style={styles.charCount}>
                                 {details.length}/500
@@ -215,6 +226,9 @@ export default function ReportBottomSheet({
                                 ]}
                                 onPress={handleSubmit}
                                 disabled={submitting}
+                                accessibilityRole="button"
+                                accessibilityLabel={submitting ? 'Submitting report' : 'Submit Report'}
+                                accessibilityState={{ disabled: submitting }}
                             >
                                 {submitting ? (
                                     <ActivityIndicator size="small" color={colors.white} />

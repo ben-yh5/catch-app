@@ -690,6 +690,7 @@ export default function MapScreen() {
                     ref={mapRef}
                     style={styles.map}
                     styleURL={mapStyle}
+                    accessibilityLabel="Map showing photo locations"
                     logoEnabled={false}
                     scaleBarEnabled={false}
                     compassEnabled={true}
@@ -808,6 +809,9 @@ export default function MapScreen() {
                     style={[styles.centerButton, { top: insets.top + 240 }]}
                     onPress={centerOnUserLocation}
                     activeOpacity={0.7}
+                    accessibilityLabel="Center on my location"
+                    accessibilityRole="button"
+                    accessibilityHint="Pan the map to your current location"
                 >
                     <Ionicons name="locate" size={24} color={colors.textPrimary} />
                 </TouchableOpacity>

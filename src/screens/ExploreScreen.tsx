@@ -267,13 +267,13 @@ export default function ExploreScreen() {
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                     <View style={styles.titleContainer}>
-                        <Text style={styles.title}>Featured Lists</Text>
+                        <Text style={styles.title} accessibilityRole="header">Featured Lists</Text>
                     </View>
-                    <Text style={styles.seeAll} onPress={() => router.push('/(tabs)/lists')}>See All →</Text>
+                    <Text style={styles.seeAll} onPress={() => router.push('/(tabs)/lists')} accessibilityRole="link" accessibilityHint="View all featured lists">See All →</Text>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.listContent}>
                     {featuredLists.map(list => (
-                        <TouchableOpacity key={list.id} style={styles.listCard} onPress={() => router.push({ pathname: '/(tabs)/map', params: { listId: list.id } })}>
+                        <TouchableOpacity key={list.id} style={styles.listCard} onPress={() => router.push({ pathname: '/(tabs)/map', params: { listId: list.id } })} accessibilityLabel={`${list.name} by @${list.creatorUsername}, ${list.postIds?.length || 0} shots`} accessibilityRole="button" accessibilityHint="Open this list on the map">
                             <View style={styles.listThumbnailGrid}>
                                 {[0, 1, 2, 3].map((index) => (
                                     <View key={index} style={styles.listThumbnailItem}>
@@ -283,6 +283,7 @@ export default function ExploreScreen() {
                                                 style={styles.listThumbnail}
                                                 contentFit="cover"
                                                 transition={200}
+                                                accessibilityLabel={`${list.name} thumbnail ${index + 1}`}
                                             />
                                         ) : (
                                             <View style={[styles.listThumbnail, styles.listThumbnailPlaceholder]}>
@@ -325,7 +326,7 @@ export default function ExploreScreen() {
                 <View style={styles.section}>
                     <View style={styles.emptyContainer}>
                         <Text style={styles.emptyText}>Enable location to see catches nearby</Text>
-                        <TouchableOpacity onPress={requestLocationPermission}><Text style={styles.seeAll}>Enable Location</Text></TouchableOpacity>
+                        <TouchableOpacity onPress={requestLocationPermission} accessibilityLabel="Enable Location" accessibilityRole="button" accessibilityHint="Grant location permission to see nearby catches"><Text style={styles.seeAll}>Enable Location</Text></TouchableOpacity>
                     </View>
                 </View>
             )}
@@ -337,7 +338,7 @@ export default function ExploreScreen() {
                 </View>
             ) : recommendedFeed.posts.length > 0 ? (
                 <View style={styles.forYouHeader}>
-                    <Text style={styles.forYouTitle}>For You</Text>
+                    <Text style={styles.forYouTitle} accessibilityRole="header">For You</Text>
                     <Text style={styles.forYouSubtitle}>Based on who you follow and places you explore</Text>
                 </View>
             ) : (
@@ -365,13 +366,25 @@ export default function ExploreScreen() {
     return (
         <View style={styles.container}>
             <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-                <Text style={styles.headerTitle}>Explore</Text>
+                <Text style={styles.headerTitle} accessibilityRole="header">Explore</Text>
                 <View style={styles.headerRight}>
-                    <TouchableOpacity style={styles.contributionBadge} onPress={() => setShowNotifications(true)}>
+                    <TouchableOpacity
+                        style={styles.contributionBadge}
+                        onPress={() => setShowNotifications(true)}
+                        accessibilityLabel={`Contribution score: ${contribution}`}
+                        accessibilityRole="button"
+                        accessibilityHint="View your notifications"
+                    >
                         <Text style={styles.contributionEmoji}>🏆</Text>
                         <Text style={styles.contributionText}>{contribution}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.notificationButton} onPress={() => setShowNotifications(true)}>
+                    <TouchableOpacity
+                        style={styles.notificationButton}
+                        onPress={() => setShowNotifications(true)}
+                        accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+                        accessibilityRole="button"
+                        accessibilityHint="Open notifications"
+                    >
                         <Ionicons name="notifications-outline" size={24} color={colors.textPrimary} />
                         {unreadCount > 0 && (
                             <View style={styles.unreadBadge}>
