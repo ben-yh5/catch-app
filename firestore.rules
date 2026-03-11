@@ -121,5 +121,17 @@ service cloud.firestore {
       // No client access — only written/read by Cloud Functions (admin SDK)
       allow read, write: if false;
     }
+
+    // Coverage cells (global post density aggregates, managed by Cloud Functions)
+    match /geohash_cells/{cellId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // User coverage (personal visited areas, managed by Cloud Functions)
+    match /user_coverage/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
   }
 }

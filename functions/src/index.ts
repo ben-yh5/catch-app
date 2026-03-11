@@ -30,6 +30,89 @@ function getGenAI(): GoogleGenerativeAI {
     return genAI
 }
 
+/**
+ * Increment coverage cell counts for a post's geohash and update user coverage.
+ * Called during onPostCreated for both originals and catches.
+ */
+async function updateCoverageCells(
+    db: admin.firestore.Firestore,
+    geohash: string,
+    authorId: string
+): Promise<void> {
+    const gh4 = geohash.substring(0, 4)
+    const gh5 = geohash.substring(0, 5)
+
+    const batch = db.batch()
+
+    batch.set(
+        db.collection('geohash_cells').doc(`p4_${gh4}`),
+        {
+            geohash: gh4,
+            precision: 4,
+            postCount: admin.firestore.FieldValue.increment(1),
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+    )
+
+    batch.set(
+        db.collection('geohash_cells').doc(`p5_${gh5}`),
+        {
+            geohash: gh5,
+            precision: 5,
+            postCount: admin.firestore.FieldValue.increment(1),
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+    )
+
+    batch.set(
+        db.collection('user_coverage').doc(authorId),
+        {
+            cells4: admin.firestore.FieldValue.arrayUnion(gh4),
+            cells5: admin.firestore.FieldValue.arrayUnion(gh5),
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+    )
+
+    await batch.commit()
+}
+
+/**
+ * Decrement coverage cell counts for a post's geohash.
+ * Called during onPostDeleted. Does not affect user_coverage (coverage is permanent).
+ */
+async function decrementCoverageCells(
+    db: admin.firestore.Firestore,
+    geohash: string
+): Promise<void> {
+    const gh4 = geohash.substring(0, 4)
+    const gh5 = geohash.substring(0, 5)
+
+    const batch = db.batch()
+
+    batch.set(
+        db.collection('geohash_cells').doc(`p4_${gh4}`),
+        {
+            postCount: admin.firestore.FieldValue.increment(-1),
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+    )
+
+    batch.set(
+        db.collection('geohash_cells').doc(`p5_${gh5}`),
+        {
+            postCount: admin.firestore.FieldValue.increment(-1),
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+    )
+
+    await batch.commit()
+}
+
 /** Maximum distance (in meters) a user must be from a post location to catch it */
 const CATCH_RADIUS_METERS = 100
 
@@ -542,6 +625,23 @@ export const onPostCreated = functions.firestore
                 } catch (e) {
                     functions.logger.error(`[onPostCreated] Failed to create xp_catch notification`, e)
                 }
+
+                // Update coverage cells for catch post
+                try {
+                    const catchLocationQuery = await db
+                        .collection('post_locations')
+                        .where('postId', '==', postId)
+                        .limit(1)
+                        .get()
+
+                    if (!catchLocationQuery.empty) {
+                        const catchGeohash = catchLocationQuery.docs[0].data().geohash
+                        await updateCoverageCells(db, catchGeohash, authorId)
+                        functions.logger.info(`[onPostCreated] Updated coverage cells for catch ${postId}`)
+                    }
+                } catch (e) {
+                    functions.logger.warn(`[onPostCreated] Coverage cell update failed for catch ${postId}`, e)
+                }
             }
 
             // Handle ORIGINAL posts
@@ -721,6 +821,17 @@ export const onPostCreated = functions.firestore
                     functions.logger.error(`[onPostCreated] Failed to create xp_post notification`, e)
                 }
 
+                // Update coverage cells for original post
+                if (!locationQuery.empty) {
+                    try {
+                        const newPostGeohash = locationQuery.docs[0].data().geohash
+                        await updateCoverageCells(db, newPostGeohash, authorId)
+                        functions.logger.info(`[onPostCreated] Updated coverage cells for original post ${postId}`)
+                    } catch (e) {
+                        functions.logger.warn(`[onPostCreated] Coverage cell update failed for post ${postId}`, e)
+                    }
+                }
+
                 // Send notifications to followers
                 const authorDoc = await userRef.get()
                 if (authorDoc.exists) {
@@ -890,10 +1001,17 @@ export const onPostDeleted = functions.firestore
                         .get()
 
                     if (!oldLocationQuery.empty) {
+                        const oldGeohash = oldLocationQuery.docs[0].data().geohash
                         batch.delete(oldLocationQuery.docs[0].ref)
+                        // Decrement coverage cells after batch commit
+                        await batch.commit()
+                        if (oldGeohash) {
+                            await decrementCoverageCells(db, oldGeohash)
+                        }
+                    } else {
+                        await batch.commit()
                     }
 
-                    await batch.commit()
                     functions.logger.info(`Thread promotion complete. New root: ${newRootId}`)
                 } else {
                     // No catches in thread, just delete location data
@@ -904,7 +1022,11 @@ export const onPostDeleted = functions.firestore
                         .get()
 
                     if (!locationQuery.empty) {
+                        const geohash = locationQuery.docs[0].data().geohash
                         await locationQuery.docs[0].ref.delete()
+                        if (geohash) {
+                            await decrementCoverageCells(db, geohash)
+                        }
                         functions.logger.info(`Deleted location data for post ${postId}`)
                     }
                 }
@@ -944,7 +1066,11 @@ export const onPostDeleted = functions.firestore
                     .get()
 
                 if (!locationQuery.empty) {
+                    const catchGeohash = locationQuery.docs[0].data().geohash
                     await locationQuery.docs[0].ref.delete()
+                    if (catchGeohash) {
+                        await decrementCoverageCells(db, catchGeohash)
+                    }
                     functions.logger.info(`Deleted location data for catch ${postId}`)
                 }
             }
@@ -2557,5 +2683,133 @@ export const backfillEmbeddings = functions
 
         const summary = { processed, skipped, errors, total: snapshot.docs.length }
         functions.logger.info(`[backfill] Complete:`, summary)
+        return summary
+    })
+
+/**
+ * One-time admin function to backfill geohash_cells and user_coverage
+ * from existing post_locations data.
+ *
+ * Run once after deploying the coverage feature to populate historical data.
+ * Uses FieldValue.increment() and arrayUnion() so it's safe to re-run,
+ * but will over-count if run multiple times without clearing geohash_cells first.
+ */
+export const backfillCoverage = functions
+    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .https.onCall(async (_data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Must be authenticated')
+        }
+
+        const db = admin.firestore()
+        const BATCH_SIZE = 500
+        let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null
+        let totalProcessed = 0
+        let totalErrors = 0
+
+        while (true) {
+            let q: admin.firestore.Query = db.collection('post_locations')
+                .orderBy('geohash')
+                .limit(BATCH_SIZE)
+
+            if (lastDoc) {
+                q = q.startAfter(lastDoc)
+            }
+
+            const snapshot = await q.get()
+            if (snapshot.empty) break
+
+            // Fetch associated post docs to get authorId
+            const postIds = snapshot.docs.map(d => d.data().postId).filter(Boolean)
+            const authorMap = new Map<string, string>()
+
+            // Batch getAll in chunks of 100
+            for (let i = 0; i < postIds.length; i += 100) {
+                const chunk = postIds.slice(i, i + 100)
+                const postRefs = chunk.map(id => db.collection('posts').doc(id))
+                const postSnaps = await db.getAll(...postRefs)
+                postSnaps.forEach(snap => {
+                    if (snap.exists) {
+                        authorMap.set(snap.id, snap.data()!.authorId)
+                    }
+                })
+            }
+
+            // Accumulate counts in memory before writing
+            const cellCounts = new Map<string, { geohash: string; precision: number; count: number }>()
+            const userCells = new Map<string, { cells4: Set<string>; cells5: Set<string> }>()
+
+            for (const doc of snapshot.docs) {
+                const data = doc.data()
+                const geohash = data.geohash
+                const postId = data.postId
+                const authorId = authorMap.get(postId)
+
+                if (!geohash || !authorId) continue
+
+                const gh4 = geohash.substring(0, 4)
+                const gh5 = geohash.substring(0, 5)
+
+                const key4 = `p4_${gh4}`
+                const key5 = `p5_${gh5}`
+
+                if (!cellCounts.has(key4)) cellCounts.set(key4, { geohash: gh4, precision: 4, count: 0 })
+                cellCounts.get(key4)!.count++
+
+                if (!cellCounts.has(key5)) cellCounts.set(key5, { geohash: gh5, precision: 5, count: 0 })
+                cellCounts.get(key5)!.count++
+
+                if (!userCells.has(authorId)) {
+                    userCells.set(authorId, { cells4: new Set(), cells5: new Set() })
+                }
+                userCells.get(authorId)!.cells4.add(gh4)
+                userCells.get(authorId)!.cells5.add(gh5)
+            }
+
+            // Write cell counts in batches of 500
+            try {
+                const cellEntries = Array.from(cellCounts.entries())
+                for (let i = 0; i < cellEntries.length; i += 500) {
+                    const batch = db.batch()
+                    const chunk = cellEntries.slice(i, i + 500)
+                    for (const [docId, cell] of chunk) {
+                        batch.set(
+                            db.collection('geohash_cells').doc(docId),
+                            {
+                                geohash: cell.geohash,
+                                precision: cell.precision,
+                                postCount: admin.firestore.FieldValue.increment(cell.count),
+                                lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+                            },
+                            { merge: true }
+                        )
+                    }
+                    await batch.commit()
+                }
+
+                // Write user coverage
+                for (const [userId, cells] of userCells) {
+                    await db.collection('user_coverage').doc(userId).set(
+                        {
+                            cells4: admin.firestore.FieldValue.arrayUnion(...Array.from(cells.cells4)),
+                            cells5: admin.firestore.FieldValue.arrayUnion(...Array.from(cells.cells5)),
+                            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+                        },
+                        { merge: true }
+                    )
+                }
+
+                totalProcessed += snapshot.docs.length
+            } catch (e) {
+                totalErrors++
+                functions.logger.error(`[backfillCoverage] Batch error:`, e)
+            }
+
+            lastDoc = snapshot.docs[snapshot.docs.length - 1]
+            functions.logger.info(`[backfillCoverage] Processed ${totalProcessed} locations`)
+        }
+
+        const summary = { totalProcessed, totalErrors }
+        functions.logger.info(`[backfillCoverage] Complete:`, summary)
         return summary
     })

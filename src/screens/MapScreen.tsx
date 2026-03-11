@@ -9,10 +9,11 @@ import { usePost } from '@/context/PostContext'
 import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post, SearchPost } from '@/types'
-import { getPostsInViewport as fetchViewportPosts, getPostLocations } from '@/utils/geospatialQueries'
+import { getPostsInViewport as fetchViewportPosts, getPostLocations, MapBounds } from '@/utils/geospatialQueries'
 import { getPostBountyStatus } from '@/utils/postClassification'
+import { useCoverage, CoverageMode } from '@/hooks/useCoverage'
 import { Ionicons } from '@expo/vector-icons'
-import Mapbox, { Camera, CircleLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
+import Mapbox, { Camera, CircleLayer, FillLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { arrayRemove, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
@@ -92,6 +93,17 @@ export default function MapScreen() {
     const [searchPostResults, setSearchPostResults] = useState<Post[]>([])
     const [searchLoading, setSearchLoading] = useState(false)
     const [activeSearchQuery, setActiveSearchQuery] = useState('')
+
+    // Coverage/heatmap state
+    const [coverageMode, setCoverageMode] = useState<CoverageMode>('off')
+    const [currentZoom, setCurrentZoom] = useState(12)
+    const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null)
+    const { coverageGeoJSON, precision: coveragePrecision } = useCoverage(
+        currentBounds,
+        currentZoom,
+        coverageMode
+    )
+    const showCoverage = coverageMode !== 'off' && coverageGeoJSON && coveragePrecision !== null
 
     // Get user's current location
     useEffect(() => {
@@ -414,14 +426,48 @@ export default function MapScreen() {
         }
     }, [activeFilter, applySorting, cachePosts, isListMode])
 
+    // Coverage toggle
+    const cycleCoverageMode = useCallback(() => {
+        setCoverageMode(prev => {
+            if (prev === 'off') return 'global'
+            if (prev === 'global') return 'personal'
+            return 'off'
+        })
+    }, [])
+
     // Handle map movement - Auto Fetch with Debounce
-    const handleCameraChanged = useCallback((state: any) => {
+    const handleCameraChanged = useCallback(async (state: any) => {
         if (isSearchModeRef.current) return
         if (!isMapReadyRef.current) return
+
+        // Track zoom level for coverage precision switching
+        const zoom = state.properties?.zoom
+        if (zoom !== undefined) {
+            setCurrentZoom(zoom)
+        }
+
         // Only fetch if idle (interaction ended)
         if (!state.gestures.isGestureActive) {
             if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
-            fetchTimeoutRef.current = setTimeout(() => {
+            fetchTimeoutRef.current = setTimeout(async () => {
+                // Update bounds for coverage queries
+                if (mapRef.current) {
+                    try {
+                        const visibleBounds = await mapRef.current.getVisibleBounds()
+                        if (visibleBounds && visibleBounds.length === 2) {
+                            const ne = visibleBounds[0]
+                            const sw = visibleBounds[1]
+                            setCurrentBounds({
+                                north: Math.max(ne[1], sw[1]),
+                                south: Math.min(ne[1], sw[1]),
+                                east: Math.max(ne[0], sw[0]),
+                                west: Math.min(ne[0], sw[0]),
+                            })
+                        }
+                    } catch (e) {
+                        // getVisibleBounds can fail during rapid map interactions
+                    }
+                }
                 loadVisiblePosts()
             }, FILTER_DEBOUNCE)
         }
@@ -730,83 +776,109 @@ export default function MapScreen() {
                         puckBearing="heading"
                     />
 
-                    <ShapeSource
-                        id="posts-source"
-                        ref={shapeSourceRef}
-                        shape={getGeoJSONData()}
-                        onPress={async (event) => {
-                            const feature = event.features?.[0]
-                            if (!feature) return
+                    {/* Coverage layer - shown when zoomed out with coverage mode active */}
+                    {showCoverage && (
+                        <ShapeSource id="coverage-source" shape={coverageGeoJSON!}>
+                            <FillLayer
+                                id="coverage-fill"
+                                style={{
+                                    fillColor: coverageMode === 'personal'
+                                        ? 'rgba(207, 44, 246, 0.3)'
+                                        : [
+                                            'interpolate', ['linear'], ['get', 'postCount'],
+                                            1, 'rgba(0, 122, 255, 0.1)',
+                                            10, 'rgba(0, 122, 255, 0.25)',
+                                            50, 'rgba(0, 122, 255, 0.4)',
+                                            200, 'rgba(0, 122, 255, 0.55)',
+                                        ],
+                                    fillOutlineColor: coverageMode === 'personal'
+                                        ? 'rgba(207, 44, 246, 0.5)'
+                                        : 'rgba(0, 122, 255, 0.3)',
+                                }}
+                            />
+                        </ShapeSource>
+                    )}
 
-                            const isCluster = feature.properties?.cluster
-                            if (isCluster) {
-                                const expansionZoom = await shapeSourceRef.current?.getClusterExpansionZoom(
-                                    feature
-                                )
+                    {/* Pin markers - hidden when coverage is active at low zoom */}
+                    {!showCoverage && (
+                        <ShapeSource
+                            id="posts-source"
+                            ref={shapeSourceRef}
+                            shape={getGeoJSONData()}
+                            onPress={async (event) => {
+                                const feature = event.features?.[0]
+                                if (!feature) return
 
-                                if (expansionZoom && cameraRef.current) {
-                                    cameraRef.current.setCamera({
-                                        centerCoordinate: (feature.geometry as any).coordinates,
-                                        zoomLevel: expansionZoom,
-                                        animationDuration: 500,
-                                    })
+                                const isCluster = feature.properties?.cluster
+                                if (isCluster) {
+                                    const expansionZoom = await shapeSourceRef.current?.getClusterExpansionZoom(
+                                        feature
+                                    )
+
+                                    if (expansionZoom && cameraRef.current) {
+                                        cameraRef.current.setCamera({
+                                            centerCoordinate: (feature.geometry as any).coordinates,
+                                            zoomLevel: expansionZoom,
+                                            animationDuration: 500,
+                                        })
+                                    }
+                                } else {
+                                    handleMarkerPress(event)
                                 }
-                            } else {
-                                handleMarkerPress(event)
-                            }
-                        }}
-                        cluster
-                        clusterRadius={50}
-                        clusterMaxZoomLevel={14}
-                    >
-                        <SymbolLayer
-                            id="point-count"
-                            style={{
-                                textField: ['get', 'point_count'],
-                                textSize: 12,
-                                textColor: '#ffffff',
-                                textPitchAlignment: 'map',
                             }}
-                        />
+                            cluster
+                            clusterRadius={50}
+                            clusterMaxZoomLevel={14}
+                        >
+                            <SymbolLayer
+                                id="point-count"
+                                style={{
+                                    textField: ['get', 'point_count'],
+                                    textSize: 12,
+                                    textColor: '#ffffff',
+                                    textPitchAlignment: 'map',
+                                }}
+                            />
 
-                        <CircleLayer
-                            id="clusters"
-                            belowLayerID="point-count"
-                            filter={['has', 'point_count']}
-                            style={{
-                                circlePitchAlignment: 'map',
-                                circleColor: MAP_COLORS.pin,
-                                circleRadius: 20,
-                                circleOpacity: 0.7,
-                                circleStrokeWidth: 2,
-                                circleStrokeColor: 'white',
-                            }}
-                        />
+                            <CircleLayer
+                                id="clusters"
+                                belowLayerID="point-count"
+                                filter={['has', 'point_count']}
+                                style={{
+                                    circlePitchAlignment: 'map',
+                                    circleColor: MAP_COLORS.pin,
+                                    circleRadius: 20,
+                                    circleOpacity: 0.7,
+                                    circleStrokeWidth: 2,
+                                    circleStrokeColor: 'white',
+                                }}
+                            />
 
-                        <CircleLayer
-                            id="posts-layer"
-                            filter={['!', ['has', 'point_count']]}
-                            style={{
-                                circleColor: [
-                                    'case',
-                                    ['get', 'isSelected'],
-                                    MAP_COLORS.selectedPin,
-                                    ['get', 'isOwn'],
-                                    MAP_COLORS.selectedPin,
-                                    ['get', 'isCaught'],
-                                    MAP_COLORS.pinCaught,
-                                    ['get', 'isBounty'],
-                                    MAP_COLORS.pinBounty,
-                                    ['get', 'isTrending'],
-                                    MAP_COLORS.pinTrending,
-                                    MAP_COLORS.pin,
-                                ],
-                                circleRadius: ['case', ['get', 'isSelected'], 12, 10],
-                                circleStrokeWidth: 3,
-                                circleStrokeColor: MAP_COLORS.stroke,
-                            }}
-                        />
-                    </ShapeSource>
+                            <CircleLayer
+                                id="posts-layer"
+                                filter={['!', ['has', 'point_count']]}
+                                style={{
+                                    circleColor: [
+                                        'case',
+                                        ['get', 'isSelected'],
+                                        MAP_COLORS.selectedPin,
+                                        ['get', 'isOwn'],
+                                        MAP_COLORS.selectedPin,
+                                        ['get', 'isCaught'],
+                                        MAP_COLORS.pinCaught,
+                                        ['get', 'isBounty'],
+                                        MAP_COLORS.pinBounty,
+                                        ['get', 'isTrending'],
+                                        MAP_COLORS.pinTrending,
+                                        MAP_COLORS.pin,
+                                    ],
+                                    circleRadius: ['case', ['get', 'isSelected'], 12, 10],
+                                    circleStrokeWidth: 3,
+                                    circleStrokeColor: MAP_COLORS.stroke,
+                                }}
+                            />
+                        </ShapeSource>
+                    )}
                 </MapView>
             )}
 
@@ -823,6 +895,31 @@ export default function MapScreen() {
                 >
                     <Ionicons name="locate" size={24} color={colors.textPrimary} />
                 </TouchableOpacity>
+            )}
+
+            {/* Coverage toggle button */}
+            <TouchableOpacity
+                style={[styles.coverageButton, { top: insets.top + 300 }]}
+                onPress={cycleCoverageMode}
+                activeOpacity={0.7}
+                accessibilityLabel={`Coverage mode: ${coverageMode}`}
+                accessibilityRole="button"
+                accessibilityHint="Cycle between off, global, and personal coverage views"
+            >
+                <Ionicons
+                    name={coverageMode === 'off' ? 'grid-outline' : 'grid'}
+                    size={22}
+                    color={coverageMode === 'off'
+                        ? colors.textPrimary
+                        : coverageMode === 'global' ? colors.primary : colors.secondary}
+                />
+            </TouchableOpacity>
+            {coverageMode !== 'off' && (
+                <View style={[styles.coverageLabel, { top: insets.top + 352 }]}>
+                    <Text style={styles.coverageLabelText}>
+                        {coverageMode === 'global' ? 'Global' : 'My Coverage'}
+                    </Text>
+                </View>
             )}
 
 
@@ -983,5 +1080,36 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 3,
         zIndex: 15,
+    },
+    coverageButton: {
+        position: 'absolute',
+        right: 16,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: colors.cardBackground,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        zIndex: 15,
+    },
+    coverageLabel: {
+        position: 'absolute',
+        right: 16,
+        width: 48,
+        alignItems: 'center',
+        zIndex: 15,
+    },
+    coverageLabelText: {
+        fontSize: 9,
+        fontWeight: '600',
+        color: colors.textSecondary,
+        textAlign: 'center',
     },
 })
