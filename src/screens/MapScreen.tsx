@@ -65,6 +65,7 @@ export default function MapScreen() {
     const lastFetchRef = useRef<number>(0)
     const fetchTimeoutRef = useRef<any>(undefined)
     const isMapReadyRef = useRef(false)
+    const initialFetchDoneRef = useRef(false)
     const pendingCameraActionRef = useRef<(() => void) | null>(null)
     const FILTER_DEBOUNCE = 600 // reduced to 600ms for snappier feel
 
@@ -416,9 +417,9 @@ export default function MapScreen() {
     // Handle map movement - Auto Fetch with Debounce
     const handleCameraChanged = useCallback((state: any) => {
         if (isSearchModeRef.current) return
+        if (!isMapReadyRef.current) return
         // Only fetch if idle (interaction ended)
         if (!state.gestures.isGestureActive) {
-            // We use a timeout to debounce the fetch
             if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
             fetchTimeoutRef.current = setTimeout(() => {
                 loadVisiblePosts()
@@ -426,16 +427,23 @@ export default function MapScreen() {
         }
     }, [loadVisiblePosts])
 
-    // onDidFinishLoadingMap callback — replaces the old 1500ms setTimeout
+    // onDidFinishLoadingMap callback
     const handleMapReady = useCallback(() => {
         isMapReadyRef.current = true
-        if (!listId) {
-            loadVisiblePosts()
-        }
         // Execute any queued camera action
         if (pendingCameraActionRef.current) {
             pendingCameraActionRef.current()
             pendingCameraActionRef.current = null
+        }
+        // Delay initial fetch to let the Camera component settle at its coordinates
+        if (!listId) {
+            setTimeout(() => {
+                if (!initialFetchDoneRef.current) {
+                    initialFetchDoneRef.current = true
+                    lastFetchRef.current = 0
+                    loadVisiblePosts()
+                }
+            }, 500)
         }
     }, [listId, loadVisiblePosts])
 
