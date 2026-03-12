@@ -64,7 +64,7 @@ export default {
             '@rnmapbox/maps',
             '@react-native-firebase/app',
             '@react-native-firebase/app-check',
-            '@sentry/react-native/expo',
+            ['@sentry/react-native/expo', { organization: 'catchapp-va', project: 'catch-app' }],
             './plugins/withModularHeaders',
         ],
         experiments: {
