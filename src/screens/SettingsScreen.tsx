@@ -24,6 +24,7 @@ export default function SettingsScreen() {
     const insets = useSafeAreaInsets()
     const [deleting, setDeleting] = useState(false)
 
+
     const handleDeleteAccount = () => {
         Alert.alert(
             'Delete Account',

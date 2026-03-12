@@ -39,21 +39,10 @@ async function updateCoverageCells(
     geohash: string,
     authorId: string
 ): Promise<void> {
-    const gh4 = geohash.substring(0, 4)
     const gh5 = geohash.substring(0, 5)
+    const gh6 = geohash.substring(0, 6)
 
     const batch = db.batch()
-
-    batch.set(
-        db.collection('geohash_cells').doc(`p4_${gh4}`),
-        {
-            geohash: gh4,
-            precision: 4,
-            postCount: admin.firestore.FieldValue.increment(1),
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-    )
 
     batch.set(
         db.collection('geohash_cells').doc(`p5_${gh5}`),
@@ -67,10 +56,21 @@ async function updateCoverageCells(
     )
 
     batch.set(
+        db.collection('geohash_cells').doc(`p6_${gh6}`),
+        {
+            geohash: gh6,
+            precision: 6,
+            postCount: admin.firestore.FieldValue.increment(1),
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+    )
+
+    batch.set(
         db.collection('user_coverage').doc(authorId),
         {
-            cells4: admin.firestore.FieldValue.arrayUnion(gh4),
             cells5: admin.firestore.FieldValue.arrayUnion(gh5),
+            cells6: admin.firestore.FieldValue.arrayUnion(gh6),
             lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -87,13 +87,13 @@ async function decrementCoverageCells(
     db: admin.firestore.Firestore,
     geohash: string
 ): Promise<void> {
-    const gh4 = geohash.substring(0, 4)
     const gh5 = geohash.substring(0, 5)
+    const gh6 = geohash.substring(0, 6)
 
     const batch = db.batch()
 
     batch.set(
-        db.collection('geohash_cells').doc(`p4_${gh4}`),
+        db.collection('geohash_cells').doc(`p5_${gh5}`),
         {
             postCount: admin.firestore.FieldValue.increment(-1),
             lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
@@ -102,7 +102,7 @@ async function decrementCoverageCells(
     )
 
     batch.set(
-        db.collection('geohash_cells').doc(`p5_${gh5}`),
+        db.collection('geohash_cells').doc(`p6_${gh6}`),
         {
             postCount: admin.firestore.FieldValue.increment(-1),
             lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
@@ -2703,6 +2703,27 @@ export const backfillCoverage = functions
 
         const db = admin.firestore()
         const BATCH_SIZE = 500
+
+        // --- Phase 1: Delete all existing geohash_cells and user_coverage ---
+        functions.logger.info('[backfillCoverage] Phase 1: Clearing old coverage data')
+
+        const collectionsToDelete = ['geohash_cells', 'user_coverage']
+        for (const collName of collectionsToDelete) {
+            let deletedCount = 0
+            while (true) {
+                const snapshot = await db.collection(collName).limit(BATCH_SIZE).get()
+                if (snapshot.empty) break
+                const batch = db.batch()
+                snapshot.docs.forEach(d => batch.delete(d.ref))
+                await batch.commit()
+                deletedCount += snapshot.docs.length
+            }
+            functions.logger.info(`[backfillCoverage] Deleted ${deletedCount} docs from ${collName}`)
+        }
+
+        // --- Phase 2: Rebuild with precision 5 and 6 ---
+        functions.logger.info('[backfillCoverage] Phase 2: Rebuilding coverage at precision 5+6')
+
         let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null
         let totalProcessed = 0
         let totalErrors = 0
@@ -2737,7 +2758,7 @@ export const backfillCoverage = functions
 
             // Accumulate counts in memory before writing
             const cellCounts = new Map<string, { geohash: string; precision: number; count: number }>()
-            const userCells = new Map<string, { cells4: Set<string>; cells5: Set<string> }>()
+            const userCells = new Map<string, { cells5: Set<string>; cells6: Set<string> }>()
 
             for (const doc of snapshot.docs) {
                 const data = doc.data()
@@ -2747,23 +2768,23 @@ export const backfillCoverage = functions
 
                 if (!geohash || !authorId) continue
 
-                const gh4 = geohash.substring(0, 4)
                 const gh5 = geohash.substring(0, 5)
+                const gh6 = geohash.substring(0, 6)
 
-                const key4 = `p4_${gh4}`
                 const key5 = `p5_${gh5}`
-
-                if (!cellCounts.has(key4)) cellCounts.set(key4, { geohash: gh4, precision: 4, count: 0 })
-                cellCounts.get(key4)!.count++
+                const key6 = `p6_${gh6}`
 
                 if (!cellCounts.has(key5)) cellCounts.set(key5, { geohash: gh5, precision: 5, count: 0 })
                 cellCounts.get(key5)!.count++
 
+                if (!cellCounts.has(key6)) cellCounts.set(key6, { geohash: gh6, precision: 6, count: 0 })
+                cellCounts.get(key6)!.count++
+
                 if (!userCells.has(authorId)) {
-                    userCells.set(authorId, { cells4: new Set(), cells5: new Set() })
+                    userCells.set(authorId, { cells5: new Set(), cells6: new Set() })
                 }
-                userCells.get(authorId)!.cells4.add(gh4)
                 userCells.get(authorId)!.cells5.add(gh5)
+                userCells.get(authorId)!.cells6.add(gh6)
             }
 
             // Write cell counts in batches of 500
@@ -2791,8 +2812,8 @@ export const backfillCoverage = functions
                 for (const [userId, cells] of userCells) {
                     await db.collection('user_coverage').doc(userId).set(
                         {
-                            cells4: admin.firestore.FieldValue.arrayUnion(...Array.from(cells.cells4)),
                             cells5: admin.firestore.FieldValue.arrayUnion(...Array.from(cells.cells5)),
+                            cells6: admin.firestore.FieldValue.arrayUnion(...Array.from(cells.cells6)),
                             lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
                         },
                         { merge: true }

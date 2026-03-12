@@ -14,8 +14,8 @@ import {
 export { CoverageMode } from '@/utils/coverageQueries'
 
 function getPrecisionForZoom(zoom: number): number | null {
-    if (zoom < 10) return 4
-    if (zoom < 13) return 5
+    if (zoom < 10) return 5
+    if (zoom < 13) return 6
     return null // show pins instead
 }
 

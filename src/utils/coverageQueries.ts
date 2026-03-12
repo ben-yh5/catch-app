@@ -13,8 +13,8 @@ export interface CoverageCell {
 }
 
 export interface UserCoverage {
-    cells4: string[]
     cells5: string[]
+    cells6: string[]
 }
 
 export type CoverageMode = 'off' | 'global' | 'personal'
@@ -167,8 +167,8 @@ export async function getUserCoverage(userId: string): Promise<UserCoverage> {
 
     const docSnap = await getDoc(doc(db, 'user_coverage', userId))
     const coverage: UserCoverage = docSnap.exists()
-        ? { cells4: docSnap.data().cells4 || [], cells5: docSnap.data().cells5 || [] }
-        : { cells4: [], cells5: [] }
+        ? { cells5: docSnap.data().cells5 || [], cells6: docSnap.data().cells6 || [] }
+        : { cells5: [], cells6: [] }
 
     userCoverageCache = { data: coverage, userId }
     return coverage
@@ -221,7 +221,7 @@ export function userCoverageToGeoJSON(
     precision: number,
     bounds?: MapBounds
 ): GeoJSON.FeatureCollection {
-    const cells = precision === 4 ? coverage.cells4 : coverage.cells5
+    const cells = precision === 5 ? coverage.cells5 : coverage.cells6
 
     const features = cells
         .map(geohash => {
