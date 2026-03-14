@@ -4,7 +4,15 @@ import { Ionicons } from '@expo/vector-icons'
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated'
 import { colors } from '@/theme/colors'
 
-const AnimatedIcon = ({ name, color, focused }: { name: any, color: string, focused: boolean }) => {
+const AnimatedIcon = ({
+    name,
+    color,
+    focused,
+}: {
+    name: any
+    color: string
+    focused: boolean
+}) => {
     const animatedStyle = useAnimatedStyle(() => {
         return {
             transform: [
@@ -12,9 +20,9 @@ const AnimatedIcon = ({ name, color, focused }: { name: any, color: string, focu
                     scale: withSpring(focused ? 1.1 : 1, {
                         damping: 15,
                         stiffness: 150,
-                    })
-                }
-            ]
+                    }),
+                },
+            ],
         }
     })
 
@@ -39,7 +47,11 @@ export default function TabLayout() {
                     title: 'Explore',
                     tabBarAccessibilityLabel: 'Explore tab',
                     tabBarIcon: ({ color, focused }) => (
-                        <AnimatedIcon name="compass" color={color} focused={focused} />
+                        <AnimatedIcon
+                            name="compass"
+                            color={color}
+                            focused={focused}
+                        />
                     ),
                 }}
             />
@@ -49,7 +61,11 @@ export default function TabLayout() {
                     title: 'Map',
                     tabBarAccessibilityLabel: 'Map tab',
                     tabBarIcon: ({ color, focused }) => (
-                        <AnimatedIcon name="map" color={color} focused={focused} />
+                        <AnimatedIcon
+                            name="map"
+                            color={color}
+                            focused={focused}
+                        />
                     ),
                 }}
             />
@@ -59,7 +75,11 @@ export default function TabLayout() {
                     title: 'Post',
                     tabBarAccessibilityLabel: 'Post tab',
                     tabBarIcon: ({ color, focused }) => (
-                        <AnimatedIcon name="add-circle" color={color} focused={focused} />
+                        <AnimatedIcon
+                            name="add-circle"
+                            color={color}
+                            focused={focused}
+                        />
                     ),
                 }}
             />
@@ -69,7 +89,11 @@ export default function TabLayout() {
                     title: 'Lists',
                     tabBarAccessibilityLabel: 'Lists tab',
                     tabBarIcon: ({ color, focused }) => (
-                        <AnimatedIcon name="list" color={color} focused={focused} />
+                        <AnimatedIcon
+                            name="list"
+                            color={color}
+                            focused={focused}
+                        />
                     ),
                 }}
             />
@@ -79,7 +103,11 @@ export default function TabLayout() {
                     title: 'Profile',
                     tabBarAccessibilityLabel: 'Profile tab',
                     tabBarIcon: ({ color, focused }) => (
-                        <AnimatedIcon name="person" color={color} focused={focused} />
+                        <AnimatedIcon
+                            name="person"
+                            color={color}
+                            focused={focused}
+                        />
                     ),
                 }}
             />

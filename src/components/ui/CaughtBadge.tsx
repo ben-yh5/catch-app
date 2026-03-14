@@ -1,30 +1,37 @@
-import { colors } from '@/theme/colors';
-import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { StyleSheet, View, ViewStyle } from 'react-native';
+import { colors } from '@/theme/colors'
+import { Ionicons } from '@expo/vector-icons'
+import React from 'react'
+import { StyleSheet, View, ViewStyle } from 'react-native'
 
 interface CaughtBadgeProps {
-    containerStyle?: ViewStyle;
-    size?: number;
+    containerStyle?: ViewStyle
+    size?: number
 }
 
 /**
  * CaughtBadge - Shared UI atom for the checkmark badge indicating a "caught" or owned post
  */
-export default function CaughtBadge({ containerStyle, size = 20 }: CaughtBadgeProps) {
+export default function CaughtBadge({
+    containerStyle,
+    size = 20,
+}: CaughtBadgeProps) {
     return (
         <View
             style={[
                 styles.container,
                 { width: size, height: size, borderRadius: size / 2 },
-                containerStyle
+                containerStyle,
             ]}
             accessibilityLabel="You caught this"
             accessibilityRole="image"
         >
-            <Ionicons name="checkmark" size={size * 0.6} color={colors.caughtBadgeText} />
+            <Ionicons
+                name="checkmark"
+                size={size * 0.6}
+                color={colors.caughtBadgeText}
+            />
         </View>
-    );
+    )
 }
 
 const styles = StyleSheet.create({
@@ -38,4 +45,4 @@ const styles = StyleSheet.create({
         shadowRadius: 2,
         elevation: 3,
     },
-});
+})

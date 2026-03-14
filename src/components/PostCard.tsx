@@ -30,7 +30,11 @@ import {
     View,
     ViewToken,
 } from 'react-native'
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import {
+    Gesture,
+    GestureDetector,
+    GestureHandlerRootView,
+} from 'react-native-gesture-handler'
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
@@ -146,11 +150,10 @@ export default function PostCard({
     // Comparison slider state - start at 1/4 (showing 3/4 yours, 1/4 original)
     const sliderPosition = useSharedValue(0.25)
 
-    const panGesture = Gesture.Pan()
-        .onUpdate((event) => {
-            const newPosition = event.x / imageSize
-            sliderPosition.value = Math.max(0, Math.min(1, newPosition))
-        })
+    const panGesture = Gesture.Pan().onUpdate((event) => {
+        const newPosition = event.x / imageSize
+        sliderPosition.value = Math.max(0, Math.min(1, newPosition))
+    })
 
     const sliderAnimatedStyle = useAnimatedStyle(() => ({
         left: sliderPosition.value * imageSize,
@@ -220,23 +223,36 @@ export default function PostCard({
                 <View style={styles.cardHeaderRight}>
                     {headerBadgeText && (
                         <View style={styles.headerBadge}>
-                            <Text style={styles.headerBadgeText}>{headerBadgeText}</Text>
+                            <Text style={styles.headerBadgeText}>
+                                {headerBadgeText}
+                            </Text>
                         </View>
                     )}
                     {showCatchBadge && (
-                        <CatchBadge count={catchCount} containerStyle={styles.catchBadge} />
+                        <CatchBadge
+                            count={catchCount}
+                            containerStyle={styles.catchBadge}
+                        />
                     )}
                     {showBookmark && (
                         <TouchableOpacity
                             onPress={onBookmarkPress}
                             style={styles.headerIconButton}
-                            accessibilityLabel={bookmarked ? 'Remove bookmark' : 'Bookmark'}
+                            accessibilityLabel={
+                                bookmarked ? 'Remove bookmark' : 'Bookmark'
+                            }
                             accessibilityRole="button"
                         >
                             <Ionicons
-                                name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+                                name={
+                                    bookmarked ? 'bookmark' : 'bookmark-outline'
+                                }
                                 size={22}
-                                color={bookmarked ? colors.iconActive : colors.iconInactive}
+                                color={
+                                    bookmarked
+                                        ? colors.iconActive
+                                        : colors.iconInactive
+                                }
                             />
                         </TouchableOpacity>
                     )}
@@ -262,38 +278,68 @@ export default function PostCard({
 
             {/* Image Section */}
             {comparisonMode && originalImageUrl ? (
-                <GestureHandlerRootView style={{ width: imageSize, height: imageSize }}>
+                <GestureHandlerRootView
+                    style={{ width: imageSize, height: imageSize }}
+                >
                     <GestureDetector gesture={panGesture}>
                         <View
-                            style={[styles.comparisonContainer, { width: imageSize, height: imageSize }]}
+                            style={[
+                                styles.comparisonContainer,
+                                { width: imageSize, height: imageSize },
+                            ]}
                             accessibilityLabel="Photo comparison slider"
                             accessibilityHint="Drag to compare original and your photo"
                         >
                             {/* Your photo (bottom layer) */}
                             <Image
                                 source={{ uri: images[0] }}
-                                style={[styles.comparisonImage, { width: imageSize, height: imageSize }]}
+                                style={[
+                                    styles.comparisonImage,
+                                    { width: imageSize, height: imageSize },
+                                ]}
                                 contentFit="cover"
                             />
                             {/* Original photo (top layer, clipped) */}
-                            <Animated.View style={[styles.originalImageClip, originalClipStyle, { height: imageSize }]}>
+                            <Animated.View
+                                style={[
+                                    styles.originalImageClip,
+                                    originalClipStyle,
+                                    { height: imageSize },
+                                ]}
+                            >
                                 <Image
                                     source={{ uri: originalImageUrl }}
-                                    style={[styles.comparisonImage, { width: imageSize, height: imageSize }]}
+                                    style={[
+                                        styles.comparisonImage,
+                                        { width: imageSize, height: imageSize },
+                                    ]}
                                     contentFit="cover"
                                 />
                             </Animated.View>
                             {/* Slider handle */}
-                            <Animated.View style={[styles.sliderHandle, sliderAnimatedStyle]}>
+                            <Animated.View
+                                style={[
+                                    styles.sliderHandle,
+                                    sliderAnimatedStyle,
+                                ]}
+                            >
                                 <View style={styles.sliderLine} />
                                 <View style={styles.sliderKnob}>
-                                    <Ionicons name="swap-horizontal" size={20} color={colors.textPrimary} />
+                                    <Ionicons
+                                        name="swap-horizontal"
+                                        size={20}
+                                        color={colors.textPrimary}
+                                    />
                                 </View>
                             </Animated.View>
                             {/* Labels */}
                             <View style={styles.comparisonLabels}>
-                                <Text style={styles.comparisonLabel}>Original</Text>
-                                <Text style={styles.comparisonLabel}>Yours</Text>
+                                <Text style={styles.comparisonLabel}>
+                                    Original
+                                </Text>
+                                <Text style={styles.comparisonLabel}>
+                                    Yours
+                                </Text>
                             </View>
                         </View>
                     </GestureDetector>
@@ -376,7 +422,9 @@ export default function PostCard({
                                 <View
                                     style={[
                                         styles.progressFill,
-                                        { width: `${((currentIndex + 1) / total) * 100}%` },
+                                        {
+                                            width: `${((currentIndex + 1) / total) * 100}%`,
+                                        },
                                     ]}
                                 />
                             </View>
@@ -391,28 +439,47 @@ export default function PostCard({
                             style={[
                                 styles.actionButton,
                                 {
-                                    backgroundColor: selectedListCount > 0 ? colors.cardElevated : 'transparent',
+                                    backgroundColor:
+                                        selectedListCount > 0
+                                            ? colors.cardElevated
+                                            : 'transparent',
                                     borderWidth: 1,
-                                    borderColor: selectedListCount > 0 ? colors.primary : colors.border,
+                                    borderColor:
+                                        selectedListCount > 0
+                                            ? colors.primary
+                                            : colors.border,
                                     marginBottom: 8,
-                                }
+                                },
                             ]}
                             onPress={onAddToListPress}
                             accessibilityRole="button"
-                            accessibilityLabel={selectedListCount > 0
-                                ? `Saved to ${selectedListCount} ${selectedListCount === 1 ? 'list' : 'lists'}`
-                                : 'Add to List'}
+                            accessibilityLabel={
+                                selectedListCount > 0
+                                    ? `Saved to ${selectedListCount} ${selectedListCount === 1 ? 'list' : 'lists'}`
+                                    : 'Add to List'
+                            }
                         >
                             <Ionicons
-                                name={selectedListCount > 0 ? 'bookmark' : 'bookmark-outline'}
+                                name={
+                                    selectedListCount > 0
+                                        ? 'bookmark'
+                                        : 'bookmark-outline'
+                                }
                                 size={20}
-                                color={selectedListCount > 0 ? colors.primary : colors.textPrimary}
+                                color={
+                                    selectedListCount > 0
+                                        ? colors.primary
+                                        : colors.textPrimary
+                                }
                             />
                             <Text
                                 style={[
                                     styles.actionButtonText,
                                     {
-                                        color: selectedListCount > 0 ? colors.primary : colors.textPrimary,
+                                        color:
+                                            selectedListCount > 0
+                                                ? colors.primary
+                                                : colors.textPrimary,
                                     },
                                 ]}
                             >
@@ -427,25 +494,43 @@ export default function PostCard({
                         <TouchableOpacity
                             style={[
                                 styles.actionButton,
-                                actionButtonDisabled && styles.actionButtonDisabled,
+                                actionButtonDisabled &&
+                                    styles.actionButtonDisabled,
                             ]}
                             onPress={onActionPress}
                             disabled={actionButtonDisabled}
                             accessibilityRole="button"
-                            accessibilityLabel={actionButtonLoading ? actionButtonLoadingText : actionButtonText}
-                            accessibilityState={{ disabled: actionButtonDisabled }}
+                            accessibilityLabel={
+                                actionButtonLoading
+                                    ? actionButtonLoadingText
+                                    : actionButtonText
+                            }
+                            accessibilityState={{
+                                disabled: actionButtonDisabled,
+                            }}
                         >
                             {actionButtonLoading ? (
                                 <>
-                                    <ActivityIndicator size="small" color="#fff" />
-                                    <Text style={styles.actionButtonText}>{actionButtonLoadingText}</Text>
+                                    <ActivityIndicator
+                                        size="small"
+                                        color="#fff"
+                                    />
+                                    <Text style={styles.actionButtonText}>
+                                        {actionButtonLoadingText}
+                                    </Text>
                                 </>
                             ) : (
                                 <>
                                     {actionButtonIcon && (
-                                        <Ionicons name={actionButtonIcon as any} size={20} color="#fff" />
+                                        <Ionicons
+                                            name={actionButtonIcon as any}
+                                            size={20}
+                                            color="#fff"
+                                        />
                                     )}
-                                    <Text style={styles.actionButtonText}>{actionButtonText}</Text>
+                                    <Text style={styles.actionButtonText}>
+                                        {actionButtonText}
+                                    </Text>
                                 </>
                             )}
                         </TouchableOpacity>

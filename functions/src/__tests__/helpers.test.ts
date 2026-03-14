@@ -5,7 +5,9 @@ const mockRateLimitGet = jest.fn()
 const mockRateLimitSet = jest.fn().mockResolvedValue(undefined)
 const mockDocGet = jest.fn()
 const mockDoc = jest.fn().mockReturnValue({ get: mockDocGet })
-const mockWhere = jest.fn().mockReturnValue({ limit: jest.fn().mockReturnValue({ get: jest.fn() }) })
+const mockWhere = jest
+    .fn()
+    .mockReturnValue({ limit: jest.fn().mockReturnValue({ get: jest.fn() }) })
 const mockCollection = jest.fn((name: string) => {
     if (name === 'rate_limits') {
         return { doc: () => ({ get: mockRateLimitGet, set: mockRateLimitSet }) }
@@ -15,15 +17,22 @@ const mockCollection = jest.fn((name: string) => {
 
 jest.mock('firebase-admin', () => ({
     initializeApp: jest.fn(),
-    firestore: Object.assign(
-        () => ({ collection: mockCollection }),
-        { FieldValue: { serverTimestamp: jest.fn(), arrayUnion: jest.fn(), arrayRemove: jest.fn(), increment: jest.fn() } }
-    ),
+    firestore: Object.assign(() => ({ collection: mockCollection }), {
+        FieldValue: {
+            serverTimestamp: jest.fn(),
+            arrayUnion: jest.fn(),
+            arrayRemove: jest.fn(),
+            increment: jest.fn(),
+        },
+    }),
 }))
 
 import { getPostLocation } from '../index'
 
-const run = (getPostLocation as any).run as (data: any, context: any) => Promise<any>
+const run = (getPostLocation as any).run as (
+    data: any,
+    context: any
+) => Promise<any>
 
 describe('verifyAppCheck (warn mode)', () => {
     beforeEach(() => {
@@ -35,18 +44,18 @@ describe('verifyAppCheck (warn mode)', () => {
         const context = { auth: { uid: 'user1' }, app: { appId: 'valid' } }
 
         // Gets past auth + app check, fails at input validation
-        await expect(
-            run({}, context)
-        ).rejects.toMatchObject({ code: 'invalid-argument' })
+        await expect(run({}, context)).rejects.toMatchObject({
+            code: 'invalid-argument',
+        })
     })
 
     it('allows requests without app context in warn mode', async () => {
         const context = { auth: { uid: 'user1' }, app: undefined }
 
         // Still gets past app check in warn mode
-        await expect(
-            run({}, context)
-        ).rejects.toMatchObject({ code: 'invalid-argument' })
+        await expect(run({}, context)).rejects.toMatchObject({
+            code: 'invalid-argument',
+        })
     })
 })
 
@@ -63,9 +72,9 @@ describe('checkRateLimit', () => {
         const context = { auth: { uid: 'user1' }, app: { appId: 'test' } }
 
         // Gets past rate limit, fails at validation
-        await expect(
-            run({}, context)
-        ).rejects.toMatchObject({ code: 'invalid-argument' })
+        await expect(run({}, context)).rejects.toMatchObject({
+            code: 'invalid-argument',
+        })
     })
 
     it('blocks requests that exceed the limit', async () => {
@@ -77,9 +86,9 @@ describe('checkRateLimit', () => {
 
         const context = { auth: { uid: 'user1' }, app: { appId: 'test' } }
 
-        await expect(
-            run({ postId: 'p1' }, context)
-        ).rejects.toMatchObject({ code: 'resource-exhausted' })
+        await expect(run({ postId: 'p1' }, context)).rejects.toMatchObject({
+            code: 'resource-exhausted',
+        })
     })
 
     it('fails open when Firestore errors', async () => {
@@ -88,17 +97,17 @@ describe('checkRateLimit', () => {
         const context = { auth: { uid: 'user1' }, app: { appId: 'test' } }
 
         // Proceeds past rate limit despite error
-        await expect(
-            run({}, context)
-        ).rejects.toMatchObject({ code: 'invalid-argument' })
+        await expect(run({}, context)).rejects.toMatchObject({
+            code: 'invalid-argument',
+        })
     })
 
     it('prunes old timestamps outside the window', async () => {
         const now = Date.now()
         const timestamps = [
             now - 120000, // 2 min ago (pruned)
-            now - 90000,  // 1.5 min ago (pruned)
-            now - 5000,   // 5s ago (kept)
+            now - 90000, // 1.5 min ago (pruned)
+            now - 5000, // 5s ago (kept)
         ]
         mockRateLimitGet.mockResolvedValue({
             data: () => ({ getPostLocation_ts: timestamps }),
@@ -106,9 +115,9 @@ describe('checkRateLimit', () => {
 
         const context = { auth: { uid: 'user1' }, app: { appId: 'test' } }
 
-        await expect(
-            run({}, context)
-        ).rejects.toMatchObject({ code: 'invalid-argument' })
+        await expect(run({}, context)).rejects.toMatchObject({
+            code: 'invalid-argument',
+        })
 
         // Verify pruned timestamps written back
         expect(mockRateLimitSet).toHaveBeenCalledWith(

@@ -6,7 +6,17 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { httpsCallable } from 'firebase/functions'
 import React, { useState } from 'react'
-import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
+import {
+    ActivityIndicator,
+    Alert,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const PRIVACY_POLICY_URL = '#'
@@ -17,13 +27,12 @@ export default function SettingsScreen() {
         dataContributionEnabled,
         toggleDataContribution,
         notificationSettings,
-        toggleNotificationSetting
+        toggleNotificationSetting,
     } = useAuth()
     const { showToast } = useToast()
     const router = useRouter()
     const insets = useSafeAreaInsets()
     const [deleting, setDeleting] = useState(false)
-
 
     const handleDeleteAccount = () => {
         Alert.alert(
@@ -46,12 +55,21 @@ export default function SettingsScreen() {
                                     onPress: async () => {
                                         setDeleting(true)
                                         try {
-                                            const deleteAccountFn = httpsCallable(functions, 'deleteAccount')
+                                            const deleteAccountFn =
+                                                httpsCallable(
+                                                    functions,
+                                                    'deleteAccount'
+                                                )
                                             await deleteAccountFn({})
                                             // Auth state change will redirect to login
                                         } catch (error: any) {
                                             setDeleting(false)
-                                            showToast('error', 'Delete Failed', error.message || 'Please try again.')
+                                            showToast(
+                                                'error',
+                                                'Delete Failed',
+                                                error.message ||
+                                                    'Please try again.'
+                                            )
                                         }
                                     },
                                 },
@@ -95,76 +113,118 @@ export default function SettingsScreen() {
                         color={colors.textPrimary}
                     />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle} accessibilityRole="header">Settings</Text>
+                <Text style={styles.headerTitle} accessibilityRole="header">
+                    Settings
+                </Text>
                 <View style={styles.placeholder} />
             </View>
 
             <ScrollView style={styles.content}>
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle} accessibilityRole="header">Privacy & Data</Text>
+                    <Text
+                        style={styles.sectionTitle}
+                        accessibilityRole="header"
+                    >
+                        Privacy & Data
+                    </Text>
                     <View style={styles.settingItem}>
                         <View style={styles.settingTextContainer}>
-                            <Text style={styles.settingLabel}>Improve Catch AI</Text>
+                            <Text style={styles.settingLabel}>
+                                Improve Catch AI
+                            </Text>
                             <Text style={styles.settingDescription}>
-                                Allow Catch to use your matches to train our view verification model. Photos are anonymized.
+                                Allow Catch to use your matches to train our
+                                view verification model. Photos are anonymized.
                             </Text>
                         </View>
                         <Switch
                             value={dataContributionEnabled}
                             onValueChange={toggleDataContribution}
-                            trackColor={{ false: colors.border, true: colors.primary }}
+                            trackColor={{
+                                false: colors.border,
+                                true: colors.primary,
+                            }}
                             thumbColor={colors.inverseTextPrimary}
                             accessibilityLabel="Improve Catch AI"
                             accessibilityRole="switch"
-                            accessibilityState={{ checked: dataContributionEnabled }}
+                            accessibilityState={{
+                                checked: dataContributionEnabled,
+                            }}
                         />
                     </View>
                 </View>
 
                 {/* Notifications Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle} accessibilityRole="header">Notifications</Text>
+                    <Text
+                        style={styles.sectionTitle}
+                        accessibilityRole="header"
+                    >
+                        Notifications
+                    </Text>
 
                     <View style={styles.settingItem}>
                         <View style={styles.settingTextContainer}>
                             <Text style={styles.settingLabel}>New Catches</Text>
                             <Text style={styles.settingDescription}>
-                                Get notified when someone catches your shots and you earn royalties.
+                                Get notified when someone catches your shots and
+                                you earn royalties.
                             </Text>
                         </View>
                         <Switch
                             value={notificationSettings.notifyOnCatch}
-                            onValueChange={(val) => toggleNotificationSetting('notifyOnCatch', val)}
-                            trackColor={{ false: colors.border, true: colors.primary }}
+                            onValueChange={(val) =>
+                                toggleNotificationSetting('notifyOnCatch', val)
+                            }
+                            trackColor={{
+                                false: colors.border,
+                                true: colors.primary,
+                            }}
                             thumbColor={colors.inverseTextPrimary}
                             accessibilityLabel="New Catches notifications"
                             accessibilityRole="switch"
-                            accessibilityState={{ checked: notificationSettings.notifyOnCatch }}
+                            accessibilityState={{
+                                checked: notificationSettings.notifyOnCatch,
+                            }}
                         />
                     </View>
 
                     <View style={[styles.settingItem, { marginTop: 12 }]}>
                         <View style={styles.settingTextContainer}>
-                            <Text style={styles.settingLabel}>New Followers</Text>
+                            <Text style={styles.settingLabel}>
+                                New Followers
+                            </Text>
                             <Text style={styles.settingDescription}>
                                 Get notified when someone follows you.
                             </Text>
                         </View>
                         <Switch
                             value={notificationSettings.notifyOnFollow}
-                            onValueChange={(val) => toggleNotificationSetting('notifyOnFollow', val)}
-                            trackColor={{ false: colors.border, true: colors.primary }}
+                            onValueChange={(val) =>
+                                toggleNotificationSetting('notifyOnFollow', val)
+                            }
+                            trackColor={{
+                                false: colors.border,
+                                true: colors.primary,
+                            }}
                             thumbColor={colors.inverseTextPrimary}
                             accessibilityLabel="New Followers notifications"
                             accessibilityRole="switch"
-                            accessibilityState={{ checked: notificationSettings.notifyOnFollow }}
+                            accessibilityState={{
+                                checked: notificationSettings.notifyOnFollow,
+                            }}
                         />
                     </View>
                 </View>
 
                 {/* Legal Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle} accessibilityRole="header">Legal</Text>
+                    <Text
+                        style={styles.sectionTitle}
+                        accessibilityRole="header"
+                    >
+                        Legal
+                    </Text>
                     <TouchableOpacity
                         style={styles.settingItem}
                         onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
@@ -173,7 +233,9 @@ export default function SettingsScreen() {
                         accessibilityHint="Opens the privacy policy in your browser"
                     >
                         <View style={styles.settingTextContainer}>
-                            <Text style={styles.settingLabel}>Privacy Policy</Text>
+                            <Text style={styles.settingLabel}>
+                                Privacy Policy
+                            </Text>
                         </View>
                         <Ionicons
                             name="open-outline"
@@ -185,9 +247,17 @@ export default function SettingsScreen() {
 
                 {/* Account Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle} accessibilityRole="header">Account</Text>
+                    <Text
+                        style={styles.sectionTitle}
+                        accessibilityRole="header"
+                    >
+                        Account
+                    </Text>
                     <TouchableOpacity
-                        style={[styles.settingItem, { borderColor: colors.danger }]}
+                        style={[
+                            styles.settingItem,
+                            { borderColor: colors.danger },
+                        ]}
                         onPress={handleDeleteAccount}
                         disabled={deleting}
                         accessibilityLabel="Delete Account"
@@ -196,7 +266,12 @@ export default function SettingsScreen() {
                         accessibilityState={{ disabled: deleting }}
                     >
                         <View style={styles.settingTextContainer}>
-                            <Text style={[styles.settingLabel, { color: colors.danger }]}>
+                            <Text
+                                style={[
+                                    styles.settingLabel,
+                                    { color: colors.danger },
+                                ]}
+                            >
                                 Delete Account
                             </Text>
                             <Text style={styles.settingDescription}>

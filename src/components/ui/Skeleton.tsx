@@ -1,40 +1,45 @@
-import { colors } from '@/theme/colors';
-import React, { useEffect } from 'react';
-import { Dimensions, StyleSheet, View, ViewStyle } from 'react-native';
+import { colors } from '@/theme/colors'
+import React, { useEffect } from 'react'
+import { Dimensions, StyleSheet, View, ViewStyle } from 'react-native'
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
     withRepeat,
     withTiming,
-} from 'react-native-reanimated';
+} from 'react-native-reanimated'
 
-const SHIMMER_DURATION = 1000;
-const COLOR_HIGH = '#3a3a3c';
+const SHIMMER_DURATION = 1000
+const COLOR_HIGH = '#3a3a3c'
 
 // --- Base Skeleton Block ---
 
 interface SkeletonProps {
-    width: number | `${number}%`;
-    height: number;
-    borderRadius?: number;
-    style?: ViewStyle;
+    width: number | `${number}%`
+    height: number
+    borderRadius?: number
+    style?: ViewStyle
 }
 
-export function Skeleton({ width, height, borderRadius = 8, style }: SkeletonProps) {
-    const opacity = useSharedValue(0.5);
+export function Skeleton({
+    width,
+    height,
+    borderRadius = 8,
+    style,
+}: SkeletonProps) {
+    const opacity = useSharedValue(0.5)
 
     useEffect(() => {
         opacity.value = withRepeat(
             withTiming(1, { duration: SHIMMER_DURATION }),
             -1,
             true
-        );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        )
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     const animatedStyle = useAnimatedStyle(() => ({
         opacity: opacity.value,
-    }));
+    }))
 
     return (
         <Animated.View
@@ -51,12 +56,12 @@ export function Skeleton({ width, height, borderRadius = 8, style }: SkeletonPro
             accessibilityLabel="Loading"
             accessibilityRole="progressbar"
         />
-    );
+    )
 }
 
 // --- Composite Skeletons ---
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
 /** Skeleton for ExploreSection horizontal cards (240x240 + info bar) */
 export function ExploreSectionSkeleton() {
@@ -72,7 +77,7 @@ export function ExploreSectionSkeleton() {
                 </View>
             ))}
         </View>
-    );
+    )
 }
 
 /** Skeleton for the full Explore page initial load */
@@ -92,10 +97,23 @@ export function ExploreSkeleton() {
                 <View style={compositeStyles.sectionContainer}>
                     {[1, 2].map((i) => (
                         <View key={i} style={compositeStyles.listCard}>
-                            <Skeleton width={200} height={200} borderRadius={0} />
+                            <Skeleton
+                                width={200}
+                                height={200}
+                                borderRadius={0}
+                            />
                             <View style={compositeStyles.listCardInfo}>
-                                <Skeleton width={120} height={14} borderRadius={4} />
-                                <Skeleton width={80} height={10} borderRadius={4} style={{ marginTop: 6 }} />
+                                <Skeleton
+                                    width={120}
+                                    height={14}
+                                    borderRadius={4}
+                                />
+                                <Skeleton
+                                    width={80}
+                                    height={10}
+                                    borderRadius={4}
+                                    style={{ marginTop: 6 }}
+                                />
                             </View>
                         </View>
                     ))}
@@ -118,24 +136,34 @@ export function ExploreSkeleton() {
                 <ExploreSectionSkeleton />
             </View>
         </View>
-    );
+    )
 }
 
 /** Skeleton for "For You" recommended post cards */
 export function RecommendedPostSkeleton() {
-    const cardWidth = SCREEN_WIDTH - 32;
-    const imageHeight = cardWidth * 0.75;
+    const cardWidth = SCREEN_WIDTH - 32
+    const imageHeight = cardWidth * 0.75
 
     return (
         <View style={compositeStyles.recommendedCard}>
             <Skeleton width={cardWidth} height={imageHeight} borderRadius={0} />
             <View style={compositeStyles.recommendedContent}>
                 <Skeleton width={60} height={18} borderRadius={10} />
-                <Skeleton width={cardWidth * 0.7} height={14} borderRadius={4} style={{ marginTop: 8 }} />
-                <Skeleton width={100} height={12} borderRadius={4} style={{ marginTop: 6 }} />
+                <Skeleton
+                    width={cardWidth * 0.7}
+                    height={14}
+                    borderRadius={4}
+                    style={{ marginTop: 8 }}
+                />
+                <Skeleton
+                    width={100}
+                    height={12}
+                    borderRadius={4}
+                    style={{ marginTop: 6 }}
+                />
             </View>
         </View>
-    );
+    )
 }
 
 /** Skeleton for CompactPostCard (120x120 image + text) */
@@ -148,25 +176,41 @@ export function CompactPostCardSkeleton() {
                     <Skeleton width={100} height={14} borderRadius={4} />
                     <Skeleton width={40} height={14} borderRadius={8} />
                 </View>
-                <Skeleton width="80%" height={12} borderRadius={4} style={{ marginTop: 8 }} />
-                <Skeleton width="50%" height={12} borderRadius={4} style={{ marginTop: 4 }} />
+                <Skeleton
+                    width="80%"
+                    height={12}
+                    borderRadius={4}
+                    style={{ marginTop: 8 }}
+                />
+                <Skeleton
+                    width="50%"
+                    height={12}
+                    borderRadius={4}
+                    style={{ marginTop: 4 }}
+                />
                 <View style={{ flex: 1 }} />
                 <Skeleton width={70} height={10} borderRadius={4} />
             </View>
         </View>
-    );
+    )
 }
 
 /** Skeleton for ThreadModal (header + square image + footer) */
 export function ThreadModalSkeleton() {
-    const cardWidth = SCREEN_WIDTH - 20;
+    const cardWidth = SCREEN_WIDTH - 20
 
     return (
         <View style={compositeStyles.threadModalContainer}>
             <View style={compositeStyles.threadCard}>
                 {/* Header */}
                 <View style={compositeStyles.threadHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+                        }}
+                    >
                         <Skeleton width={24} height={24} borderRadius={12} />
                         <Skeleton width={100} height={16} borderRadius={4} />
                     </View>
@@ -176,17 +220,31 @@ export function ThreadModalSkeleton() {
                     </View>
                 </View>
                 {/* Image */}
-                <Skeleton width={cardWidth} height={cardWidth} borderRadius={0} />
+                <Skeleton
+                    width={cardWidth}
+                    height={cardWidth}
+                    borderRadius={0}
+                />
                 {/* Footer */}
                 <View style={compositeStyles.threadFooter}>
                     <Skeleton width="60%" height={14} borderRadius={4} />
-                    <Skeleton width={80} height={10} borderRadius={4} style={{ marginTop: 8 }} />
+                    <Skeleton
+                        width={80}
+                        height={10}
+                        borderRadius={4}
+                        style={{ marginTop: 8 }}
+                    />
                     <View style={compositeStyles.threadDivider} />
-                    <Skeleton width="100%" height={48} borderRadius={12} style={{ marginTop: 4 }} />
+                    <Skeleton
+                        width="100%"
+                        height={48}
+                        borderRadius={12}
+                        style={{ marginTop: 4 }}
+                    />
                 </View>
             </View>
         </View>
-    );
+    )
 }
 
 /** Skeleton for ListsScreen list items */
@@ -196,10 +254,15 @@ export function ListItemSkeleton() {
             <Skeleton width={24} height={24} borderRadius={4} />
             <View style={compositeStyles.listItemText}>
                 <Skeleton width={140} height={16} borderRadius={4} />
-                <Skeleton width={80} height={12} borderRadius={4} style={{ marginTop: 6 }} />
+                <Skeleton
+                    width={80}
+                    height={12}
+                    borderRadius={4}
+                    style={{ marginTop: 6 }}
+                />
             </View>
         </View>
-    );
+    )
 }
 
 /** Skeleton for ListsScreen tab content */
@@ -210,7 +273,7 @@ export function ListsTabSkeleton() {
                 <ListItemSkeleton key={i} />
             ))}
         </View>
-    );
+    )
 }
 
 /** Skeleton for ListDetailScreen (header + post list) */
@@ -222,7 +285,12 @@ export function ListDetailSkeleton() {
                 <Skeleton width={24} height={24} borderRadius={4} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                     <Skeleton width={160} height={20} borderRadius={4} />
-                    <Skeleton width={100} height={12} borderRadius={4} style={{ marginTop: 8 }} />
+                    <Skeleton
+                        width={100}
+                        height={12}
+                        borderRadius={4}
+                        style={{ marginTop: 8 }}
+                    />
                 </View>
             </View>
             {/* Post list skeleton */}
@@ -230,7 +298,7 @@ export function ListDetailSkeleton() {
                 <CompactPostCardSkeleton key={i} />
             ))}
         </View>
-    );
+    )
 }
 
 /** Skeleton for profile header (username + stats + tabs) */
@@ -242,7 +310,12 @@ export function ProfileSkeleton() {
                 {[1, 2, 3].map((i) => (
                     <View key={i} style={compositeStyles.profileStatItem}>
                         <Skeleton width={40} height={20} borderRadius={4} />
-                        <Skeleton width={60} height={12} borderRadius={4} style={{ marginTop: 4 }} />
+                        <Skeleton
+                            width={60}
+                            height={12}
+                            borderRadius={4}
+                            style={{ marginTop: 4 }}
+                        />
                     </View>
                 ))}
             </View>
@@ -252,7 +325,7 @@ export function ProfileSkeleton() {
                 <Skeleton width={60} height={16} borderRadius={4} />
             </View>
         </View>
-    );
+    )
 }
 
 const compositeStyles = StyleSheet.create({
@@ -413,4 +486,4 @@ const compositeStyles = StyleSheet.create({
         marginTop: 24,
         paddingBottom: 12,
     },
-});
+})

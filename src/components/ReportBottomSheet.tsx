@@ -27,11 +27,27 @@ interface ReportBottomSheetProps {
 }
 
 const REPORT_REASONS = [
-    { key: 'harassment', label: 'Harassment or bullying', icon: 'hand-left-outline' as const },
+    {
+        key: 'harassment',
+        label: 'Harassment or bullying',
+        icon: 'hand-left-outline' as const,
+    },
     { key: 'spam', label: 'Spam or scam', icon: 'megaphone-outline' as const },
-    { key: 'impersonation', label: 'Impersonation', icon: 'person-outline' as const },
-    { key: 'inappropriate_content', label: 'Inappropriate content', icon: 'warning-outline' as const },
-    { key: 'other', label: 'Other', icon: 'ellipsis-horizontal-outline' as const },
+    {
+        key: 'impersonation',
+        label: 'Impersonation',
+        icon: 'person-outline' as const,
+    },
+    {
+        key: 'inappropriate_content',
+        label: 'Inappropriate content',
+        icon: 'warning-outline' as const,
+    },
+    {
+        key: 'other',
+        label: 'Other',
+        icon: 'ellipsis-horizontal-outline' as const,
+    },
 ]
 
 export default function ReportBottomSheet({
@@ -81,24 +97,46 @@ export default function ReportBottomSheet({
                 details: details.trim(),
             })
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-            showToast('success', 'Report Submitted', 'Thank you for helping keep Catch safe.')
+            showToast(
+                'success',
+                'Report Submitted',
+                'Thank you for helping keep Catch safe.'
+            )
             onClose()
         } catch (error: any) {
-            console.error('[ReportBottomSheet] Error:', error?.code, error?.message)
+            console.error(
+                '[ReportBottomSheet] Error:',
+                error?.code,
+                error?.message
+            )
             const code = error?.code
             if (code === 'functions/already-exists') {
-                showToast('warning', 'Already Reported', 'You have already reported this user.')
+                showToast(
+                    'warning',
+                    'Already Reported',
+                    'You have already reported this user.'
+                )
             } else if (code === 'functions/resource-exhausted') {
-                showToast('warning', 'Please Wait', 'Too many reports submitted. Try again later.')
+                showToast(
+                    'warning',
+                    'Please Wait',
+                    'Too many reports submitted. Try again later.'
+                )
             } else {
-                showToast('error', 'Report Failed', error?.message || 'Please try again.')
+                showToast(
+                    'error',
+                    'Report Failed',
+                    error?.message || 'Please try again.'
+                )
             }
         } finally {
             setSubmitting(false)
         }
     }
 
-    const selectedReasonData = REPORT_REASONS.find(r => r.key === selectedReason)
+    const selectedReasonData = REPORT_REASONS.find(
+        (r) => r.key === selectedReason
+    )
 
     const translateY = slideAnim.interpolate({
         inputRange: [0, 1],
@@ -135,7 +173,11 @@ export default function ReportBottomSheet({
                                 accessibilityLabel="Go back"
                                 accessibilityRole="button"
                             >
-                                <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+                                <Ionicons
+                                    name="chevron-back"
+                                    size={24}
+                                    color={colors.textPrimary}
+                                />
                             </TouchableOpacity>
                         ) : (
                             <View style={{ width: 32 }} />
@@ -149,7 +191,11 @@ export default function ReportBottomSheet({
                             accessibilityLabel="Close"
                             accessibilityRole="button"
                         >
-                            <Ionicons name="close" size={24} color={colors.textPrimary} />
+                            <Ionicons
+                                name="close"
+                                size={24}
+                                color={colors.textPrimary}
+                            />
                         </TouchableOpacity>
                     </View>
 
@@ -165,7 +211,9 @@ export default function ReportBottomSheet({
                                 <TouchableOpacity
                                     key={reason.key}
                                     style={styles.reasonItem}
-                                    onPress={() => handleSelectReason(reason.key)}
+                                    onPress={() =>
+                                        handleSelectReason(reason.key)
+                                    }
                                     accessibilityRole="button"
                                     accessibilityLabel={reason.label}
                                 >
@@ -175,7 +223,9 @@ export default function ReportBottomSheet({
                                         color={colors.textSecondary}
                                         style={styles.reasonIcon}
                                     />
-                                    <Text style={styles.reasonLabel}>{reason.label}</Text>
+                                    <Text style={styles.reasonLabel}>
+                                        {reason.label}
+                                    </Text>
                                     <Ionicons
                                         name="chevron-forward"
                                         size={18}
@@ -227,13 +277,22 @@ export default function ReportBottomSheet({
                                 onPress={handleSubmit}
                                 disabled={submitting}
                                 accessibilityRole="button"
-                                accessibilityLabel={submitting ? 'Submitting report' : 'Submit Report'}
+                                accessibilityLabel={
+                                    submitting
+                                        ? 'Submitting report'
+                                        : 'Submit Report'
+                                }
                                 accessibilityState={{ disabled: submitting }}
                             >
                                 {submitting ? (
-                                    <ActivityIndicator size="small" color={colors.white} />
+                                    <ActivityIndicator
+                                        size="small"
+                                        color={colors.white}
+                                    />
                                 ) : (
-                                    <Text style={styles.submitButtonText}>Submit Report</Text>
+                                    <Text style={styles.submitButtonText}>
+                                        Submit Report
+                                    </Text>
                                 )}
                             </TouchableOpacity>
                         </ScrollView>

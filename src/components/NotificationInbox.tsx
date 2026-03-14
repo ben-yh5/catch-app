@@ -29,10 +29,7 @@ interface ActivityFeedProps {
     onClose: () => void
 }
 
-export default function ActivityFeed({
-    visible,
-    onClose,
-}: ActivityFeedProps) {
+export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
     const {
         notifications,
         markAllNotificationsAsRead,
@@ -43,7 +40,9 @@ export default function ActivityFeed({
     } = useAuth()
     const router = useRouter()
     const insets = useSafeAreaInsets()
-    const [hydratedNotifications, setHydratedNotifications] = useState<Notification[]>([])
+    const [hydratedNotifications, setHydratedNotifications] = useState<
+        Notification[]
+    >([])
     const [loading, setLoading] = useState(false)
     const [showHowItWorks, setShowHowItWorks] = useState(false)
     const [activeFilter, setActiveFilter] = useState<FilterType>('all')
@@ -58,7 +57,7 @@ export default function ActivityFeed({
         } else {
             setHydratedNotifications([])
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, notifications])
 
     const hydrateNotifications = async () => {
@@ -70,7 +69,9 @@ export default function ActivityFeed({
                 // Fetch "From User" details
                 if (note.fromUserId) {
                     try {
-                        const userDoc = await getDoc(doc(db, 'users', note.fromUserId))
+                        const userDoc = await getDoc(
+                            doc(db, 'users', note.fromUserId)
+                        )
                         if (userDoc.exists()) {
                             const data = userDoc.data()
                             note.fromUsername = data.username || 'Someone'
@@ -85,7 +86,9 @@ export default function ActivityFeed({
                 // Fetch Post Thumbnail if applicable
                 if (note.postId) {
                     try {
-                        const postDoc = await getDoc(doc(db, 'posts', note.postId))
+                        const postDoc = await getDoc(
+                            doc(db, 'posts', note.postId)
+                        )
                         if (postDoc.exists()) {
                             note.postThumbnail = postDoc.data().photoURL
                         }
@@ -104,12 +107,12 @@ export default function ActivityFeed({
     const filteredNotifications = useMemo(() => {
         if (activeFilter === 'all') return hydratedNotifications
         if (activeFilter === 'xp') {
-            return hydratedNotifications.filter(n =>
+            return hydratedNotifications.filter((n) =>
                 ['xp_post', 'xp_catch', 'royalty'].includes(n.type)
             )
         }
         // social
-        return hydratedNotifications.filter(n =>
+        return hydratedNotifications.filter((n) =>
             ['follow', 'new_post'].includes(n.type)
         )
     }, [hydratedNotifications, activeFilter])
@@ -127,9 +130,14 @@ export default function ActivityFeed({
         // For post-related notifications, open the ThreadModal
         if (notification.postId) {
             try {
-                const postDoc = await getDoc(doc(db, 'posts', notification.postId))
+                const postDoc = await getDoc(
+                    doc(db, 'posts', notification.postId)
+                )
                 if (postDoc.exists()) {
-                    setSelectedPost({ id: postDoc.id, ...postDoc.data() } as Post)
+                    setSelectedPost({
+                        id: postDoc.id,
+                        ...postDoc.data(),
+                    } as Post)
                     setThreadModalVisible(true)
                 }
             } catch (e) {
@@ -171,8 +179,8 @@ export default function ActivityFeed({
                         } catch {
                             Alert.alert('Error', 'Failed to clear activity')
                         }
-                    }
-                }
+                    },
+                },
             ]
         )
     }
@@ -180,14 +188,28 @@ export default function ActivityFeed({
     const renderNotificationIcon = (item: Notification) => {
         if (item.type === 'xp_post') {
             return (
-                <View style={[styles.iconCircle, { backgroundColor: item.isPioneer ? '#FFD700' : colors.primary }]}>
+                <View
+                    style={[
+                        styles.iconCircle,
+                        {
+                            backgroundColor: item.isPioneer
+                                ? '#FFD700'
+                                : colors.primary,
+                        },
+                    ]}
+                >
                     <Ionicons name="location" size={20} color="#fff" />
                 </View>
             )
         }
         if (item.type === 'xp_catch') {
             return (
-                <View style={[styles.iconCircle, { backgroundColor: colors.secondary }]}>
+                <View
+                    style={[
+                        styles.iconCircle,
+                        { backgroundColor: colors.secondary },
+                    ]}
+                >
                     <Ionicons name="camera" size={20} color="#fff" />
                 </View>
             )
@@ -205,7 +227,9 @@ export default function ActivityFeed({
         return (
             <View style={styles.avatarPlaceholder}>
                 <Text style={styles.avatarInitial}>
-                    {item.fromUsername ? item.fromUsername[0].toUpperCase() : '?'}
+                    {item.fromUsername
+                        ? item.fromUsername[0].toUpperCase()
+                        : '?'}
                 </Text>
             </View>
         )
@@ -260,7 +284,8 @@ export default function ActivityFeed({
     }
 
     const showThumbnail = (item: Notification) =>
-        ['royalty', 'xp_post', 'xp_catch', 'new_post'].includes(item.type) && item.postThumbnail
+        ['royalty', 'xp_post', 'xp_catch', 'new_post'].includes(item.type) &&
+        item.postThumbnail
 
     const filters: { key: FilterType; label: string }[] = [
         { key: 'all', label: 'All' },
@@ -283,9 +308,15 @@ export default function ActivityFeed({
                         accessibilityLabel="Close"
                         accessibilityRole="button"
                     >
-                        <Ionicons name="close" size={24} color={colors.textPrimary} />
+                        <Ionicons
+                            name="close"
+                            size={24}
+                            color={colors.textPrimary}
+                        />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle} accessibilityRole="header">Activity</Text>
+                    <Text style={styles.headerTitle} accessibilityRole="header">
+                        Activity
+                    </Text>
                     {hydratedNotifications.length > 0 && (
                         <TouchableOpacity
                             onPress={handleClearAll}
@@ -293,30 +324,49 @@ export default function ActivityFeed({
                             accessibilityLabel="Clear all activity"
                             accessibilityRole="button"
                         >
-                            <Ionicons name="trash-outline" size={24} color={colors.textPrimary} />
+                            <Ionicons
+                                name="trash-outline"
+                                size={24}
+                                color={colors.textPrimary}
+                            />
                         </TouchableOpacity>
                     )}
                 </View>
 
                 {loading ? (
                     <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={colors.primary} />
+                        <ActivityIndicator
+                            size="large"
+                            color={colors.primary}
+                        />
                     </View>
                 ) : (
                     <ScrollView contentContainerStyle={styles.content}>
                         {/* Contribution Summary */}
                         <View style={styles.summaryContainer}>
-                            <Text style={styles.summaryTotal}>{contribution}</Text>
-                            <Text style={styles.summaryTotalLabel}>Total Points</Text>
+                            <Text style={styles.summaryTotal}>
+                                {contribution}
+                            </Text>
+                            <Text style={styles.summaryTotalLabel}>
+                                Total Points
+                            </Text>
                             <View style={styles.summaryStats}>
                                 <View style={styles.summaryStatItem}>
-                                    <Text style={styles.summaryStatNumber}>{totalPosts}</Text>
-                                    <Text style={styles.summaryStatLabel}>Posts</Text>
+                                    <Text style={styles.summaryStatNumber}>
+                                        {totalPosts}
+                                    </Text>
+                                    <Text style={styles.summaryStatLabel}>
+                                        Posts
+                                    </Text>
                                 </View>
                                 <View style={styles.summaryDivider} />
                                 <View style={styles.summaryStatItem}>
-                                    <Text style={styles.summaryStatNumber}>{totalCatches}</Text>
-                                    <Text style={styles.summaryStatLabel}>Catches</Text>
+                                    <Text style={styles.summaryStatNumber}>
+                                        {totalCatches}
+                                    </Text>
+                                    <Text style={styles.summaryStatLabel}>
+                                        Catches
+                                    </Text>
                                 </View>
                             </View>
                         </View>
@@ -329,9 +379,15 @@ export default function ActivityFeed({
                             accessibilityLabel="How Points Work"
                             accessibilityState={{ expanded: showHowItWorks }}
                         >
-                            <Text style={styles.howItWorksToggleText}>How Points Work</Text>
+                            <Text style={styles.howItWorksToggleText}>
+                                How Points Work
+                            </Text>
                             <Ionicons
-                                name={showHowItWorks ? 'chevron-up' : 'chevron-down'}
+                                name={
+                                    showHowItWorks
+                                        ? 'chevron-up'
+                                        : 'chevron-down'
+                                }
                                 size={18}
                                 color={colors.textTertiary}
                             />
@@ -339,39 +395,83 @@ export default function ActivityFeed({
                         {showHowItWorks && (
                             <View style={styles.howItWorksContent}>
                                 <View style={styles.pointRow}>
-                                    <Text style={styles.pointLabel}>Pioneer Post</Text>
-                                    <Text style={styles.pointValue}>+{CONTRIBUTION.PIONEER_POST} pts</Text>
+                                    <Text style={styles.pointLabel}>
+                                        Pioneer Post
+                                    </Text>
+                                    <Text style={styles.pointValue}>
+                                        +{CONTRIBUTION.PIONEER_POST} pts
+                                    </Text>
                                 </View>
                                 <View style={styles.pointRow}>
-                                    <Text style={styles.pointLabel}>Nearby Post</Text>
-                                    <Text style={styles.pointValue}>+{CONTRIBUTION.NEARBY_POST} pts</Text>
+                                    <Text style={styles.pointLabel}>
+                                        Nearby Post
+                                    </Text>
+                                    <Text style={styles.pointValue}>
+                                        +{CONTRIBUTION.NEARBY_POST} pts
+                                    </Text>
                                 </View>
                                 <View style={styles.pointRow}>
                                     <Text style={styles.pointLabel}>Catch</Text>
-                                    <Text style={styles.pointValue}>+{CONTRIBUTION.CATCH} pts</Text>
+                                    <Text style={styles.pointValue}>
+                                        +{CONTRIBUTION.CATCH} pts
+                                    </Text>
                                 </View>
                                 <View style={styles.pointRow}>
-                                    <Text style={styles.pointLabel}>Pioneer Royalty</Text>
-                                    <Text style={styles.pointValue}>+{CONTRIBUTION.ROYALTY_PIONEER} pts</Text>
+                                    <Text style={styles.pointLabel}>
+                                        Pioneer Royalty
+                                    </Text>
+                                    <Text style={styles.pointValue}>
+                                        +{CONTRIBUTION.ROYALTY_PIONEER} pts
+                                    </Text>
                                 </View>
                                 <View style={styles.pointRow}>
-                                    <Text style={styles.pointLabel}>Nearby Royalty</Text>
-                                    <Text style={styles.pointValue}>+{CONTRIBUTION.ROYALTY_NEARBY} pts</Text>
+                                    <Text style={styles.pointLabel}>
+                                        Nearby Royalty
+                                    </Text>
+                                    <Text style={styles.pointValue}>
+                                        +{CONTRIBUTION.ROYALTY_NEARBY} pts
+                                    </Text>
                                 </View>
                                 <View style={styles.pointDivider} />
                                 <View style={styles.pointRow}>
                                     <View style={styles.pointLabelRow}>
-                                        <View style={[styles.pinDot, { backgroundColor: colors.pinBounty }]} />
-                                        <Text style={styles.pointLabel}>Gold Pin (Bounty)</Text>
+                                        <View
+                                            style={[
+                                                styles.pinDot,
+                                                {
+                                                    backgroundColor:
+                                                        colors.pinBounty,
+                                                },
+                                            ]}
+                                        />
+                                        <Text style={styles.pointLabel}>
+                                            Gold Pin (Bounty)
+                                        </Text>
                                     </View>
-                                    <Text style={styles.pointValue}>{CONTRIBUTION.BOUNTY_MULTIPLIER}x catch pts</Text>
+                                    <Text style={styles.pointValue}>
+                                        {CONTRIBUTION.BOUNTY_MULTIPLIER}x catch
+                                        pts
+                                    </Text>
                                 </View>
                                 <View style={styles.pointRow}>
                                     <View style={styles.pointLabelRow}>
-                                        <View style={[styles.pinDot, { backgroundColor: colors.pinTrending }]} />
-                                        <Text style={styles.pointLabel}>Silver Pin (Trending)</Text>
+                                        <View
+                                            style={[
+                                                styles.pinDot,
+                                                {
+                                                    backgroundColor:
+                                                        colors.pinTrending,
+                                                },
+                                            ]}
+                                        />
+                                        <Text style={styles.pointLabel}>
+                                            Silver Pin (Trending)
+                                        </Text>
                                     </View>
-                                    <Text style={styles.pointValue}>{CONTRIBUTION.TRENDING_MULTIPLIER}x catch pts</Text>
+                                    <Text style={styles.pointValue}>
+                                        {CONTRIBUTION.TRENDING_MULTIPLIER}x
+                                        catch pts
+                                    </Text>
                                 </View>
                             </View>
                         )}
@@ -383,17 +483,23 @@ export default function ActivityFeed({
                                     key={f.key}
                                     style={[
                                         styles.filterTab,
-                                        activeFilter === f.key && styles.filterTabActive,
+                                        activeFilter === f.key &&
+                                            styles.filterTabActive,
                                     ]}
                                     onPress={() => setActiveFilter(f.key)}
                                     accessibilityRole="button"
                                     accessibilityLabel={f.label}
-                                    accessibilityState={{ selected: activeFilter === f.key }}
+                                    accessibilityState={{
+                                        selected: activeFilter === f.key,
+                                    }}
                                 >
-                                    <Text style={[
-                                        styles.filterTabText,
-                                        activeFilter === f.key && styles.filterTabTextActive,
-                                    ]}>
+                                    <Text
+                                        style={[
+                                            styles.filterTabText,
+                                            activeFilter === f.key &&
+                                                styles.filterTabTextActive,
+                                        ]}
+                                    >
                                         {f.label}
                                     </Text>
                                 </TouchableOpacity>
@@ -404,15 +510,26 @@ export default function ActivityFeed({
                         <View style={styles.activitySection}>
                             {filteredNotifications.length === 0 ? (
                                 <View style={styles.emptyState}>
-                                    <Ionicons name="pulse-outline" size={48} color={colors.textTertiary} />
-                                    <Text style={styles.emptyText}>No activity yet</Text>
+                                    <Ionicons
+                                        name="pulse-outline"
+                                        size={48}
+                                        color={colors.textTertiary}
+                                    />
+                                    <Text style={styles.emptyText}>
+                                        No activity yet
+                                    </Text>
                                 </View>
                             ) : (
                                 filteredNotifications.map((item) => (
                                     <TouchableOpacity
                                         key={item.id}
-                                        style={[styles.item, !item.read && styles.unreadItem]}
-                                        onPress={() => handleNotificationPress(item)}
+                                        style={[
+                                            styles.item,
+                                            !item.read && styles.unreadItem,
+                                        ]}
+                                        onPress={() =>
+                                            handleNotificationPress(item)
+                                        }
                                         accessibilityRole="button"
                                         accessibilityHint="View details"
                                     >
@@ -422,12 +539,16 @@ export default function ActivityFeed({
 
                                         <View style={styles.itemContent}>
                                             {renderNotificationText(item)}
-                                            <Text style={styles.timeText}>{formatDate(item.createdAt)}</Text>
+                                            <Text style={styles.timeText}>
+                                                {formatDate(item.createdAt)}
+                                            </Text>
                                         </View>
 
                                         {showThumbnail(item) && (
                                             <Image
-                                                source={{ uri: item.postThumbnail }}
+                                                source={{
+                                                    uri: item.postThumbnail,
+                                                }}
                                                 style={styles.postThumbnail}
                                                 contentFit="cover"
                                             />
@@ -620,8 +741,7 @@ const styles = StyleSheet.create({
     },
 
     // Activity List
-    activitySection: {
-    },
+    activitySection: {},
     emptyState: {
         padding: 40,
         alignItems: 'center',

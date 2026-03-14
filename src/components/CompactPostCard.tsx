@@ -1,23 +1,38 @@
-import CatchBadge from '@/components/ui/CatchBadge';
-import CaughtBadge from '@/components/ui/CaughtBadge';
-import { colors } from '@/theme/colors';
-import { Post } from '@/types';
-import { formatPostDate } from '@/utils/dateUtils';
-import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import CatchBadge from '@/components/ui/CatchBadge'
+import CaughtBadge from '@/components/ui/CaughtBadge'
+import { colors } from '@/theme/colors'
+import { Post } from '@/types'
+import { formatPostDate } from '@/utils/dateUtils'
+import { Ionicons } from '@expo/vector-icons'
+import { Image } from 'expo-image'
+import React from 'react'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 
 interface CompactPostCardProps {
-    post: Pick<Post, 'id' | 'photoURL' | 'thumbnailURL' | 'authorUsername' | 'title' | 'caption' | 'catchCount' | 'createdAt' | 'latitude' | 'longitude'>;
-    onPress: () => void;
-    onJumpToLocation?: () => void;
-    highlighted?: boolean;
+    post: Pick<
+        Post,
+        | 'id'
+        | 'photoURL'
+        | 'thumbnailURL'
+        | 'authorUsername'
+        | 'title'
+        | 'caption'
+        | 'catchCount'
+        | 'createdAt'
+        | 'latitude'
+        | 'longitude'
+    >
+    onPress: () => void
+    onJumpToLocation?: () => void
+    highlighted?: boolean
 }
 
-export default function CompactPostCard({ post, onPress, onJumpToLocation, highlighted = false }: CompactPostCardProps) {
-
-
+export default function CompactPostCard({
+    post,
+    onPress,
+    onJumpToLocation,
+    highlighted = false,
+}: CompactPostCardProps) {
     return (
         <TouchableOpacity
             style={styles.card}
@@ -37,47 +52,69 @@ export default function CompactPostCard({ post, onPress, onJumpToLocation, highl
                     accessibilityLabel="Post photo"
                 />
                 {highlighted && (
-                    <CaughtBadge containerStyle={styles.caughtBadge} size={20} />
+                    <CaughtBadge
+                        containerStyle={styles.caughtBadge}
+                        size={20}
+                    />
                 )}
             </View>
 
             <View style={styles.content}>
                 <View style={styles.header}>
-                    <Text style={styles.username} numberOfLines={1}>@{post.authorUsername}</Text>
+                    <Text style={styles.username} numberOfLines={1}>
+                        @{post.authorUsername}
+                    </Text>
                     <CatchBadge count={post.catchCount} />
                 </View>
 
-
-
                 {post.caption ? (
-                    <Text style={styles.caption} numberOfLines={2} ellipsizeMode="tail">
+                    <Text
+                        style={styles.caption}
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                    >
                         {post.caption}
                     </Text>
-                ) : <View style={{ flex: 1 }} />}
+                ) : (
+                    <View style={{ flex: 1 }} />
+                )}
 
                 <View style={styles.footer}>
-                    <Text style={styles.date}>{formatPostDate(post.createdAt)}</Text>
+                    <Text style={styles.date}>
+                        {formatPostDate(post.createdAt)}
+                    </Text>
 
                     {onJumpToLocation && (
                         <TouchableOpacity
                             style={styles.locationButton}
                             onPress={(e) => {
-                                e.stopPropagation();
-                                onJumpToLocation();
+                                e.stopPropagation()
+                                onJumpToLocation()
                             }}
                             activeOpacity={0.7}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            hitSlop={{
+                                top: 10,
+                                bottom: 10,
+                                left: 10,
+                                right: 10,
+                            }}
                             accessibilityLabel="Jump to location"
                             accessibilityRole="button"
                         >
-                            <Ionicons name="location-sharp" size={14} color={colors.primary} />
-                            <Text style={styles.locationButtonText}>Location</Text>
+                            <Ionicons
+                                name="location-sharp"
+                                size={14}
+                                color={colors.primary}
+                            />
+                            <Text style={styles.locationButtonText}>
+                                Location
+                            </Text>
                         </TouchableOpacity>
                     )}
                 </View>
             </View>
         </TouchableOpacity>
-    );
+    )
 }
 
 const styles = StyleSheet.create({
@@ -90,7 +127,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: colors.border,
-        shadowColor: "#000",
+        shadowColor: '#000',
         shadowOffset: {
             width: 0,
             height: 2,
@@ -161,4 +198,4 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: colors.primary,
     },
-});
+})

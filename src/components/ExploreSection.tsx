@@ -1,19 +1,25 @@
-import { useAuth } from '@/context/AuthContext';
-import { colors } from '@/theme/colors';
-import React from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import FeaturedPostCard from './FeaturedPostCard';
-import { ExploreSectionSkeleton } from './ui/Skeleton';
+import { useAuth } from '@/context/AuthContext'
+import { colors } from '@/theme/colors'
+import React from 'react'
+import {
+    FlatList,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native'
+import FeaturedPostCard from './FeaturedPostCard'
+import { ExploreSectionSkeleton } from './ui/Skeleton'
 
-const CARD_SIZE = 240;
-const CARD_MARGIN = 12;
+const CARD_SIZE = 240
+const CARD_MARGIN = 12
 
 interface ExploreSectionProps {
-    title: string;
-    posts: any[];
-    onPostPress: (postId: string) => void;
-    onSeeAllPress?: () => void;
-    loading?: boolean;
+    title: string
+    posts: any[]
+    onPostPress: (postId: string) => void
+    onSeeAllPress?: () => void
+    loading?: boolean
 }
 
 export default function ExploreSection({
@@ -23,7 +29,7 @@ export default function ExploreSection({
     onSeeAllPress,
     loading = false,
 }: ExploreSectionProps) {
-    const { user } = useAuth();
+    const { user } = useAuth()
 
     if (loading) {
         return (
@@ -35,11 +41,11 @@ export default function ExploreSection({
                 </View>
                 <ExploreSectionSkeleton />
             </View>
-        );
+        )
     }
 
     if (!posts || posts.length === 0) {
-        return null;
+        return null
     }
 
     const renderPostCard = ({ item }: { item: any }) => (
@@ -49,13 +55,15 @@ export default function ExploreSection({
             size={CARD_SIZE}
             isOwnPost={item.authorId === user?.uid}
         />
-    );
+    )
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.titleContainer}>
-                    <Text style={styles.title} accessibilityRole="header">{title}</Text>
+                    <Text style={styles.title} accessibilityRole="header">
+                        {title}
+                    </Text>
                 </View>
                 {onSeeAllPress && (
                     <TouchableOpacity
@@ -81,7 +89,7 @@ export default function ExploreSection({
                 pagingEnabled={false}
             />
         </View>
-    );
+    )
 }
 
 const styles = StyleSheet.create({
@@ -183,4 +191,4 @@ const styles = StyleSheet.create({
         shadowRadius: 2,
         elevation: 3,
     },
-});
+})

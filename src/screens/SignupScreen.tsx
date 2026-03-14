@@ -4,16 +4,14 @@ import AppInput from '@/components/ui/AppInput'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
-import { isUsernameAvailable, validateUsernameFormat } from '@/utils/usernameValidation'
+import {
+    isUsernameAvailable,
+    validateUsernameFormat,
+} from '@/utils/usernameValidation'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
-import {
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 
 export default function SignupScreen() {
@@ -55,7 +53,11 @@ export default function SignupScreen() {
             // Check if username is available
             const available = await isUsernameAvailable(username)
             if (!available) {
-                showToast('warning', 'Username Taken', 'This username is already in use. Please choose another.')
+                showToast(
+                    'warning',
+                    'Username Taken',
+                    'This username is already in use. Please choose another.'
+                )
                 setLoading(false)
                 return
             }
@@ -94,7 +96,13 @@ export default function SignupScreen() {
                     onChangeText={setUsername}
                     autoCapitalize="none"
                     editable={!loading}
-                    leftIcon={<Ionicons name="person-outline" size={20} color={colors.textTertiary} />}
+                    leftIcon={
+                        <Ionicons
+                            name="person-outline"
+                            size={20}
+                            color={colors.textTertiary}
+                        />
+                    }
                     accessibilityLabel="Username"
                     accessibilityHint="Enter your desired username"
                 />
@@ -106,7 +114,13 @@ export default function SignupScreen() {
                     autoCapitalize="none"
                     keyboardType="email-address"
                     editable={!loading}
-                    leftIcon={<Ionicons name="mail-outline" size={20} color={colors.textTertiary} />}
+                    leftIcon={
+                        <Ionicons
+                            name="mail-outline"
+                            size={20}
+                            color={colors.textTertiary}
+                        />
+                    }
                     accessibilityLabel="Email"
                     accessibilityHint="Enter your email address"
                 />
@@ -117,7 +131,13 @@ export default function SignupScreen() {
                     onChangeText={setPassword}
                     secureTextEntry
                     editable={!loading}
-                    leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />}
+                    leftIcon={
+                        <Ionicons
+                            name="lock-closed-outline"
+                            size={20}
+                            color={colors.textTertiary}
+                        />
+                    }
                     accessibilityLabel="Password"
                     accessibilityHint="Enter your password"
                 />
@@ -128,7 +148,13 @@ export default function SignupScreen() {
                     onChangeText={setConfirmPassword}
                     secureTextEntry
                     editable={!loading}
-                    leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />}
+                    leftIcon={
+                        <Ionicons
+                            name="lock-closed-outline"
+                            size={20}
+                            color={colors.textTertiary}
+                        />
+                    }
                     accessibilityLabel="Confirm Password"
                     accessibilityHint="Re-enter your password to confirm"
                 />
@@ -160,7 +186,14 @@ export default function SignupScreen() {
                     onPress={handleGoogleSignup}
                     loading={loading}
                     variant="outline"
-                    icon={<Ionicons name="logo-google" size={18} color={colors.textPrimary} style={{ marginRight: 8 }} />}
+                    icon={
+                        <Ionicons
+                            name="logo-google"
+                            size={18}
+                            color={colors.textPrimary}
+                            style={{ marginRight: 8 }}
+                        />
+                    }
                     accessibilityLabel="Continue with Google"
                     accessibilityRole="button"
                     accessibilityState={{ disabled: loading }}

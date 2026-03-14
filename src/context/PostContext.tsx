@@ -20,7 +20,7 @@ import React, {
     useContext,
     useEffect,
     useRef,
-    useState
+    useState,
 } from 'react'
 
 import { useAuth } from '@/context/AuthContext'
@@ -39,13 +39,17 @@ type PostEvent = {
 interface PostContextType {
     shouldRefresh: boolean
     triggerRefresh: () => void
-    notifyPostEvent: (action: PostAction, postId?: string, userId?: string) => void
+    notifyPostEvent: (
+        action: PostAction,
+        postId?: string,
+        userId?: string
+    ) => void
     subscribeToPostEvents: (callback: (event: PostEvent) => void) => () => void
     updateLastFetch: (screen: 'explore' | 'profile' | 'saved') => void
     getLastFetch: (screen: 'explore' | 'profile' | 'saved') => number
     isStale: (screen: 'explore' | 'profile' | 'saved') => boolean
     // Data Caching
-    getCachedPosts: (ids: string[]) => { found: Post[], missing: string[] }
+    getCachedPosts: (ids: string[]) => { found: Post[]; missing: string[] }
     cachePosts: (posts: Post[]) => void
     // User Data
     caughtThreadIds: Set<string>
@@ -71,10 +75,10 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
         saved: Date.now(),
     })
 
-
-
     // In-memory post cache
-    const postCacheRef = useRef<Map<string, { data: Post, timestamp: number }>>(new Map())
+    const postCacheRef = useRef<Map<string, { data: Post; timestamp: number }>>(
+        new Map()
+    )
     const CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
     // Use ref to avoid re-renders when listeners change
@@ -91,35 +95,41 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
      * Emit a post event to all subscribers without causing re-renders
      * This is the preferred way to notify screens of post changes
      */
-    const notifyPostEvent = useCallback((action: PostAction, postId?: string, userId?: string) => {
-        const event: PostEvent = {
-            action,
-            postId,
-            userId,
-            timestamp: Date.now(),
-        }
-
-        // Notify all listeners without causing re-renders
-        eventListenersRef.current.forEach(listener => {
-            try {
-                listener(event)
-            } catch (error) {
-                console.error('Error in post event listener:', error)
+    const notifyPostEvent = useCallback(
+        (action: PostAction, postId?: string, userId?: string) => {
+            const event: PostEvent = {
+                action,
+                postId,
+                userId,
+                timestamp: Date.now(),
             }
-        })
-    }, [])
+
+            // Notify all listeners without causing re-renders
+            eventListenersRef.current.forEach((listener) => {
+                try {
+                    listener(event)
+                } catch (error) {
+                    console.error('Error in post event listener:', error)
+                }
+            })
+        },
+        []
+    )
 
     /**
      * Subscribe to post events
      * Returns unsubscribe function for cleanup
      */
-    const subscribeToPostEvents = useCallback((callback: (event: PostEvent) => void) => {
-        eventListenersRef.current.add(callback)
+    const subscribeToPostEvents = useCallback(
+        (callback: (event: PostEvent) => void) => {
+            eventListenersRef.current.add(callback)
 
-        return () => {
-            eventListenersRef.current.delete(callback)
-        }
-    }, [])
+            return () => {
+                eventListenersRef.current.delete(callback)
+            }
+        },
+        []
+    )
 
     const updateLastFetch = useCallback(
         (screen: 'explore' | 'profile' | 'saved') => {
@@ -144,7 +154,6 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
             return Date.now() - lastFetch > STALE_THRESHOLD
         },
         [lastFetchTimes]
-
     )
 
     /**
@@ -155,9 +164,9 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
         const missing: string[] = []
         const now = Date.now()
 
-        ids.forEach(id => {
+        ids.forEach((id) => {
             const cached = postCacheRef.current.get(id)
-            if (cached && (now - cached.timestamp < CACHE_TTL)) {
+            if (cached && now - cached.timestamp < CACHE_TTL) {
                 found.push(cached.data)
             } else {
                 missing.push(id)
@@ -165,7 +174,7 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
         })
 
         return { found, missing }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     /**
@@ -173,10 +182,10 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
      */
     const cachePosts = useCallback((posts: Post[]) => {
         const now = Date.now()
-        posts.forEach(post => {
+        posts.forEach((post) => {
             postCacheRef.current.set(post.id, {
                 data: post,
-                timestamp: now
+                timestamp: now,
             })
         })
     }, [])
@@ -192,7 +201,9 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
     }, [shouldRefresh])
 
     // Caught Threads State
-    const [caughtThreadIds, setCaughtThreadIds] = useState<Set<string>>(new Set())
+    const [caughtThreadIds, setCaughtThreadIds] = useState<Set<string>>(
+        new Set()
+    )
     const { user } = useAuth()
 
     /**
@@ -236,8 +247,8 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
     useEffect(() => {
         const unsubscribe = subscribeToPostEvents((event) => {
             if (event.action === 'catch' && event.userId === user?.uid) {
-                // We could optimize this by just adding the ID if we knew the rootPostId, 
-                // but for consistency we'll refresh. 
+                // We could optimize this by just adding the ID if we knew the rootPostId,
+                // but for consistency we'll refresh.
                 // Actually, let's just refresh to be safe.
                 refreshCaughtThreads()
             }
@@ -265,7 +276,6 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
         </PostContext.Provider>
     )
 }
-
 
 /**
  * Hook to subscribe to post events without causing re-renders
@@ -308,4 +318,3 @@ export const usePostEvents = (
 }
 
 export type { PostAction, PostEvent }
-

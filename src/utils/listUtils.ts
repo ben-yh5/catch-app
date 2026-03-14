@@ -12,7 +12,17 @@
  */
 
 import { db } from '@/services/firebase'
-import { addDoc, arrayRemove, arrayUnion, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore'
+import {
+    addDoc,
+    arrayRemove,
+    arrayUnion,
+    collection,
+    doc,
+    getDocs,
+    query,
+    updateDoc,
+    where,
+} from 'firebase/firestore'
 
 const SAVED_LIST_NAME = 'My List'
 
@@ -20,7 +30,10 @@ const SAVED_LIST_NAME = 'My List'
  * Get or create the user's default "My List"
  * This is a special private list that's auto-created for saving shots
  */
-export async function getOrCreateSavedList(userId: string, username: string): Promise<string> {
+export async function getOrCreateSavedList(
+    userId: string,
+    username: string
+): Promise<string> {
     try {
         // Check if user already has their default list (by isSavedList flag)
         const savedListQuery = query(
@@ -71,7 +84,10 @@ export async function getOrCreateSavedList(userId: string, username: string): Pr
 /**
  * Add a post to a list
  */
-export async function addPostToList(listId: string, postId: string): Promise<void> {
+export async function addPostToList(
+    listId: string,
+    postId: string
+): Promise<void> {
     try {
         await updateDoc(doc(db, 'lists', listId), {
             postIds: arrayUnion(postId),
@@ -86,7 +102,10 @@ export async function addPostToList(listId: string, postId: string): Promise<voi
 /**
  * Remove a post from a list
  */
-export async function removePostFromList(listId: string, postId: string): Promise<void> {
+export async function removePostFromList(
+    listId: string,
+    postId: string
+): Promise<void> {
     try {
         await updateDoc(doc(db, 'lists', listId), {
             postIds: arrayRemove(postId),
@@ -101,7 +120,10 @@ export async function removePostFromList(listId: string, postId: string): Promis
 /**
  * Check if a post is in any of the user's lists
  */
-export async function isPostSaved(userId: string, postId: string): Promise<boolean> {
+export async function isPostSaved(
+    userId: string,
+    postId: string
+): Promise<boolean> {
     try {
         const listsQuery = query(
             collection(db, 'lists'),
@@ -120,7 +142,10 @@ export async function isPostSaved(userId: string, postId: string): Promise<boole
 /**
  * Get all lists that contain a specific post (for the user)
  */
-export async function getListsContainingPost(userId: string, postId: string): Promise<string[]> {
+export async function getListsContainingPost(
+    userId: string,
+    postId: string
+): Promise<string[]> {
     try {
         const listsQuery = query(
             collection(db, 'lists'),
@@ -129,7 +154,7 @@ export async function getListsContainingPost(userId: string, postId: string): Pr
         )
 
         const snapshot = await getDocs(listsQuery)
-        return snapshot.docs.map(doc => doc.id)
+        return snapshot.docs.map((doc) => doc.id)
     } catch (error) {
         console.error('Error getting lists containing post:', error)
         return []

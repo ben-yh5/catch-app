@@ -57,7 +57,9 @@ export default function UnifiedPreviewScreen({
 }: UnifiedPreviewScreenProps) {
     const [caption, setCaption] = useState('')
     const [showListSelection, setShowListSelection] = useState(false)
-    const [selectedListIds, setSelectedListIds] = useState<Set<string>>(new Set())
+    const [selectedListIds, setSelectedListIds] = useState<Set<string>>(
+        new Set()
+    )
     const [nudgeDismissed, setNudgeDismissed] = useState(false)
     const insets = useSafeAreaInsets()
 
@@ -103,21 +105,17 @@ export default function UnifiedPreviewScreen({
                     showBackButton={true}
                     onBackPress={onCancel}
                     headerBadgeText={isPost ? 'New Post' : 'New Catch'}
-
                     // Image
                     images={[imageUri]}
                     comparisonMode={isCatch && !!originalPhotoUrl}
                     originalImageUrl={originalPhotoUrl}
-
                     // Footer
                     captionInputMode={true}
                     captionPlaceholder="Add a caption (optional)..."
                     onCaptionChange={setCaption}
                     date={today}
-
                     // Progress bar - hide for single item preview
                     showProgressBar={false}
-
                     // Action button
                     actionButtonText={buttonText}
                     actionButtonIcon={isPost ? 'arrow-up' : 'camera'}
@@ -125,7 +123,6 @@ export default function UnifiedPreviewScreen({
                     actionButtonDisabled={buttonDisabled}
                     actionButtonLoading={buttonLoading}
                     actionButtonLoadingText={buttonLoadingText}
-
                     // List Selection
                     onAddToListPress={() => setShowListSelection(true)}
                     selectedListCount={selectedListIds.size}
@@ -133,7 +130,12 @@ export default function UnifiedPreviewScreen({
             </ScrollView>
 
             {isPost && similarPost && !nudgeDismissed && onCatchInstead && (
-                <View style={[styles.nudgeOverlay, { bottom: insets.bottom + 10 }]}>
+                <View
+                    style={[
+                        styles.nudgeOverlay,
+                        { bottom: insets.bottom + 10 },
+                    ]}
+                >
                     <NudgeCard
                         post={similarPost}
                         onCatchInstead={onCatchInstead}

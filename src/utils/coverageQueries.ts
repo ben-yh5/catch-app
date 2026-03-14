@@ -1,5 +1,12 @@
 import { geohashQueryBounds, distanceBetween } from 'geofire-common'
-import { collection, getDocs, getDoc, doc, query, where } from 'firebase/firestore'
+import {
+    collection,
+    getDocs,
+    getDoc,
+    doc,
+    query,
+    where,
+} from 'firebase/firestore'
 import { db } from '@/services/firebase'
 import { MapBounds } from './geospatialQueries'
 
@@ -27,10 +34,14 @@ const BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz'
  * Decode a geohash string into its bounding box.
  * Returns [minLat, minLon, maxLat, maxLon].
  */
-export function decodeGeohashBBox(geohash: string): [number, number, number, number] {
+export function decodeGeohashBBox(
+    geohash: string
+): [number, number, number, number] {
     let isLon = true
-    let latMin = -90, latMax = 90
-    let lonMin = -180, lonMax = 180
+    let latMin = -90,
+        latMax = 90
+    let lonMin = -180,
+        lonMax = 180
 
     for (const char of geohash) {
         const idx = BASE32.indexOf(char)
@@ -56,7 +67,10 @@ export function decodeGeohashBBox(geohash: string): [number, number, number, num
 // --- Caching ---
 
 const COVERAGE_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
-const coverageCache = new Map<string, { data: CoverageCell[]; timestamp: number }>()
+const coverageCache = new Map<
+    string,
+    { data: CoverageCell[]; timestamp: number }
+>()
 
 function getCoverageCacheKey(bounds: MapBounds, precision: number): string {
     return `cov:${precision}:${bounds.north.toFixed(2)},${bounds.south.toFixed(2)},${bounds.east.toFixed(2)},${bounds.west.toFixed(2)}`
@@ -84,10 +98,9 @@ export async function getGlobalCoverage(
     const centerLng = (bounds.east + bounds.west) / 2
 
     // Calculate radius from center to corner in meters
-    const radiusM = distanceBetween(
-        [centerLat, centerLng],
-        [bounds.north, bounds.east]
-    ) * 1000
+    const radiusM =
+        distanceBetween([centerLat, centerLng], [bounds.north, bounds.east]) *
+        1000
 
     // Get geohash bounds covering the viewport
     const ghBounds = geohashQueryBounds([centerLat, centerLng], radiusM)
@@ -110,23 +123,29 @@ export async function getGlobalCoverage(
 
     // Execute range queries in parallel
     const queryPromises = truncatedBounds.map(([start, end]) =>
-        getDocs(query(
-            cellsRef,
-            where('precision', '==', precision),
-            where('geohash', '>=', start),
-            where('geohash', '<=', end)
-        ))
+        getDocs(
+            query(
+                cellsRef,
+                where('precision', '==', precision),
+                where('geohash', '>=', start),
+                where('geohash', '<=', end)
+            )
+        )
     )
     const snapshots = await Promise.all(queryPromises)
 
     for (const snapshot of snapshots) {
-        snapshot.forEach(docSnap => {
+        snapshot.forEach((docSnap) => {
             const data = docSnap.data()
             if (data.postCount > 0) {
                 const bbox = decodeGeohashBBox(data.geohash)
                 // Filter to viewport bounds
-                if (bbox[2] >= bounds.south && bbox[0] <= bounds.north &&
-                    bbox[3] >= bounds.west && bbox[1] <= bounds.east) {
+                if (
+                    bbox[2] >= bounds.south &&
+                    bbox[0] <= bounds.north &&
+                    bbox[3] >= bounds.west &&
+                    bbox[1] <= bounds.east
+                ) {
                     results.push({
                         geohash: data.geohash,
                         precision: data.precision,
@@ -140,7 +159,7 @@ export async function getGlobalCoverage(
 
     // Deduplicate (ranges can overlap)
     const uniqueResults = Array.from(
-        new Map(results.map(c => [c.geohash, c])).values()
+        new Map(results.map((c) => [c.geohash, c])).values()
     )
 
     coverageCache.set(cacheKey, { data: uniqueResults, timestamp: Date.now() })
@@ -167,7 +186,10 @@ export async function getUserCoverage(userId: string): Promise<UserCoverage> {
 
     const docSnap = await getDoc(doc(db, 'user_coverage', userId))
     const coverage: UserCoverage = docSnap.exists()
-        ? { cells5: docSnap.data().cells5 || [], cells6: docSnap.data().cells6 || [] }
+        ? {
+              cells5: docSnap.data().cells5 || [],
+              cells6: docSnap.data().cells6 || [],
+          }
         : { cells5: [], cells6: [] }
 
     userCoverageCache = { data: coverage, userId }
@@ -180,25 +202,31 @@ export function invalidateUserCoverageCache(): void {
 
 // --- GeoJSON Conversion ---
 
-function cellBBoxToPolygon(bbox: [number, number, number, number]): number[][][] {
+function cellBBoxToPolygon(
+    bbox: [number, number, number, number]
+): number[][][] {
     const [minLat, minLon, maxLat, maxLon] = bbox
     // GeoJSON coordinates are [lon, lat]
-    return [[
-        [minLon, minLat],
-        [maxLon, minLat],
-        [maxLon, maxLat],
-        [minLon, maxLat],
-        [minLon, minLat], // close ring
-    ]]
+    return [
+        [
+            [minLon, minLat],
+            [maxLon, minLat],
+            [maxLon, maxLat],
+            [minLon, maxLat],
+            [minLon, minLat], // close ring
+        ],
+    ]
 }
 
 /**
  * Convert global coverage cells to GeoJSON FeatureCollection.
  */
-export function coverageCellsToGeoJSON(cells: CoverageCell[]): GeoJSON.FeatureCollection {
+export function coverageCellsToGeoJSON(
+    cells: CoverageCell[]
+): GeoJSON.FeatureCollection {
     return {
         type: 'FeatureCollection',
-        features: cells.map(cell => ({
+        features: cells.map((cell) => ({
             type: 'Feature' as const,
             properties: {
                 geohash: cell.geohash,
@@ -224,12 +252,16 @@ export function userCoverageToGeoJSON(
     const cells = precision === 5 ? coverage.cells5 : coverage.cells6
 
     const features = cells
-        .map(geohash => {
+        .map((geohash) => {
             const bbox = decodeGeohashBBox(geohash)
             // Filter to viewport if provided
             if (bounds) {
-                if (bbox[2] < bounds.south || bbox[0] > bounds.north ||
-                    bbox[3] < bounds.west || bbox[1] > bounds.east) {
+                if (
+                    bbox[2] < bounds.south ||
+                    bbox[0] > bounds.north ||
+                    bbox[3] < bounds.west ||
+                    bbox[1] > bounds.east
+                ) {
                     return null
                 }
             }

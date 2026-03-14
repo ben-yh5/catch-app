@@ -35,7 +35,10 @@ export interface AreaQueryOptions {
 
 // Cache for viewport queries (5 minutes)
 const CACHE_DURATION = 5 * 60 * 1000
-const cache = new Map<string, { data: EnrichedPostLocation[]; timestamp: number }>()
+const cache = new Map<
+    string,
+    { data: EnrichedPostLocation[]; timestamp: number }
+>()
 
 function getCacheKey(bounds: MapBounds, options?: AreaQueryOptions): string {
     // Round to 3 decimal places (~100m precision) for cache key
@@ -69,26 +72,32 @@ export async function getPostsInViewport(
         // Calculate radius (distance from center to corner)
         // We use the simpler radius query which is known to be stable
         const radiusInMeters = calculateDistance(
-            centerLat, centerLng,
-            bounds.north, bounds.east
+            centerLat,
+            centerLng,
+            bounds.north,
+            bounds.east
         )
 
         // Add a small buffer to radius to ensure we cover the corners
         const bufferRadius = radiusInMeters * 1.1
 
-        const results = await getPostsInRadius({
-            centerLat,
-            centerLng,
-            radiusInMeters: bufferRadius
-        }, options)
+        const results = await getPostsInRadius(
+            {
+                centerLat,
+                centerLng,
+                radiusInMeters: bufferRadius,
+            },
+            options
+        )
 
         // Optional: Filter results to strictly match the rectangular bounds
         // This removes points that are in the circle but outside the rectangle
-        const filteredResults = results.filter(loc =>
-            loc.latitude <= bounds.north &&
-            loc.latitude >= bounds.south &&
-            loc.longitude <= bounds.east &&
-            loc.longitude >= bounds.west
+        const filteredResults = results.filter(
+            (loc) =>
+                loc.latitude <= bounds.north &&
+                loc.latitude >= bounds.south &&
+                loc.longitude <= bounds.east &&
+                loc.longitude >= bounds.west
         )
 
         // Cache the result
@@ -100,7 +109,9 @@ export async function getPostsInViewport(
         // Clean old cache entries
         if (cache.size > 50) {
             const entries = Array.from(cache.entries())
-            const sorted = entries.sort((a, b) => a[1].timestamp - b[1].timestamp)
+            const sorted = entries.sort(
+                (a, b) => a[1].timestamp - b[1].timestamp
+            )
             const toDelete = sorted.slice(0, 25) // Remove oldest 25
             toDelete.forEach(([key]) => cache.delete(key))
         }
@@ -155,7 +166,9 @@ export function calculateDistance(
 /**
  * Get locations for specific posts by ID
  */
-export async function getPostLocations(postIds: string[]): Promise<PostLocation[]> {
+export async function getPostLocations(
+    postIds: string[]
+): Promise<PostLocation[]> {
     try {
         const getPostLocationsFn = httpsCallable<
             { postIds: string[] },

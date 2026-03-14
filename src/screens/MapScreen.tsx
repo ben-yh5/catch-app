@@ -9,11 +9,23 @@ import { usePost } from '@/context/PostContext'
 import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post, SearchPost } from '@/types'
-import { getPostsInViewport as fetchViewportPosts, getPostLocations, MapBounds } from '@/utils/geospatialQueries'
+import {
+    getPostsInViewport as fetchViewportPosts,
+    getPostLocations,
+    MapBounds,
+} from '@/utils/geospatialQueries'
 import { getPostBountyStatus } from '@/utils/postClassification'
 import { useCoverage, CoverageMode } from '@/hooks/useCoverage'
 import { Ionicons } from '@expo/vector-icons'
-import Mapbox, { Camera, CircleLayer, FillLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
+import Mapbox, {
+    Camera,
+    CircleLayer,
+    FillLayer,
+    LocationPuck,
+    MapView,
+    ShapeSource,
+    SymbolLayer,
+} from '@rnmapbox/maps'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { doc, getDoc } from 'firebase/firestore'
@@ -35,12 +47,12 @@ Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '')
 
 // Map marker colors (using theme colors)
 const MAP_COLORS = {
-    userLocation: colors.white,         // White - user's location puck
-    pin: colors.pinDefault,             // Blue - uncaught posts
-    pinCaught: colors.pinCaught,        // Pink - caught by user
-    selectedPin: colors.pinSelected,    // Light pink - currently selected
-    pinBounty: colors.pinBounty,        // Gold - bounty posts
-    pinTrending: colors.pinTrending,    // Silver - trending posts
+    userLocation: colors.white, // White - user's location puck
+    pin: colors.pinDefault, // Blue - uncaught posts
+    pinCaught: colors.pinCaught, // Pink - caught by user
+    selectedPin: colors.pinSelected, // Light pink - currently selected
+    pinBounty: colors.pinBounty, // Gold - bounty posts
+    pinTrending: colors.pinTrending, // Silver - trending posts
     stroke: colors.white,
 }
 
@@ -58,9 +70,11 @@ export default function MapScreen() {
     const [visiblePosts, setVisiblePosts] = useState<Post[]>([])
     const [loadingPosts, setLoadingPosts] = useState(false)
     const [activeFilter, setActiveFilter] = useState<FilterType>('trending')
-    const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null)
+    const [userLocation, setUserLocation] =
+        useState<Location.LocationObject | null>(null)
     const [locationLoading, setLocationLoading] = useState(true)
-    const [initialLocation, setInitialLocation] = useState<Location.LocationObject | null>(null)
+    const [initialLocation, setInitialLocation] =
+        useState<Location.LocationObject | null>(null)
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
     const { cachePosts, caughtThreadIds } = usePost()
     const lastFetchRef = useRef<number>(0)
@@ -71,17 +85,17 @@ export default function MapScreen() {
     const FILTER_DEBOUNCE = 600 // reduced to 600ms for snappier feel
 
     // List Focus Mode State
-    const { listId, postId, filter, panToUser, searchQuery } = useLocalSearchParams<{
-        listId: string;
-        postId: string;
-        filter: string;
-        panToUser: string;
-        searchQuery: string;
-    }>()
+    const { listId, postId, filter, panToUser, searchQuery } =
+        useLocalSearchParams<{
+            listId: string
+            postId: string
+            filter: string
+            panToUser: string
+            searchQuery: string
+        }>()
     const [activeList, setActiveList] = useState<any | null>(null)
     const [, setListPosts] = useState<Post[]>([])
     const [isListMode, setIsListMode] = useState(false)
-
 
     // Thread modal state
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
@@ -103,137 +117,167 @@ export default function MapScreen() {
         currentZoom,
         coverageMode
     )
-    const showCoverage = coverageMode !== 'off' && coverageGeoJSON && coveragePrecision !== null
+    const showCoverage =
+        coverageMode !== 'off' && coverageGeoJSON && coveragePrecision !== null
 
     // Wrap fetchListDetails in useCallback
-    const fetchListDetails = useCallback(async (id: string) => {
-        try {
-            setLoadingPosts(true)
-            const listDoc = await getDoc(doc(db, 'lists', id))
-            if (listDoc.exists()) {
-                const listData = listDoc.data()
-                setActiveList({ id: listDoc.id, ...listData })
-                setIsListMode(true)
+    const fetchListDetails = useCallback(
+        async (id: string) => {
+            try {
+                setLoadingPosts(true)
+                const listDoc = await getDoc(doc(db, 'lists', id))
+                if (listDoc.exists()) {
+                    const listData = listDoc.data()
+                    setActiveList({ id: listDoc.id, ...listData })
+                    setIsListMode(true)
 
-                // Fetch posts for the list
-                if (listData.postIds && listData.postIds.length > 0) {
-                    const postIds = listData.postIds
+                    // Fetch posts for the list
+                    if (listData.postIds && listData.postIds.length > 0) {
+                        const postIds = listData.postIds
 
-                    // Fetch post documents and locations in parallel
-                    const [postDocs, locations] = await Promise.all([
-                        Promise.all(postIds.map((postId: string) => getDoc(doc(db, 'posts', postId)))),
-                        getPostLocations(postIds)
-                    ])
+                        // Fetch post documents and locations in parallel
+                        const [postDocs, locations] = await Promise.all([
+                            Promise.all(
+                                postIds.map((postId: string) =>
+                                    getDoc(doc(db, 'posts', postId))
+                                )
+                            ),
+                            getPostLocations(postIds),
+                        ])
 
-                    const posts = postDocs
-                        .filter((docSnap) => docSnap.exists())
-                        .map((docSnap) => {
-                            const data = docSnap.data()
-                            const location = locations.find(loc => loc.postId === docSnap.id)
+                        const posts = postDocs
+                            .filter((docSnap) => docSnap.exists())
+                            .map((docSnap) => {
+                                const data = docSnap.data()
+                                const location = locations.find(
+                                    (loc) => loc.postId === docSnap.id
+                                )
 
-                            return {
-                                id: docSnap.id,
-                                ...data,
-                                latitude: location?.latitude,
-                                longitude: location?.longitude,
-                            } as Post
-                        })
+                                return {
+                                    id: docSnap.id,
+                                    ...data,
+                                    latitude: location?.latitude,
+                                    longitude: location?.longitude,
+                                } as Post
+                            })
 
-                    console.log(`[ListMode] Loaded ${posts.length} posts for list ${listData.name}`)
-                    const postsWithLocation = posts.filter(p => p.latitude && p.longitude)
-                    console.log(`[ListMode] Posts with valid location: ${postsWithLocation.length}`)
+                        console.log(
+                            `[ListMode] Loaded ${posts.length} posts for list ${listData.name}`
+                        )
+                        const postsWithLocation = posts.filter(
+                            (p) => p.latitude && p.longitude
+                        )
+                        console.log(
+                            `[ListMode] Posts with valid location: ${postsWithLocation.length}`
+                        )
 
-                    setListPosts(posts)
-                    setVisiblePosts(posts) // Show only list posts on map
+                        setListPosts(posts)
+                        setVisiblePosts(posts) // Show only list posts on map
 
-                    // Fit bounds to show all posts
-                    if (posts.length > 0 && mapRef.current && cameraRef.current) {
-                        const coordinates = posts
-                            .filter(p => p.longitude && p.latitude)
-                            .map(p => [p.longitude!, p.latitude!])
+                        // Fit bounds to show all posts
+                        if (
+                            posts.length > 0 &&
+                            mapRef.current &&
+                            cameraRef.current
+                        ) {
+                            const coordinates = posts
+                                .filter((p) => p.longitude && p.latitude)
+                                .map((p) => [p.longitude!, p.latitude!])
 
-                        if (coordinates.length > 0) {
-                            const firstPost = posts[0]
-                            if (firstPost.latitude && firstPost.longitude) {
-                                const panToList = () => {
-                                    cameraRef.current?.setCamera({
-                                        centerCoordinate: [firstPost.longitude!, firstPost.latitude!],
-                                        zoomLevel: 10,
-                                        animationDuration: 1000,
-                                    })
-                                }
-                                if (isMapReadyRef.current) {
-                                    panToList()
-                                } else {
-                                    pendingCameraActionRef.current = panToList
+                            if (coordinates.length > 0) {
+                                const firstPost = posts[0]
+                                if (firstPost.latitude && firstPost.longitude) {
+                                    const panToList = () => {
+                                        cameraRef.current?.setCamera({
+                                            centerCoordinate: [
+                                                firstPost.longitude!,
+                                                firstPost.latitude!,
+                                            ],
+                                            zoomLevel: 10,
+                                            animationDuration: 1000,
+                                        })
+                                    }
+                                    if (isMapReadyRef.current) {
+                                        panToList()
+                                    } else {
+                                        pendingCameraActionRef.current =
+                                            panToList
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            } catch (error) {
+                console.error('Error fetching list details:', error)
+                showToast('error', 'Failed to load list details')
+            } finally {
+                setLoadingPosts(false)
             }
-        } catch (error) {
-            console.error('Error fetching list details:', error)
-            showToast('error', 'Failed to load list details')
-        } finally {
-            setLoadingPosts(false)
-        }
-    }, [showToast])
+        },
+        [showToast]
+    )
 
     // Wrap fetchPostForLocate in useCallback
-    const fetchPostForLocate = useCallback(async (id: string) => {
-        try {
-            setLoadingPosts(true)
-            // Fetch the post
-            const postDoc = await getDoc(doc(db, 'posts', id))
-            if (postDoc.exists()) {
-                const postData = postDoc.data()
+    const fetchPostForLocate = useCallback(
+        async (id: string) => {
+            try {
+                setLoadingPosts(true)
+                // Fetch the post
+                const postDoc = await getDoc(doc(db, 'posts', id))
+                if (postDoc.exists()) {
+                    const postData = postDoc.data()
 
-                // Fetch location via cloud function
-                const locations = await getPostLocations([id])
-                const location = locations.find(loc => loc.postId === id)
+                    // Fetch location via cloud function
+                    const locations = await getPostLocations([id])
+                    const location = locations.find((loc) => loc.postId === id)
 
-                const post = {
-                    id: postDoc.id,
-                    ...postData,
-                    latitude: location?.latitude,
-                    longitude: location?.longitude,
-                } as Post
+                    const post = {
+                        id: postDoc.id,
+                        ...postData,
+                        latitude: location?.latitude,
+                        longitude: location?.longitude,
+                    } as Post
 
-                // Set up "fake" list mode
-                setActiveList({
-                    id: 'single-post-view',
-                    name: 'Post Location',
-                    creatorId: 'system',
-                    postIds: [id]
-                })
-                setIsListMode(true)
-                setListPosts([post])
-                setVisiblePosts([post])
+                    // Set up "fake" list mode
+                    setActiveList({
+                        id: 'single-post-view',
+                        name: 'Post Location',
+                        creatorId: 'system',
+                        postIds: [id],
+                    })
+                    setIsListMode(true)
+                    setListPosts([post])
+                    setVisiblePosts([post])
 
-                // Focus camera
-                if (post.latitude && post.longitude) {
-                    const panToPost = () => {
-                        cameraRef.current?.setCamera({
-                            centerCoordinate: [post.longitude!, post.latitude!],
-                            zoomLevel: 16,
-                            animationDuration: 1000,
-                        })
-                    }
-                    if (isMapReadyRef.current) {
-                        panToPost()
-                    } else {
-                        pendingCameraActionRef.current = panToPost
+                    // Focus camera
+                    if (post.latitude && post.longitude) {
+                        const panToPost = () => {
+                            cameraRef.current?.setCamera({
+                                centerCoordinate: [
+                                    post.longitude!,
+                                    post.latitude!,
+                                ],
+                                zoomLevel: 16,
+                                animationDuration: 1000,
+                            })
+                        }
+                        if (isMapReadyRef.current) {
+                            panToPost()
+                        } else {
+                            pendingCameraActionRef.current = panToPost
+                        }
                     }
                 }
+            } catch (error) {
+                console.error('Error fetching post for locate:', error)
+                showToast('error', 'Failed to locate post')
+            } finally {
+                setLoadingPosts(false)
             }
-        } catch (error) {
-            console.error('Error fetching post for locate:', error)
-            showToast('error', 'Failed to locate post')
-        } finally {
-            setLoadingPosts(false)
-        }
-    }, [showToast])
+        },
+        [showToast]
+    )
 
     // Wrap handleListClose in useCallback
     const handleListClose = useCallback(() => {
@@ -246,7 +290,10 @@ export default function MapScreen() {
     const centerOnUserLocation = useCallback(() => {
         if (userLocation && cameraRef.current) {
             cameraRef.current.setCamera({
-                centerCoordinate: [userLocation.coords.longitude, userLocation.coords.latitude],
+                centerCoordinate: [
+                    userLocation.coords.longitude,
+                    userLocation.coords.latitude,
+                ],
                 zoomLevel: 14,
                 animationDuration: 1000,
             })
@@ -254,86 +301,98 @@ export default function MapScreen() {
     }, [userLocation])
 
     // Search mode handlers
-    const handleSearch = useCallback(async (queryText: string) => {
-        isSearchModeRef.current = true
-        setIsSearchMode(true)
-        setSearchLoading(true)
-        setActiveSearchQuery(queryText)
-        setSearchPostResults([])
-
-        try {
-            const searchPostsFn = httpsCallable(functions, 'searchPosts')
-            const result = await searchPostsFn({
-                query: queryText,
-                ...(userLocation ? {
-                    location: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
-                } : {}),
-            })
-            const { posts } = result.data as { posts: SearchPost[] }
-
-            // Convert SearchPost[] → Post[] for map pins and bottom sheet
-            const converted: Post[] = posts
-                .filter(sp => sp.latitude && sp.longitude)
-                .map(sp => ({
-                    id: sp.postId,
-                    authorId: sp.authorId,
-                    authorUsername: sp.authorUsername,
-                    photoURL: sp.photoURL,
-                    caption: sp.caption,
-                    hasLocation: true,
-                    catchCount: sp.catchCount,
-                    parentPostId: null,
-                    rootPostId: null,
-                    isOriginal: sp.isOriginal,
-                    createdAt: sp.createdAt,
-                    thumbnailURL: sp.thumbnailURL ?? undefined,
-                    mediumURL: sp.mediumURL ?? undefined,
-                    isPioneer: sp.isPioneer,
-                    latitude: sp.latitude,
-                    longitude: sp.longitude,
-                } as Post))
-
-            setSearchPostResults(converted)
-            setVisiblePosts(converted)
-
-            // Fit camera to show all result pins
-            if (converted.length > 0 && cameraRef.current) {
-                const lats = converted.map(p => p.latitude!)
-                const lngs = converted.map(p => p.longitude!)
-
-                if (converted.length === 1) {
-                    cameraRef.current.setCamera({
-                        centerCoordinate: [lngs[0], lats[0]],
-                        zoomLevel: 14,
-                        animationDuration: 1000,
-                    })
-                } else {
-                    // Fit bounds for multiple pins
-                    const padding = 100
-                    cameraRef.current.fitBounds(
-                        [Math.min(...lngs), Math.min(...lats)],
-                        [Math.max(...lngs), Math.max(...lats)],
-                        padding,
-                        1000
-                    )
-                }
-            }
-
+    const handleSearch = useCallback(
+        async (queryText: string) => {
             isSearchModeRef.current = true
-        } catch (error) {
-            console.error('Error searching posts:', error)
-            showToast('error', 'Search failed')
-            isSearchModeRef.current = false
-        } finally {
-            setSearchLoading(false)
-        }
-    }, [userLocation, showToast])
+            setIsSearchMode(true)
+            setSearchLoading(true)
+            setActiveSearchQuery(queryText)
+            setSearchPostResults([])
+
+            try {
+                const searchPostsFn = httpsCallable(functions, 'searchPosts')
+                const result = await searchPostsFn({
+                    query: queryText,
+                    ...(userLocation
+                        ? {
+                              location: {
+                                  lat: userLocation.coords.latitude,
+                                  lng: userLocation.coords.longitude,
+                              },
+                          }
+                        : {}),
+                })
+                const { posts } = result.data as { posts: SearchPost[] }
+
+                // Convert SearchPost[] → Post[] for map pins and bottom sheet
+                const converted: Post[] = posts
+                    .filter((sp) => sp.latitude && sp.longitude)
+                    .map(
+                        (sp) =>
+                            ({
+                                id: sp.postId,
+                                authorId: sp.authorId,
+                                authorUsername: sp.authorUsername,
+                                photoURL: sp.photoURL,
+                                caption: sp.caption,
+                                hasLocation: true,
+                                catchCount: sp.catchCount,
+                                parentPostId: null,
+                                rootPostId: null,
+                                isOriginal: sp.isOriginal,
+                                createdAt: sp.createdAt,
+                                thumbnailURL: sp.thumbnailURL ?? undefined,
+                                mediumURL: sp.mediumURL ?? undefined,
+                                isPioneer: sp.isPioneer,
+                                latitude: sp.latitude,
+                                longitude: sp.longitude,
+                            }) as Post
+                    )
+
+                setSearchPostResults(converted)
+                setVisiblePosts(converted)
+
+                // Fit camera to show all result pins
+                if (converted.length > 0 && cameraRef.current) {
+                    const lats = converted.map((p) => p.latitude!)
+                    const lngs = converted.map((p) => p.longitude!)
+
+                    if (converted.length === 1) {
+                        cameraRef.current.setCamera({
+                            centerCoordinate: [lngs[0], lats[0]],
+                            zoomLevel: 14,
+                            animationDuration: 1000,
+                        })
+                    } else {
+                        // Fit bounds for multiple pins
+                        const padding = 100
+                        cameraRef.current.fitBounds(
+                            [Math.min(...lngs), Math.min(...lats)],
+                            [Math.max(...lngs), Math.max(...lats)],
+                            padding,
+                            1000
+                        )
+                    }
+                }
+
+                isSearchModeRef.current = true
+            } catch (error) {
+                console.error('Error searching posts:', error)
+                showToast('error', 'Search failed')
+                isSearchModeRef.current = false
+            } finally {
+                setSearchLoading(false)
+            }
+        },
+        [userLocation, showToast]
+    )
 
     // Get user's current location
     useEffect(() => {
-        ; (async () => {
+        ;(async () => {
             try {
-                const { status } = await Location.requestForegroundPermissionsAsync()
+                const { status } =
+                    await Location.requestForegroundPermissionsAsync()
                 if (status !== 'granted') {
                     Alert.alert(
                         'Location Required',
@@ -406,32 +465,47 @@ export default function MapScreen() {
             // setViewMode('map')
         }
 
-        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-            if (isListMode) {
-                handleListClose()
-                return true
+        const backHandler = BackHandler.addEventListener(
+            'hardwareBackPress',
+            () => {
+                if (isListMode) {
+                    handleListClose()
+                    return true
+                }
+                return false
             }
-            return false
-        })
+        )
 
         return () => backHandler.remove()
-    }, [listId, postId, isListMode, fetchListDetails, fetchPostForLocate, handleListClose])
+    }, [
+        listId,
+        postId,
+        isListMode,
+        fetchListDetails,
+        fetchPostForLocate,
+        handleListClose,
+    ])
 
     // Apply sorting based on active filter
-    const applySorting = useCallback((posts: Post[], filter: FilterType): Post[] => {
-        switch (filter) {
-            case 'trending':
-                return [...posts].sort((a, b) => b.catchCount - a.catchCount)
-            case 'new':
-                return [...posts].sort((a, b) => {
-                    const aTime = a.createdAt?.toMillis?.() || 0
-                    const bTime = b.createdAt?.toMillis?.() || 0
-                    return bTime - aTime
-                })
-            default:
-                return posts
-        }
-    }, [])
+    const applySorting = useCallback(
+        (posts: Post[], filter: FilterType): Post[] => {
+            switch (filter) {
+                case 'trending':
+                    return [...posts].sort(
+                        (a, b) => b.catchCount - a.catchCount
+                    )
+                case 'new':
+                    return [...posts].sort((a, b) => {
+                        const aTime = a.createdAt?.toMillis?.() || 0
+                        const bTime = b.createdAt?.toMillis?.() || 0
+                        return bTime - aTime
+                    })
+                default:
+                    return posts
+            }
+        },
+        []
+    )
 
     // Fetch posts in current viewport
     const loadVisiblePosts = useCallback(async () => {
@@ -471,7 +545,7 @@ export default function MapScreen() {
                 north: Math.max(lat1, lat2),
                 south: Math.min(lat1, lat2),
                 east: Math.max(lng1, lng2),
-                west: Math.min(lng1, lng2)
+                west: Math.min(lng1, lng2),
             }
 
             // Single enriched call: locations + summaries, pre-filtered to originals
@@ -482,23 +556,25 @@ export default function MapScreen() {
 
             // Convert enriched locations to Post objects for existing rendering code
             const posts: Post[] = enrichedLocations
-                .filter(loc => loc.summary)
-                .map(loc => ({
-                    ...loc.summary!,
-                    id: loc.postId,
-                    latitude: loc.latitude,
-                    longitude: loc.longitude,
-                    hasLocation: true,
-                    parentPostId: null,
-                    rootPostId: null,
-                } as Post))
+                .filter((loc) => loc.summary)
+                .map(
+                    (loc) =>
+                        ({
+                            ...loc.summary!,
+                            id: loc.postId,
+                            latitude: loc.latitude,
+                            longitude: loc.longitude,
+                            hasLocation: true,
+                            parentPostId: null,
+                            rootPostId: null,
+                        }) as Post
+                )
 
             // Cache posts so ThreadModal can use them without re-fetching
             cachePosts(posts)
 
             const sortedPosts = applySorting(posts, activeFilter)
             setVisiblePosts(sortedPosts)
-
         } catch (error) {
             console.error('Error fetching posts in viewport:', error)
             // Don't alert on auto-fetch error to avoid annoyance
@@ -509,7 +585,7 @@ export default function MapScreen() {
 
     // Coverage toggle
     const cycleCoverageMode = useCallback(() => {
-        setCoverageMode(prev => {
+        setCoverageMode((prev) => {
             if (prev === 'off') return 'global'
             if (prev === 'global') return 'personal'
             return 'off'
@@ -517,42 +593,47 @@ export default function MapScreen() {
     }, [])
 
     // Handle map movement - Auto Fetch with Debounce
-    const handleCameraChanged = useCallback(async (state: any) => {
-        if (isSearchModeRef.current) return
-        if (!isMapReadyRef.current) return
+    const handleCameraChanged = useCallback(
+        async (state: any) => {
+            if (isSearchModeRef.current) return
+            if (!isMapReadyRef.current) return
 
-        // Track zoom level for coverage precision switching
-        const zoom = state.properties?.zoom
-        if (zoom !== undefined) {
-            setCurrentZoom(zoom)
-        }
+            // Track zoom level for coverage precision switching
+            const zoom = state.properties?.zoom
+            if (zoom !== undefined) {
+                setCurrentZoom(zoom)
+            }
 
-        // Only fetch if idle (interaction ended)
-        if (!state.gestures.isGestureActive) {
-            if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
-            fetchTimeoutRef.current = setTimeout(async () => {
-                // Update bounds for coverage queries
-                if (mapRef.current) {
-                    try {
-                        const visibleBounds = await mapRef.current.getVisibleBounds()
-                        if (visibleBounds && visibleBounds.length === 2) {
-                            const ne = visibleBounds[0]
-                            const sw = visibleBounds[1]
-                            setCurrentBounds({
-                                north: Math.max(ne[1], sw[1]),
-                                south: Math.min(ne[1], sw[1]),
-                                east: Math.max(ne[0], sw[0]),
-                                west: Math.min(ne[0], sw[0]),
-                            })
+            // Only fetch if idle (interaction ended)
+            if (!state.gestures.isGestureActive) {
+                if (fetchTimeoutRef.current)
+                    clearTimeout(fetchTimeoutRef.current)
+                fetchTimeoutRef.current = setTimeout(async () => {
+                    // Update bounds for coverage queries
+                    if (mapRef.current) {
+                        try {
+                            const visibleBounds =
+                                await mapRef.current.getVisibleBounds()
+                            if (visibleBounds && visibleBounds.length === 2) {
+                                const ne = visibleBounds[0]
+                                const sw = visibleBounds[1]
+                                setCurrentBounds({
+                                    north: Math.max(ne[1], sw[1]),
+                                    south: Math.min(ne[1], sw[1]),
+                                    east: Math.max(ne[0], sw[0]),
+                                    west: Math.min(ne[0], sw[0]),
+                                })
+                            }
+                        } catch {
+                            // getVisibleBounds can fail during rapid map interactions
                         }
-                    } catch {
-                        // getVisibleBounds can fail during rapid map interactions
                     }
-                }
-                loadVisiblePosts()
-            }, FILTER_DEBOUNCE)
-        }
-    }, [loadVisiblePosts])
+                    loadVisiblePosts()
+                }, FILTER_DEBOUNCE)
+            }
+        },
+        [loadVisiblePosts]
+    )
 
     // onDidFinishLoadingMap callback
     const handleMapReady = useCallback(() => {
@@ -604,8 +685,6 @@ export default function MapScreen() {
         }
     }
 
-
-
     // Convert posts to GeoJSON for Mapbox
     const getGeoJSONData = () => {
         const features = sortedVisiblePosts
@@ -653,7 +732,9 @@ export default function MapScreen() {
     }
 
     const handlePostUpdate = (updatedPost: Post) => {
-        setVisiblePosts((prev) => prev.map((p) => (p.id === updatedPost.id ? updatedPost : p)))
+        setVisiblePosts((prev) =>
+            prev.map((p) => (p.id === updatedPost.id ? updatedPost : p))
+        )
     }
 
     const handlePostDelete = (postId: string) => {
@@ -662,7 +743,6 @@ export default function MapScreen() {
         setSelectedPost(null)
         setSelectedPostId(null)
     }
-
 
     const mapStyle =
         colorScheme === 'dark'
@@ -679,13 +759,8 @@ export default function MapScreen() {
         loadVisiblePosts()
     }, [loadVisiblePosts, router])
 
-
-
-
     return (
         <View style={styles.container}>
-
-
             {/* Map HUD (Search + Filters) */}
             <MapHUD
                 onSearch={handleSearch}
@@ -700,8 +775,15 @@ export default function MapScreen() {
             {locationLoading ? (
                 <View style={styles.map}>
                     <View style={styles.locationLoadingOverlay}>
-                        <Skeleton width={200} height={200} borderRadius={100} style={{ opacity: 0.3 }} />
-                        <Text style={styles.loadingText}>Getting your location...</Text>
+                        <Skeleton
+                            width={200}
+                            height={200}
+                            borderRadius={100}
+                            style={{ opacity: 0.3 }}
+                        />
+                        <Text style={styles.loadingText}>
+                            Getting your location...
+                        </Text>
                     </View>
                 </View>
             ) : (
@@ -725,7 +807,10 @@ export default function MapScreen() {
                         zoomLevel={12}
                         centerCoordinate={
                             initialLocation
-                                ? [initialLocation.coords.longitude, initialLocation.coords.latitude]
+                                ? [
+                                      initialLocation.coords.longitude,
+                                      initialLocation.coords.latitude,
+                                  ]
                                 : [-122.4324, 37.78825]
                         }
                         animationMode="none"
@@ -743,22 +828,33 @@ export default function MapScreen() {
 
                     {/* Coverage layer - shown when zoomed out with coverage mode active */}
                     {showCoverage && (
-                        <ShapeSource id="coverage-source" shape={coverageGeoJSON!}>
+                        <ShapeSource
+                            id="coverage-source"
+                            shape={coverageGeoJSON!}
+                        >
                             <FillLayer
                                 id="coverage-fill"
                                 style={{
-                                    fillColor: coverageMode === 'personal'
-                                        ? 'rgba(207, 44, 246, 0.3)'
-                                        : [
-                                            'interpolate', ['linear'], ['get', 'postCount'],
-                                            1, 'rgba(0, 122, 255, 0.1)',
-                                            10, 'rgba(0, 122, 255, 0.25)',
-                                            50, 'rgba(0, 122, 255, 0.4)',
-                                            200, 'rgba(0, 122, 255, 0.55)',
-                                        ],
-                                    fillOutlineColor: coverageMode === 'personal'
-                                        ? 'rgba(207, 44, 246, 0.5)'
-                                        : 'rgba(0, 122, 255, 0.3)',
+                                    fillColor:
+                                        coverageMode === 'personal'
+                                            ? 'rgba(207, 44, 246, 0.3)'
+                                            : [
+                                                  'interpolate',
+                                                  ['linear'],
+                                                  ['get', 'postCount'],
+                                                  1,
+                                                  'rgba(0, 122, 255, 0.1)',
+                                                  10,
+                                                  'rgba(0, 122, 255, 0.25)',
+                                                  50,
+                                                  'rgba(0, 122, 255, 0.4)',
+                                                  200,
+                                                  'rgba(0, 122, 255, 0.55)',
+                                              ],
+                                    fillOutlineColor:
+                                        coverageMode === 'personal'
+                                            ? 'rgba(207, 44, 246, 0.5)'
+                                            : 'rgba(0, 122, 255, 0.3)',
                                 }}
                             />
                         </ShapeSource>
@@ -776,13 +872,16 @@ export default function MapScreen() {
 
                                 const isCluster = feature.properties?.cluster
                                 if (isCluster) {
-                                    const expansionZoom = await shapeSourceRef.current?.getClusterExpansionZoom(
-                                        feature
-                                    )
+                                    const expansionZoom =
+                                        await shapeSourceRef.current?.getClusterExpansionZoom(
+                                            feature
+                                        )
 
                                     if (expansionZoom && cameraRef.current) {
                                         cameraRef.current.setCamera({
-                                            centerCoordinate: (feature.geometry as any).coordinates,
+                                            centerCoordinate: (
+                                                feature.geometry as any
+                                            ).coordinates,
                                             zoomLevel: expansionZoom,
                                             animationDuration: 500,
                                         })
@@ -837,7 +936,12 @@ export default function MapScreen() {
                                         MAP_COLORS.pinTrending,
                                         MAP_COLORS.pin,
                                     ],
-                                    circleRadius: ['case', ['get', 'isSelected'], 12, 10],
+                                    circleRadius: [
+                                        'case',
+                                        ['get', 'isSelected'],
+                                        12,
+                                        10,
+                                    ],
                                     circleStrokeWidth: 3,
                                     circleStrokeColor: MAP_COLORS.stroke,
                                 }}
@@ -858,7 +962,11 @@ export default function MapScreen() {
                     accessibilityRole="button"
                     accessibilityHint="Pan the map to your current location"
                 >
-                    <Ionicons name="locate" size={24} color={colors.textPrimary} />
+                    <Ionicons
+                        name="locate"
+                        size={24}
+                        color={colors.textPrimary}
+                    />
                 </TouchableOpacity>
             )}
 
@@ -874,9 +982,13 @@ export default function MapScreen() {
                 <Ionicons
                     name={coverageMode === 'off' ? 'grid-outline' : 'grid'}
                     size={22}
-                    color={coverageMode === 'off'
-                        ? colors.textPrimary
-                        : coverageMode === 'global' ? colors.primary : colors.secondary}
+                    color={
+                        coverageMode === 'off'
+                            ? colors.textPrimary
+                            : coverageMode === 'global'
+                              ? colors.primary
+                              : colors.secondary
+                    }
                 />
             </TouchableOpacity>
             {coverageMode !== 'off' && (
@@ -887,17 +999,26 @@ export default function MapScreen() {
                 </View>
             )}
 
-
             {/* Bottom Sheet */}
             {!locationLoading && (
                 <MapBottomSheet
-                    posts={isSearchMode ? searchPostResults : sortedVisiblePosts}
+                    posts={
+                        isSearchMode ? searchPostResults : sortedVisiblePosts
+                    }
                     loading={isSearchMode ? searchLoading : loadingPosts}
                     onPostPress={handlePostPress}
                     onJumpToLocation={handleJumpToLocation}
                     selectedPostId={selectedPostId}
-                    title={isSearchMode ? `"${activeSearchQuery}"` : activeList?.name}
-                    subtitle={isSearchMode ? `${searchPostResults.length} result${searchPostResults.length !== 1 ? 's' : ''}` : undefined}
+                    title={
+                        isSearchMode
+                            ? `"${activeSearchQuery}"`
+                            : activeList?.name
+                    }
+                    subtitle={
+                        isSearchMode
+                            ? `${searchPostResults.length} result${searchPostResults.length !== 1 ? 's' : ''}`
+                            : undefined
+                    }
                     onClose={isSearchMode ? handleSearchClear : handleListClose}
                     isListMode={isListMode || isSearchMode}
                 />
@@ -911,9 +1032,7 @@ export default function MapScreen() {
                 onPostUpdate={handlePostUpdate}
                 onPostDelete={handlePostDelete}
             />
-
-
-        </View >
+        </View>
     )
 }
 

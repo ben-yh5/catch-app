@@ -48,7 +48,10 @@ interface ProfileViewProps {
 
 const POSTS_PER_PAGE = 20
 
-export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileViewProps) {
+export default function UnifiedProfileView({
+    userId,
+    isOwnProfile,
+}: ProfileViewProps) {
     const { user, updateStats } = useAuth()
     const { showToast } = useToast()
     const { updateLastFetch, isStale } = usePost()
@@ -83,11 +86,17 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     const [staleRefreshing, setStaleRefreshing] = useState(false)
     const [searchVisible, setSearchVisible] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
-    const [searchResults, setSearchResults] = useState<{ id: string; username: string }[]>([])
+    const [searchResults, setSearchResults] = useState<
+        { id: string; username: string }[]
+    >([])
     const [searchLoading, setSearchLoading] = useState(false)
     const [followListVisible, setFollowListVisible] = useState(false)
-    const [followListType, setFollowListType] = useState<'followers' | 'following'>('followers')
-    const [followList, setFollowList] = useState<{ id: string; username: string; isFollowing: boolean }[]>([])
+    const [followListType, setFollowListType] = useState<
+        'followers' | 'following'
+    >('followers')
+    const [followList, setFollowList] = useState<
+        { id: string; username: string; isFollowing: boolean }[]
+    >([])
     const [followListLoading, setFollowListLoading] = useState(false)
     const [reportVisible, setReportVisible] = useState(false)
     const flatListRef = React.useRef<FlatList>(null)
@@ -120,7 +129,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
 
                 // Check if current user is following this profile
                 if (!isOwnProfile && user) {
-                    setIsFollowing(userData.followers?.includes(user.uid) || false)
+                    setIsFollowing(
+                        userData.followers?.includes(user.uid) || false
+                    )
                 }
             }
 
@@ -193,32 +204,35 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     useEffect(() => {
         setLoading(true)
         fetchUserData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId])
 
     // Subscribe to post events for granular updates
-    usePostEvents((event: PostEvent) => {
-        // Only handle events relevant to this profile
-        if (event.action === 'create' && event.userId === userId) {
-            // New post created by this user - add to top of posts list without full refetch
-            if (isOwnProfile) {
-                setHasMorePosts(true)
-                setLastPostDoc(null)
-                fetchUserData()
+    usePostEvents(
+        (event: PostEvent) => {
+            // Only handle events relevant to this profile
+            if (event.action === 'create' && event.userId === userId) {
+                // New post created by this user - add to top of posts list without full refetch
+                if (isOwnProfile) {
+                    setHasMorePosts(true)
+                    setLastPostDoc(null)
+                    fetchUserData()
+                }
+            } else if (event.action === 'catch' && event.userId === userId) {
+                // User created a catch - update catches list
+                if (isOwnProfile && activeTab === 'catches') {
+                    setHasMoreCatches(true)
+                    setLastCatchDoc(null)
+                    fetchUserData()
+                }
+            } else if (event.action === 'delete' && event.postId) {
+                // Remove deleted post from local state without re-fetching
+                setPosts((prev) => prev.filter((p) => p.id !== event.postId))
+                setCatches((prev) => prev.filter((p) => p.id !== event.postId))
             }
-        } else if (event.action === 'catch' && event.userId === userId) {
-            // User created a catch - update catches list
-            if (isOwnProfile && activeTab === 'catches') {
-                setHasMoreCatches(true)
-                setLastCatchDoc(null)
-                fetchUserData()
-            }
-        } else if (event.action === 'delete' && event.postId) {
-            // Remove deleted post from local state without re-fetching
-            setPosts(prev => prev.filter(p => p.id !== event.postId))
-            setCatches(prev => prev.filter(p => p.id !== event.postId))
-        }
-    }, [userId, isOwnProfile, activeTab])
+        },
+        [userId, isOwnProfile, activeTab]
+    )
 
     // Check for staleness and show indicator (only for own profile)
     useEffect(() => {
@@ -237,21 +251,27 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     useEffect(() => {
         if (!isOwnProfile) return
 
-        const unsubscribe = navigation.addListener('tabPress' as any, (e: any) => {
-            if (isFocused) {
-                // Already on this tab, scroll to top and refresh
-                e.preventDefault()
-                flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
-                setHasMorePosts(true)
-                setHasMoreCatches(true)
-                setLastPostDoc(null)
-                setLastCatchDoc(null)
-                fetchUserData()
+        const unsubscribe = navigation.addListener(
+            'tabPress' as any,
+            (e: any) => {
+                if (isFocused) {
+                    // Already on this tab, scroll to top and refresh
+                    e.preventDefault()
+                    flatListRef.current?.scrollToOffset({
+                        offset: 0,
+                        animated: true,
+                    })
+                    setHasMorePosts(true)
+                    setHasMoreCatches(true)
+                    setLastPostDoc(null)
+                    setLastCatchDoc(null)
+                    fetchUserData()
+                }
             }
-        })
+        )
 
         return unsubscribe
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigation, isFocused, isOwnProfile])
 
     const onRefresh = useCallback(async () => {
@@ -262,7 +282,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         setLastCatchDoc(null)
         await fetchUserData()
         setRefreshing(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId])
 
     const loadMorePosts = async () => {
@@ -415,7 +435,10 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         setSearchQuery('')
         setSearchResults([])
         if (selectedUserId === user?.uid) return
-        router.push({ pathname: '/user-profile', params: { userId: selectedUserId } } as any)
+        router.push({
+            pathname: '/user-profile',
+            params: { userId: selectedUserId },
+        } as any)
     }
 
     const handleReport = () => {
@@ -438,9 +461,10 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             }
 
             const userData = userDoc.data()
-            const userIds = type === 'followers'
-                ? (userData.followers || [])
-                : (userData.following || [])
+            const userIds =
+                type === 'followers'
+                    ? userData.followers || []
+                    : userData.following || []
 
             if (userIds.length === 0) {
                 setFollowList([])
@@ -449,7 +473,11 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             }
 
             // Fetch user details for each ID
-            const users: { id: string; username: string; isFollowing: boolean }[] = []
+            const users: {
+                id: string
+                username: string
+                isFollowing: boolean
+            }[] = []
 
             for (const uid of userIds) {
                 const userDocRef = doc(db, 'users', uid)
@@ -461,10 +489,14 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                     // Check if current user is following this person
                     let isFollowingThisUser = false
                     if (user) {
-                        const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
+                        const currentUserDoc = await getDoc(
+                            doc(db, 'users', user.uid)
+                        )
                         if (currentUserDoc.exists()) {
                             const currentUserData = currentUserDoc.data()
-                            isFollowingThisUser = (currentUserData.following || []).includes(uid)
+                            isFollowingThisUser = (
+                                currentUserData.following || []
+                            ).includes(uid)
                         }
                     }
 
@@ -489,15 +521,17 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         if (!user) return
 
         // Find the user in the list
-        const userInList = followList.find(u => u.id === targetUserId)
+        const userInList = followList.find((u) => u.id === targetUserId)
         if (!userInList) return
 
         // Optimistic update immediately
-        setFollowList(followList.map(u =>
-            u.id === targetUserId
-                ? { ...u, isFollowing: !u.isFollowing }
-                : u
-        ))
+        setFollowList(
+            followList.map((u) =>
+                u.id === targetUserId
+                    ? { ...u, isFollowing: !u.isFollowing }
+                    : u
+            )
+        )
 
         try {
             if (userInList.isFollowing) {
@@ -510,11 +544,13 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         } catch (error) {
             console.error('Error toggling follow:', error)
             // Revert optimistic update
-            setFollowList(prev => prev.map(u =>
-                u.id === targetUserId
-                    ? { ...u, isFollowing: userInList.isFollowing }
-                    : u
-            ))
+            setFollowList((prev) =>
+                prev.map((u) =>
+                    u.id === targetUserId
+                        ? { ...u, isFollowing: userInList.isFollowing }
+                        : u
+                )
+            )
             showToast('error', 'Failed to update follow status')
         }
     }
@@ -529,7 +565,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         // Optimistic update
         const wasFollowing = isFollowing
         setIsFollowing(!wasFollowing)
-        setFollowerCount((prev) => wasFollowing ? Math.max(0, prev - 1) : prev + 1)
+        setFollowerCount((prev) =>
+            wasFollowing ? Math.max(0, prev - 1) : prev + 1
+        )
 
         try {
             if (wasFollowing) {
@@ -543,7 +581,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             console.error('Error toggling follow:', error)
             // Revert optimistic update on error
             setIsFollowing(wasFollowing)
-            setFollowerCount((prev) => wasFollowing ? prev + 1 : Math.max(0, prev - 1))
+            setFollowerCount((prev) =>
+                wasFollowing ? prev + 1 : Math.max(0, prev - 1)
+            )
             showToast('error', 'Failed to update follow status')
         } finally {
             followActionPending.current = false
@@ -589,113 +629,155 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         />
                     }
                     ListHeaderComponent={
-                        loading ? <ProfileSkeleton /> :
-                        <View style={styles.profileInfo}>
-                            <View style={styles.statsContainer}>
-                                <Text style={styles.username} accessibilityRole="header">@{username}</Text>
-                                <View style={styles.statRow}>
-                                    <TouchableOpacity
-                                        style={styles.statItem}
-                                        onPress={() => setShowActivityFeed(true)}
-                                        accessibilityLabel={`${contribution} Contribution`}
-                                        accessibilityRole="button"
-                                        accessibilityHint="View activity feed"
+                        loading ? (
+                            <ProfileSkeleton />
+                        ) : (
+                            <View style={styles.profileInfo}>
+                                <View style={styles.statsContainer}>
+                                    <Text
+                                        style={styles.username}
+                                        accessibilityRole="header"
                                     >
-                                        <Text style={styles.statNumber}>
-                                            {contribution}
+                                        @{username}
+                                    </Text>
+                                    <View style={styles.statRow}>
+                                        <TouchableOpacity
+                                            style={styles.statItem}
+                                            onPress={() =>
+                                                setShowActivityFeed(true)
+                                            }
+                                            accessibilityLabel={`${contribution} Contribution`}
+                                            accessibilityRole="button"
+                                            accessibilityHint="View activity feed"
+                                        >
+                                            <Text style={styles.statNumber}>
+                                                {contribution}
+                                            </Text>
+                                            <Text style={styles.statLabel}>
+                                                Contribution
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.statItem}
+                                            onPress={() =>
+                                                handleShowFollowList(
+                                                    'followers'
+                                                )
+                                            }
+                                            accessibilityLabel={`${followerCount} Followers`}
+                                            accessibilityRole="button"
+                                            accessibilityHint="View followers list"
+                                        >
+                                            <Text style={styles.statNumber}>
+                                                {followerCount}
+                                            </Text>
+                                            <Text style={styles.statLabel}>
+                                                Followers
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.statItem}
+                                            onPress={() =>
+                                                handleShowFollowList(
+                                                    'following'
+                                                )
+                                            }
+                                            accessibilityLabel={`${followingCount} Following`}
+                                            accessibilityRole="button"
+                                            accessibilityHint="View following list"
+                                        >
+                                            <Text style={styles.statNumber}>
+                                                {followingCount}
+                                            </Text>
+                                            <Text style={styles.statLabel}>
+                                                Following
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                {!isOwnProfile && (
+                                    <AppButton
+                                        title={
+                                            isFollowing ? 'Following' : 'Follow'
+                                        }
+                                        onPress={handleFollowToggle}
+                                        variant={
+                                            isFollowing ? 'outline' : 'primary'
+                                        }
+                                        style={{
+                                            marginTop: 20,
+                                            alignSelf: 'center',
+                                            width: 140,
+                                        }}
+                                    />
+                                )}
+
+                                <View style={styles.tabContainer}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.tab,
+                                            activeTab === 'posts' &&
+                                                styles.tabActive,
+                                        ]}
+                                        onPress={() => {
+                                            setActiveTab('posts')
+                                        }}
+                                        accessibilityLabel="Posts"
+                                        accessibilityRole="button"
+                                        accessibilityState={{
+                                            selected: activeTab === 'posts',
+                                        }}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.tabText,
+                                                activeTab === 'posts' &&
+                                                    styles.tabTextActive,
+                                            ]}
+                                        >
+                                            Posts
                                         </Text>
-                                        <Text style={styles.statLabel}>
-                                            Contribution
-                                        </Text>
+                                        {activeTab === 'posts' && (
+                                            <View
+                                                style={styles.activeIndicator}
+                                            />
+                                        )}
                                     </TouchableOpacity>
+
                                     <TouchableOpacity
-                                        style={styles.statItem}
-                                        onPress={() => handleShowFollowList('followers')}
-                                        accessibilityLabel={`${followerCount} Followers`}
+                                        style={[
+                                            styles.tab,
+                                            activeTab === 'catches' &&
+                                                styles.tabActive,
+                                        ]}
+                                        onPress={() => {
+                                            setActiveTab('catches')
+                                        }}
+                                        accessibilityLabel="Catches"
                                         accessibilityRole="button"
-                                        accessibilityHint="View followers list"
+                                        accessibilityState={{
+                                            selected: activeTab === 'catches',
+                                        }}
                                     >
-                                        <Text style={styles.statNumber}>
-                                            {followerCount}
+                                        <Text
+                                            style={[
+                                                styles.tabText,
+                                                activeTab === 'catches' &&
+                                                    styles.tabTextActive,
+                                            ]}
+                                        >
+                                            Catches
                                         </Text>
-                                        <Text style={styles.statLabel}>
-                                            Followers
-                                        </Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.statItem}
-                                        onPress={() => handleShowFollowList('following')}
-                                        accessibilityLabel={`${followingCount} Following`}
-                                        accessibilityRole="button"
-                                        accessibilityHint="View following list"
-                                    >
-                                        <Text style={styles.statNumber}>
-                                            {followingCount}
-                                        </Text>
-                                        <Text style={styles.statLabel}>
-                                            Following
-                                        </Text>
+                                        {activeTab === 'catches' && (
+                                            <View
+                                                style={styles.activeIndicator}
+                                            />
+                                        )}
                                     </TouchableOpacity>
                                 </View>
                             </View>
-
-                            {!isOwnProfile && (
-                                <AppButton
-                                    title={isFollowing ? 'Following' : 'Follow'}
-                                    onPress={handleFollowToggle}
-                                    variant={isFollowing ? 'outline' : 'primary'}
-                                    style={{ marginTop: 20, alignSelf: 'center', width: 140 }}
-                                />
-                            )}
-
-                            <View style={styles.tabContainer}>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.tab,
-                                        activeTab === 'posts' && styles.tabActive
-                                    ]}
-                                    onPress={() => {
-                                        setActiveTab('posts')
-                                    }}
-                                    accessibilityLabel="Posts"
-                                    accessibilityRole="button"
-                                    accessibilityState={{ selected: activeTab === 'posts' }}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.tabText,
-                                            activeTab === 'posts' && styles.tabTextActive
-                                        ]}
-                                    >
-                                        Posts
-                                    </Text>
-                                    {activeTab === 'posts' && <View style={styles.activeIndicator} />}
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={[
-                                        styles.tab,
-                                        activeTab === 'catches' && styles.tabActive
-                                    ]}
-                                    onPress={() => {
-                                        setActiveTab('catches')
-                                    }}
-                                    accessibilityLabel="Catches"
-                                    accessibilityRole="button"
-                                    accessibilityState={{ selected: activeTab === 'catches' }}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.tabText,
-                                            activeTab === 'catches' && styles.tabTextActive
-                                        ]}
-                                    >
-                                        Catches
-                                    </Text>
-                                    {activeTab === 'catches' && <View style={styles.activeIndicator} />}
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+                        )
                     }
                     ListEmptyComponent={
                         loading ? (
@@ -731,7 +813,6 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             </View>
                         ) : null
                     }
-
                 />
 
                 <View
@@ -741,7 +822,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         <TouchableOpacity
                             onPress={() => {
                                 setSearchVisible(true)
-                                requestAnimationFrame(() => searchInputRef.current?.focus())
+                                requestAnimationFrame(() =>
+                                    searchInputRef.current?.focus()
+                                )
                             }}
                             style={styles.searchButton}
                             accessibilityLabel="Search users"
@@ -768,7 +851,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                         </TouchableOpacity>
                     )}
 
-                    <Text style={styles.headerTitle} accessibilityRole="header">Profile</Text>
+                    <Text style={styles.headerTitle} accessibilityRole="header">
+                        Profile
+                    </Text>
 
                     {isOwnProfile ? (
                         <TouchableOpacity
@@ -827,7 +912,12 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
             />
 
             {showStaleIndicator && isOwnProfile && (
-                <View style={[styles.staleIndicatorContainer, { top: insets.top + 66 }]}>
+                <View
+                    style={[
+                        styles.staleIndicatorContainer,
+                        { top: insets.top + 66 },
+                    ]}
+                >
                     <TouchableOpacity
                         style={styles.staleIndicator}
                         onPress={async () => {
@@ -840,12 +930,19 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             setStaleRefreshing(false)
                         }}
                         disabled={staleRefreshing}
-                        accessibilityLabel={staleRefreshing ? 'Refreshing profile' : 'Refresh profile'}
+                        accessibilityLabel={
+                            staleRefreshing
+                                ? 'Refreshing profile'
+                                : 'Refresh profile'
+                        }
                         accessibilityRole="button"
                         accessibilityState={{ disabled: staleRefreshing }}
                     >
                         {staleRefreshing ? (
-                            <ActivityIndicator size="small" color={colors.primary} />
+                            <ActivityIndicator
+                                size="small"
+                                color={colors.primary}
+                            />
                         ) : (
                             <Ionicons
                                 name="refresh"
@@ -854,13 +951,18 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             />
                         )}
                         <Text style={styles.staleIndicatorText}>
-                            {staleRefreshing ? 'Refreshing...' : 'Tap to refresh'}
+                            {staleRefreshing
+                                ? 'Refreshing...'
+                                : 'Tap to refresh'}
                         </Text>
                     </TouchableOpacity>
                 </View>
             )}
 
-            <ActivityFeed visible={showActivityFeed} onClose={() => setShowActivityFeed(false)} />
+            <ActivityFeed
+                visible={showActivityFeed}
+                onClose={() => setShowActivityFeed(false)}
+            />
 
             <Modal
                 visible={searchVisible}
@@ -872,7 +974,12 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                     setSearchResults([])
                 }}
             >
-                <View style={[styles.searchModalOverlay, { paddingTop: insets.top }]}>
+                <View
+                    style={[
+                        styles.searchModalOverlay,
+                        { paddingTop: insets.top },
+                    ]}
+                >
                     <View style={styles.searchHeader}>
                         <TouchableOpacity
                             onPress={() => {
@@ -884,10 +991,18 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             accessibilityLabel="Close search"
                             accessibilityRole="button"
                         >
-                            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+                            <Ionicons
+                                name="arrow-back"
+                                size={24}
+                                color={colors.textPrimary}
+                            />
                         </TouchableOpacity>
                         <View style={styles.searchInputContainer}>
-                            <Ionicons name="search" size={18} color={colors.textTertiary} />
+                            <Ionicons
+                                name="search"
+                                size={18}
+                                color={colors.textTertiary}
+                            />
                             <TextInput
                                 ref={searchInputRef}
                                 style={styles.searchInput}
@@ -906,7 +1021,11 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                     accessibilityLabel="Clear search"
                                     accessibilityRole="button"
                                 >
-                                    <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                                    <Ionicons
+                                        name="close-circle"
+                                        size={18}
+                                        color={colors.textTertiary}
+                                    />
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -915,7 +1034,10 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                     <View style={styles.searchResults}>
                         {searchLoading ? (
                             <View style={styles.searchLoadingContainer}>
-                                <ActivityIndicator size="small" color={colors.primary} />
+                                <ActivityIndicator
+                                    size="small"
+                                    color={colors.primary}
+                                />
                             </View>
                         ) : searchResults.length > 0 ? (
                             searchResults.map((result) => (
@@ -928,18 +1050,30 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                     accessibilityHint="View user profile"
                                 >
                                     <View style={styles.searchResultAvatar}>
-                                        <Ionicons name="person" size={20} color={colors.textTertiary} />
+                                        <Ionicons
+                                            name="person"
+                                            size={20}
+                                            color={colors.textTertiary}
+                                        />
                                     </View>
-                                    <Text style={styles.searchResultUsername}>@{result.username}</Text>
+                                    <Text style={styles.searchResultUsername}>
+                                        @{result.username}
+                                    </Text>
                                     {result.id === user?.uid && (
-                                        <Text style={styles.searchResultYou}>(you)</Text>
+                                        <Text style={styles.searchResultYou}>
+                                            (you)
+                                        </Text>
                                     )}
                                 </TouchableOpacity>
                             ))
                         ) : searchQuery.length > 0 ? (
-                            <Text style={styles.searchNoResults}>No users found</Text>
+                            <Text style={styles.searchNoResults}>
+                                No users found
+                            </Text>
                         ) : (
-                            <Text style={styles.searchHint}>Search for users by username</Text>
+                            <Text style={styles.searchHint}>
+                                Search for users by username
+                            </Text>
                         )}
                     </View>
                 </View>
@@ -951,7 +1085,12 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                 transparent
                 onRequestClose={() => setFollowListVisible(false)}
             >
-                <View style={[styles.searchModalOverlay, { paddingTop: insets.top }]}>
+                <View
+                    style={[
+                        styles.searchModalOverlay,
+                        { paddingTop: insets.top },
+                    ]}
+                >
                     <View style={styles.searchHeader}>
                         <TouchableOpacity
                             onPress={() => setFollowListVisible(false)}
@@ -959,10 +1098,19 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             accessibilityLabel="Close list"
                             accessibilityRole="button"
                         >
-                            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+                            <Ionicons
+                                name="arrow-back"
+                                size={24}
+                                color={colors.textPrimary}
+                            />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle} accessibilityRole="header">
-                            {followListType === 'followers' ? 'Followers' : 'Following'}
+                        <Text
+                            style={styles.headerTitle}
+                            accessibilityRole="header"
+                        >
+                            {followListType === 'followers'
+                                ? 'Followers'
+                                : 'Following'}
                         </Text>
                         <View style={{ width: 24 }} />
                     </View>
@@ -970,28 +1118,50 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                     <View style={styles.searchResults}>
                         {followListLoading ? (
                             <View style={styles.searchLoadingContainer}>
-                                <ActivityIndicator size="small" color={colors.primary} />
+                                <ActivityIndicator
+                                    size="small"
+                                    color={colors.primary}
+                                />
                             </View>
                         ) : followList.length > 0 ? (
                             followList.map((userItem) => (
-                                <View key={userItem.id} style={styles.searchResultItem}>
+                                <View
+                                    key={userItem.id}
+                                    style={styles.searchResultItem}
+                                >
                                     <TouchableOpacity
                                         style={styles.followListUserInfo}
                                         onPress={() => {
                                             setFollowListVisible(false)
-                                            if (userItem.id === user?.uid) return
-                                            router.push({ pathname: '/user-profile', params: { userId: userItem.id } } as any)
+                                            if (userItem.id === user?.uid)
+                                                return
+                                            router.push({
+                                                pathname: '/user-profile',
+                                                params: { userId: userItem.id },
+                                            } as any)
                                         }}
                                         accessibilityLabel={`@${userItem.username}${userItem.id === user?.uid ? ', you' : ''}`}
                                         accessibilityRole="button"
                                         accessibilityHint="View user profile"
                                     >
                                         <View style={styles.searchResultAvatar}>
-                                            <Ionicons name="person" size={20} color={colors.textTertiary} />
+                                            <Ionicons
+                                                name="person"
+                                                size={20}
+                                                color={colors.textTertiary}
+                                            />
                                         </View>
-                                        <Text style={styles.searchResultUsername}>@{userItem.username}</Text>
+                                        <Text
+                                            style={styles.searchResultUsername}
+                                        >
+                                            @{userItem.username}
+                                        </Text>
                                         {userItem.id === user?.uid && (
-                                            <Text style={styles.searchResultYou}>(you)</Text>
+                                            <Text
+                                                style={styles.searchResultYou}
+                                            >
+                                                (you)
+                                            </Text>
                                         )}
                                     </TouchableOpacity>
 
@@ -999,19 +1169,31 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                                         <TouchableOpacity
                                             style={[
                                                 styles.followListButton,
-                                                userItem.isFollowing && styles.followListButtonFollowing,
+                                                userItem.isFollowing &&
+                                                    styles.followListButtonFollowing,
                                             ]}
-                                            onPress={() => handleFollowFromList(userItem.id)}
-                                            accessibilityLabel={userItem.isFollowing ? `Unfollow @${userItem.username}` : `Follow @${userItem.username}`}
+                                            onPress={() =>
+                                                handleFollowFromList(
+                                                    userItem.id
+                                                )
+                                            }
+                                            accessibilityLabel={
+                                                userItem.isFollowing
+                                                    ? `Unfollow @${userItem.username}`
+                                                    : `Follow @${userItem.username}`
+                                            }
                                             accessibilityRole="button"
                                         >
                                             <Text
                                                 style={[
                                                     styles.followListButtonText,
-                                                    userItem.isFollowing && styles.followListButtonTextFollowing,
+                                                    userItem.isFollowing &&
+                                                        styles.followListButtonTextFollowing,
                                                 ]}
                                             >
-                                                {userItem.isFollowing ? 'Following' : 'Follow'}
+                                                {userItem.isFollowing
+                                                    ? 'Following'
+                                                    : 'Follow'}
                                             </Text>
                                         </TouchableOpacity>
                                     )}
@@ -1019,7 +1201,11 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
                             ))
                         ) : (
                             <Text style={styles.searchNoResults}>
-                                No {followListType === 'followers' ? 'followers' : 'following'} yet
+                                No{' '}
+                                {followListType === 'followers'
+                                    ? 'followers'
+                                    : 'following'}{' '}
+                                yet
                             </Text>
                         )}
                     </View>
@@ -1274,7 +1460,7 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     tabActive: {
-        // 
+        //
     },
     tabText: {
         fontSize: 16,

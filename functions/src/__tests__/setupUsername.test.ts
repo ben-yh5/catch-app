@@ -17,15 +17,28 @@ const mockCollection = jest.fn((name: string) => {
 jest.mock('firebase-admin', () => ({
     initializeApp: jest.fn(),
     firestore: Object.assign(
-        () => ({ collection: mockCollection, runTransaction: mockRunTransaction }),
-        { FieldValue: { serverTimestamp: () => 'SERVER_TIMESTAMP', arrayUnion: jest.fn(), arrayRemove: jest.fn(), increment: jest.fn() } }
+        () => ({
+            collection: mockCollection,
+            runTransaction: mockRunTransaction,
+        }),
+        {
+            FieldValue: {
+                serverTimestamp: () => 'SERVER_TIMESTAMP',
+                arrayUnion: jest.fn(),
+                arrayRemove: jest.fn(),
+                increment: jest.fn(),
+            },
+        }
     ),
 }))
 
 import { makeContext, makeUnauthContext } from './setup'
 import { setupUsername } from '../index'
 
-const run = (setupUsername as any).run as (data: any, context: any) => Promise<any>
+const run = (setupUsername as any).run as (
+    data: any,
+    context: any
+) => Promise<any>
 
 describe('setupUsername', () => {
     beforeEach(() => {
@@ -40,9 +53,9 @@ describe('setupUsername', () => {
     })
 
     it('rejects missing username', async () => {
-        await expect(
-            run({}, makeContext('user1'))
-        ).rejects.toMatchObject({ code: 'invalid-argument' })
+        await expect(run({}, makeContext('user1'))).rejects.toMatchObject({
+            code: 'invalid-argument',
+        })
     })
 
     it('rejects non-string username', async () => {
@@ -77,7 +90,10 @@ describe('setupUsername', () => {
         )
         mockTransactionGet.mockResolvedValue({ exists: false })
 
-        const result = await run({ username: 'Test_User-1' }, makeContext('user1'))
+        const result = await run(
+            { username: 'Test_User-1' },
+            makeContext('user1')
+        )
         expect(result).toEqual({ success: true })
     })
 
@@ -124,7 +140,9 @@ describe('setupUsername', () => {
         await run({ username: 'MyName' }, makeContext('user1'))
 
         expect(mockTransactionSet).toHaveBeenCalledTimes(2)
-        expect(mockTransactionSet).toHaveBeenCalledWith(usernameRef, { uid: 'user1' })
+        expect(mockTransactionSet).toHaveBeenCalledWith(usernameRef, {
+            uid: 'user1',
+        })
         expect(mockTransactionSet).toHaveBeenCalledWith(
             userRef,
             expect.objectContaining({

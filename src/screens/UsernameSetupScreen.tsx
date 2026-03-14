@@ -47,7 +47,10 @@ export default function UsernameSetupScreen() {
             router.replace('/(tabs)')
         } catch (error: any) {
             const message = error?.message || 'Something went wrong'
-            if (message.includes('already taken') || message.includes('already-exists')) {
+            if (
+                message.includes('already taken') ||
+                message.includes('already-exists')
+            ) {
                 setError('Username is already taken')
             } else {
                 showToast('error', 'Setup Failed', message)
@@ -83,8 +86,8 @@ export default function UsernameSetupScreen() {
 
             <View style={styles.hintContainer}>
                 <Text style={styles.hintText}>
-                    • 3-20 characters{'\n'}
-                    • Letters, numbers, underscores, and hyphens only
+                    • 3-20 characters{'\n'}• Letters, numbers, underscores, and
+                    hyphens only
                 </Text>
             </View>
 

@@ -112,7 +112,8 @@ export function useDeviceSensors(): DeviceSensorsResult {
 
         // 4. Calculate Pitch (vertical angle of camera)
         // Pitch: -90° (looking down) to +90° (looking up), 0° = level
-        const rawPitch = Math.asin(Math.max(-1, Math.min(1, G.z))) * (180 / Math.PI)
+        const rawPitch =
+            Math.asin(Math.max(-1, Math.min(1, G.z))) * (180 / Math.PI)
 
         // 5. Apply low-pass filter for smoothing
         if (smoothedHeadingRef.current === null) {
@@ -122,13 +123,17 @@ export function useDeviceSensors(): DeviceSensorsResult {
             let delta = rawAngle - smoothedHeadingRef.current
             if (delta > 180) delta -= 360
             if (delta < -180) delta += 360
-            smoothedHeadingRef.current = (smoothedHeadingRef.current + SMOOTHING_ALPHA * delta + 360) % 360
+            smoothedHeadingRef.current =
+                (smoothedHeadingRef.current + SMOOTHING_ALPHA * delta + 360) %
+                360
         }
 
         if (smoothedPitchRef.current === null) {
             smoothedPitchRef.current = rawPitch
         } else {
-            smoothedPitchRef.current = smoothedPitchRef.current + SMOOTHING_ALPHA * (rawPitch - smoothedPitchRef.current)
+            smoothedPitchRef.current =
+                smoothedPitchRef.current +
+                SMOOTHING_ALPHA * (rawPitch - smoothedPitchRef.current)
         }
 
         setHeading(Math.round(smoothedHeadingRef.current))
@@ -154,12 +159,12 @@ export function useDeviceSensors(): DeviceSensorsResult {
         Magnetometer.setUpdateInterval(100)
         Accelerometer.setUpdateInterval(100)
 
-        accelSubscriptionRef.current = Accelerometer.addListener(data => {
+        accelSubscriptionRef.current = Accelerometer.addListener((data) => {
             gravityRef.current = data
             calculateHeading()
         })
 
-        magSubscriptionRef.current = Magnetometer.addListener(data => {
+        magSubscriptionRef.current = Magnetometer.addListener((data) => {
             magRef.current = data
             calculateHeading()
         })

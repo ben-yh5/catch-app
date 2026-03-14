@@ -7,21 +7,30 @@ const mockWhere: jest.Mock = jest.fn().mockReturnValue({
 })
 const mockDocGet = jest.fn()
 const mockDoc = jest.fn().mockReturnValue({ get: mockDocGet })
-const mockCollection = jest.fn().mockReturnValue({ doc: mockDoc, where: mockWhere })
+const mockCollection = jest
+    .fn()
+    .mockReturnValue({ doc: mockDoc, where: mockWhere })
 
 jest.mock('firebase-admin', () => ({
     initializeApp: jest.fn(),
-    firestore: Object.assign(
-        () => ({ collection: mockCollection }),
-        { FieldValue: { serverTimestamp: jest.fn(), arrayUnion: jest.fn(), arrayRemove: jest.fn(), increment: jest.fn() } }
-    ),
+    firestore: Object.assign(() => ({ collection: mockCollection }), {
+        FieldValue: {
+            serverTimestamp: jest.fn(),
+            arrayUnion: jest.fn(),
+            arrayRemove: jest.fn(),
+            increment: jest.fn(),
+        },
+    }),
 }))
 
 import { makeContext, makeUnauthContext } from './setup'
 import { validateCatch } from '../index'
 
 // In firebase-functions v4, onCall attaches the handler as .run(data, context)
-const run = (validateCatch as any).run as (data: any, context: any) => Promise<any>
+const run = (validateCatch as any).run as (
+    data: any,
+    context: any
+) => Promise<any>
 
 describe('validateCatch', () => {
     beforeEach(() => {
@@ -79,7 +88,11 @@ describe('validateCatch', () => {
     it('rejects duplicate catch', async () => {
         mockDocGet.mockResolvedValue({
             exists: true,
-            data: () => ({ hasLocation: true, authorId: 'otherUser', rootPostId: null }),
+            data: () => ({
+                hasLocation: true,
+                authorId: 'otherUser',
+                rootPostId: null,
+            }),
         })
         mockGet.mockResolvedValue({ empty: false })
 
@@ -91,7 +104,11 @@ describe('validateCatch', () => {
     it('returns isValid=true when within catch radius', async () => {
         mockDocGet.mockResolvedValue({
             exists: true,
-            data: () => ({ hasLocation: true, authorId: 'otherUser', rootPostId: null }),
+            data: () => ({
+                hasLocation: true,
+                authorId: 'otherUser',
+                rootPostId: null,
+            }),
         })
 
         let callCount = 0
@@ -100,7 +117,9 @@ describe('validateCatch', () => {
             if (callCount === 1) return Promise.resolve({ empty: true })
             return Promise.resolve({
                 empty: false,
-                docs: [{ data: () => ({ latitude: 40.7128, longitude: -74.006 }) }],
+                docs: [
+                    { data: () => ({ latitude: 40.7128, longitude: -74.006 }) },
+                ],
             })
         })
 
@@ -117,7 +136,11 @@ describe('validateCatch', () => {
     it('returns isValid=false when outside catch radius', async () => {
         mockDocGet.mockResolvedValue({
             exists: true,
-            data: () => ({ hasLocation: true, authorId: 'otherUser', rootPostId: null }),
+            data: () => ({
+                hasLocation: true,
+                authorId: 'otherUser',
+                rootPostId: null,
+            }),
         })
 
         let callCount = 0
@@ -126,7 +149,9 @@ describe('validateCatch', () => {
             if (callCount === 1) return Promise.resolve({ empty: true })
             return Promise.resolve({
                 empty: false,
-                docs: [{ data: () => ({ latitude: 40.7228, longitude: -74.006 }) }],
+                docs: [
+                    { data: () => ({ latitude: 40.7228, longitude: -74.006 }) },
+                ],
             })
         })
 
@@ -142,7 +167,11 @@ describe('validateCatch', () => {
     it('returns heading and pitch when available', async () => {
         mockDocGet.mockResolvedValue({
             exists: true,
-            data: () => ({ hasLocation: true, authorId: 'otherUser', rootPostId: null }),
+            data: () => ({
+                hasLocation: true,
+                authorId: 'otherUser',
+                rootPostId: null,
+            }),
         })
 
         let callCount = 0
@@ -151,12 +180,16 @@ describe('validateCatch', () => {
             if (callCount === 1) return Promise.resolve({ empty: true })
             return Promise.resolve({
                 empty: false,
-                docs: [{
-                    data: () => ({
-                        latitude: 40.7128, longitude: -74.006,
-                        heading: 90, pitch: 45,
-                    }),
-                }],
+                docs: [
+                    {
+                        data: () => ({
+                            latitude: 40.7128,
+                            longitude: -74.006,
+                            heading: 90,
+                            pitch: 45,
+                        }),
+                    },
+                ],
             })
         })
 

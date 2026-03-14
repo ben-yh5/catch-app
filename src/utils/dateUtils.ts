@@ -31,4 +31,3 @@ export function formatPostDate(timestamp: any): string {
         year: 'numeric',
     })
 }
-

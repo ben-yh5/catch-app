@@ -17,10 +17,14 @@ export function getPostBountyStatus(post: Post): BountyStatus {
     if (catchCount === 0) return 'bounty'
 
     if (post.lastCaughtAt) {
-        const lastCaughtMs = post.lastCaughtAt?.toMillis?.()
-            ?? (post.lastCaughtAt instanceof Date ? post.lastCaughtAt.getTime() : 0)
+        const lastCaughtMs =
+            post.lastCaughtAt?.toMillis?.() ??
+            (post.lastCaughtAt instanceof Date
+                ? post.lastCaughtAt.getTime()
+                : 0)
         if (lastCaughtMs > 0) {
-            const inactivityMs = CONTRIBUTION.BOUNTY_INACTIVITY_DAYS * 24 * 60 * 60 * 1000
+            const inactivityMs =
+                CONTRIBUTION.BOUNTY_INACTIVITY_DAYS * 24 * 60 * 60 * 1000
             if (Date.now() - lastCaughtMs > inactivityMs) return 'bounty'
         }
     }
@@ -30,4 +34,3 @@ export function getPostBountyStatus(post: Post): BountyStatus {
 
     return 'normal'
 }
-

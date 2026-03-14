@@ -13,7 +13,7 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native'
 import PagerView from 'react-native-pager-view'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -50,10 +50,16 @@ export default function ListsScreen() {
             })
 
             // Sort to put Saved list first
-            const savedList = fetchedLists.find(l => l.isSavedList || l.name === 'Saved')
-            const otherLists = fetchedLists.filter(l => !l.isSavedList && l.name !== 'Saved')
+            const savedList = fetchedLists.find(
+                (l) => l.isSavedList || l.name === 'Saved'
+            )
+            const otherLists = fetchedLists.filter(
+                (l) => !l.isSavedList && l.name !== 'Saved'
+            )
 
-            const sortedLists = savedList ? [savedList, ...otherLists] : otherLists
+            const sortedLists = savedList
+                ? [savedList, ...otherLists]
+                : otherLists
 
             setLists(sortedLists)
         } catch (error) {
@@ -123,7 +129,9 @@ export default function ListsScreen() {
         return (
             <TouchableOpacity
                 style={styles.listItem}
-                onPress={() => router.push(`/(tabs)/map?listId=${item.id}` as any)}
+                onPress={() =>
+                    router.push(`/(tabs)/map?listId=${item.id}` as any)
+                }
                 accessibilityLabel={`${item.name}, ${item.postIds.length} ${item.postIds.length === 1 ? 'shot' : 'shots'}${activeTab === 'community' ? `, by @${item.creatorUsername}` : ''}`}
                 accessibilityRole="button"
                 accessibilityHint="Open this list on the map"
@@ -138,13 +146,19 @@ export default function ListsScreen() {
                         <View style={styles.listInfo}>
                             <Text style={styles.listName}>{item.name}</Text>
                             {item.description ? (
-                                <Text style={styles.listDescription} numberOfLines={2}>
+                                <Text
+                                    style={styles.listDescription}
+                                    numberOfLines={2}
+                                >
                                     {item.description}
                                 </Text>
                             ) : null}
                             <Text style={styles.listMeta}>
-                                {item.postIds.length} {item.postIds.length === 1 ? 'shot' : 'shots'}
-                                {activeTab === 'community' ? ` • @${item.creatorUsername}` : ''}
+                                {item.postIds.length}{' '}
+                                {item.postIds.length === 1 ? 'shot' : 'shots'}
+                                {activeTab === 'community'
+                                    ? ` • @${item.creatorUsername}`
+                                    : ''}
                             </Text>
                         </View>
                     </View>
@@ -155,7 +169,11 @@ export default function ListsScreen() {
 
     const renderEmptyState = () => (
         <View style={styles.emptyContainer}>
-            <Ionicons name="list-outline" size={64} color={colors.textTertiary} />
+            <Ionicons
+                name="list-outline"
+                size={64}
+                color={colors.textTertiary}
+            />
             <Text style={styles.emptyText}>
                 {activeTab === 'my' ? 'No Lists Yet' : 'No Community Lists'}
             </Text>
@@ -170,7 +188,9 @@ export default function ListsScreen() {
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
             <View style={styles.header}>
-                <Text style={styles.title} accessibilityRole="header">Lists</Text>
+                <Text style={styles.title} accessibilityRole="header">
+                    Lists
+                </Text>
             </View>
 
             {/* Tab Switcher */}
@@ -186,12 +206,20 @@ export default function ListsScreen() {
                     accessibilityRole="button"
                     accessibilityState={{ selected: activeTab === 'my' }}
                 >
-                    <Text style={[styles.tabText, activeTab === 'my' && styles.activeTabText]}>
+                    <Text
+                        style={[
+                            styles.tabText,
+                            activeTab === 'my' && styles.activeTabText,
+                        ]}
+                    >
                         My Lists
                     </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'community' && styles.activeTab]}
+                    style={[
+                        styles.tab,
+                        activeTab === 'community' && styles.activeTab,
+                    ]}
                     onPress={() => {
                         setActiveTab('community')
                         pagerRef.current?.setPage(1)
@@ -202,7 +230,10 @@ export default function ListsScreen() {
                     accessibilityState={{ selected: activeTab === 'community' }}
                 >
                     <Text
-                        style={[styles.tabText, activeTab === 'community' && styles.activeTabText]}
+                        style={[
+                            styles.tabText,
+                            activeTab === 'community' && styles.activeTabText,
+                        ]}
                     >
                         Community
                     </Text>

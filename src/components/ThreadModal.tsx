@@ -41,7 +41,7 @@ import {
     getDocs,
     orderBy,
     query,
-    where
+    where,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import React, { useEffect, useRef, useState } from 'react'
@@ -55,7 +55,7 @@ import {
     TouchableOpacity,
     View,
     ViewToken,
-    useWindowDimensions
+    useWindowDimensions,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ListSelectionBottomSheet from './ListSelectionBottomSheet'
@@ -71,8 +71,6 @@ interface ThreadModalProps {
     onPostDelete?: (postId: string) => void
     initialPostId?: string // If provided, start the gallery at this post
 }
-
-
 
 export default function ThreadModal({
     visible,
@@ -100,7 +98,12 @@ export default function ThreadModal({
     const [showAddToListModal, setShowAddToListModal] = useState(false)
 
     // Location state
-    const [postLocation, setPostLocation] = useState<{ latitude: number; longitude: number; heading?: number; pitch?: number } | null>(null)
+    const [postLocation, setPostLocation] = useState<{
+        latitude: number
+        longitude: number
+        heading?: number
+        pitch?: number
+    } | null>(null)
     const [distance, setDistance] = useState<number | null>(null)
 
     // Hook-based catch flow
@@ -141,7 +144,7 @@ export default function ThreadModal({
                     animated: true,
                 })
             })
-        }
+        },
     })
 
     // Get the currently displayed post
@@ -152,7 +155,7 @@ export default function ThreadModal({
         if (visible && post) {
             fetchThread()
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, post])
 
     // Scroll to initial post when thread loads
@@ -179,7 +182,7 @@ export default function ThreadModal({
         if (currentPost && user) {
             fetchSaveStatus()
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPost?.id, user])
 
     // Fetch location data when root post changes
@@ -193,7 +196,7 @@ export default function ThreadModal({
                 setDistance(null)
             }
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, threadPosts])
 
     const fetchThread = async () => {
@@ -301,31 +304,51 @@ export default function ThreadModal({
             // Fetch post location from Cloud Function
             const getPostLocation = httpsCallable(functions, 'getPostLocation')
             const result = await getPostLocation({ postId })
-            const locationData = result.data as { latitude: number; longitude: number; postId: string; heading?: number; pitch?: number }
+            const locationData = result.data as {
+                latitude: number
+                longitude: number
+                postId: string
+                heading?: number
+                pitch?: number
+            }
 
             setPostLocation({
                 latitude: locationData.latitude,
                 longitude: locationData.longitude,
                 heading: locationData.heading,
-                pitch: locationData.pitch
+                pitch: locationData.pitch,
             })
 
             // Get user's current location
-            const { status } = await Location.requestForegroundPermissionsAsync()
+            const { status } =
+                await Location.requestForegroundPermissionsAsync()
             if (status === 'granted') {
                 // detailed hanging
-                let userLoc: Location.LocationObject | null = null;
+                let userLoc: Location.LocationObject | null = null
                 try {
                     const locationPromise = Location.getCurrentPositionAsync({
                         accuracy: Location.Accuracy.Balanced,
                     })
-                    const timeoutPromise = new Promise<Location.LocationObject>((_, reject) => {
-                        setTimeout(() => reject(new Error('Location request timed out')), 5000)
-                    })
-                    userLoc = await Promise.race([locationPromise, timeoutPromise])
+                    const timeoutPromise = new Promise<Location.LocationObject>(
+                        (_, reject) => {
+                            setTimeout(
+                                () =>
+                                    reject(
+                                        new Error('Location request timed out')
+                                    ),
+                                5000
+                            )
+                        }
+                    )
+                    userLoc = await Promise.race([
+                        locationPromise,
+                        timeoutPromise,
+                    ])
                 } catch {
-                    console.warn('Current location timed out, trying last known...')
-                    userLoc = await Location.getLastKnownPositionAsync();
+                    console.warn(
+                        'Current location timed out, trying last known...'
+                    )
+                    userLoc = await Location.getLastKnownPositionAsync()
                 }
 
                 if (userLoc) {
@@ -441,12 +464,15 @@ export default function ThreadModal({
                 // Update root post catch count
                 newThreadPosts[0] = {
                     ...newThreadPosts[0],
-                    catchCount: Math.max(0, (newThreadPosts[0].catchCount || 0) - 1)
+                    catchCount: Math.max(
+                        0,
+                        (newThreadPosts[0].catchCount || 0) - 1
+                    ),
                 }
 
                 // Update parent component too
                 onPostUpdate?.({
-                    ...newThreadPosts[0]
+                    ...newThreadPosts[0],
                 })
             }
 
@@ -508,27 +534,41 @@ export default function ThreadModal({
         }, 100)
     }, [])
 
-    const getItemLayout = React.useCallback((_: any, index: number) => ({
-        length: cardWidth,
-        offset: cardWidth * index,
-        index,
-    }), [cardWidth])
+    const getItemLayout = React.useCallback(
+        (_: any, index: number) => ({
+            length: cardWidth,
+            offset: cardWidth * index,
+            index,
+        }),
+        [cardWidth]
+    )
 
-    const renderGalleryItem = React.useCallback(({ item }: { item: Post }) => (
-        <View style={[styles.galleryItem, { width: cardWidth, height: cardWidth }]}>
-            <Image
-                source={{ uri: item.photoURL }}
-                style={styles.galleryImage}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                priority="high"
-                accessibilityLabel={`Photo by ${item.authorUsername || 'unknown user'}`}
-            />
-            {item.authorId === user?.uid && (
-                <CaughtBadge containerStyle={styles.caughtBadgeOverlay} size={24} />
-            )}
-        </View>
-    ), [cardWidth, user?.uid])
+    const renderGalleryItem = React.useCallback(
+        ({ item }: { item: Post }) => (
+            <View
+                style={[
+                    styles.galleryItem,
+                    { width: cardWidth, height: cardWidth },
+                ]}
+            >
+                <Image
+                    source={{ uri: item.photoURL }}
+                    style={styles.galleryImage}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    priority="high"
+                    accessibilityLabel={`Photo by ${item.authorUsername || 'unknown user'}`}
+                />
+                {item.authorId === user?.uid && (
+                    <CaughtBadge
+                        containerStyle={styles.caughtBadgeOverlay}
+                        size={24}
+                    />
+                )}
+            </View>
+        ),
+        [cardWidth, user?.uid]
+    )
 
     if (!post) return null
 
@@ -573,7 +613,7 @@ export default function ThreadModal({
                     onCancel={handlePreviewCancel}
                     mode="catch"
                     loading={uploading}
-                    loadingText={statusMessage || "Creating catch..."}
+                    loadingText={statusMessage || 'Creating catch...'}
                     originalPhotoUrl={rootPost?.photoURL}
                     hasLocation={true}
                     loadingLocation={fetchingLocation}
@@ -593,7 +633,12 @@ export default function ThreadModal({
             }}
         >
             <View style={styles.modalOverlay}>
-                <View style={[styles.modalContent, { paddingTop: insets.top + 10 }]}>
+                <View
+                    style={[
+                        styles.modalContent,
+                        { paddingTop: insets.top + 10 },
+                    ]}
+                >
                     {loadingThread ? (
                         <ThreadModalSkeleton />
                     ) : (
@@ -623,8 +668,11 @@ export default function ThreadModal({
                                                 setShowOptionsMenu(false)
                                                 if (currentPost) {
                                                     router.push({
-                                                        pathname: '/user-profile',
-                                                        params: { userId: currentPost.authorId },
+                                                        pathname:
+                                                            '/user-profile',
+                                                        params: {
+                                                            userId: currentPost.authorId,
+                                                        },
                                                     })
                                                 }
                                             }}
@@ -633,34 +681,56 @@ export default function ThreadModal({
                                             accessibilityHint="View profile"
                                         >
                                             <Text style={styles.cardUsername}>
-                                                @{currentPost?.authorUsername || '...'}
+                                                @
+                                                {currentPost?.authorUsername ||
+                                                    '...'}
                                             </Text>
                                         </TouchableOpacity>
                                     </View>
                                     <View style={styles.cardHeaderRight}>
                                         <CatchBadge
-                                            count={threadPosts[0]?.catchCount || 0}
+                                            count={
+                                                threadPosts[0]?.catchCount || 0
+                                            }
                                             containerStyle={styles.catchBadge}
                                         />
                                         <TouchableOpacity
                                             onPress={handleSavePress}
                                             style={styles.headerIconButton}
-                                            accessibilityLabel={isSaved ? 'Remove from list' : 'Save to list'}
+                                            accessibilityLabel={
+                                                isSaved
+                                                    ? 'Remove from list'
+                                                    : 'Save to list'
+                                            }
                                             accessibilityRole="button"
                                         >
                                             <Ionicons
-                                                name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                                                name={
+                                                    isSaved
+                                                        ? 'bookmark'
+                                                        : 'bookmark-outline'
+                                                }
                                                 size={22}
-                                                color={isSaved ? colors.iconActive : colors.iconInactive}
+                                                color={
+                                                    isSaved
+                                                        ? colors.iconActive
+                                                        : colors.iconInactive
+                                                }
                                             />
                                         </TouchableOpacity>
                                         <View style={{ zIndex: 10 }}>
                                             <TouchableOpacity
-                                                onPress={() => setShowOptionsMenu(!showOptionsMenu)}
+                                                onPress={() =>
+                                                    setShowOptionsMenu(
+                                                        !showOptionsMenu
+                                                    )
+                                                }
                                                 style={styles.headerIconButton}
                                                 accessibilityLabel="Options menu"
                                                 accessibilityRole="button"
-                                                accessibilityState={{ expanded: showOptionsMenu }}
+                                                accessibilityState={{
+                                                    expanded: showOptionsMenu,
+                                                }}
                                             >
                                                 <Ionicons
                                                     name="ellipsis-horizontal"
@@ -670,34 +740,69 @@ export default function ThreadModal({
                                             </TouchableOpacity>
 
                                             {showOptionsMenu && (
-                                                <View style={styles.optionsMenuInCard}>
+                                                <View
+                                                    style={
+                                                        styles.optionsMenuInCard
+                                                    }
+                                                >
                                                     <TouchableOpacity
-                                                        style={styles.optionsMenuItem}
+                                                        style={
+                                                            styles.optionsMenuItem
+                                                        }
                                                         onPress={() => {
-                                                            setShowOptionsMenu(false)
-                                                            setShowAddToListModal(true)
+                                                            setShowOptionsMenu(
+                                                                false
+                                                            )
+                                                            setShowAddToListModal(
+                                                                true
+                                                            )
                                                         }}
                                                         accessibilityRole="menuitem"
                                                         accessibilityLabel="Add to List"
                                                     >
-                                                        <Text style={styles.optionsMenuText}>Add to List</Text>
+                                                        <Text
+                                                            style={
+                                                                styles.optionsMenuText
+                                                            }
+                                                        >
+                                                            Add to List
+                                                        </Text>
                                                     </TouchableOpacity>
                                                     <TouchableOpacity
-                                                        style={styles.optionsMenuItem}
+                                                        style={
+                                                            styles.optionsMenuItem
+                                                        }
                                                         onPress={handleShare}
                                                         accessibilityRole="menuitem"
                                                         accessibilityLabel="Share"
                                                     >
-                                                        <Text style={styles.optionsMenuText}>Share</Text>
+                                                        <Text
+                                                            style={
+                                                                styles.optionsMenuText
+                                                            }
+                                                        >
+                                                            Share
+                                                        </Text>
                                                     </TouchableOpacity>
-                                                    {currentPost?.authorId === user?.uid && (
+                                                    {currentPost?.authorId ===
+                                                        user?.uid && (
                                                         <TouchableOpacity
-                                                            style={[styles.optionsMenuItem, styles.optionsMenuItemLast]}
-                                                            onPress={handleDeletePost}
+                                                            style={[
+                                                                styles.optionsMenuItem,
+                                                                styles.optionsMenuItemLast,
+                                                            ]}
+                                                            onPress={
+                                                                handleDeletePost
+                                                            }
                                                             accessibilityRole="menuitem"
                                                             accessibilityLabel="Delete post"
                                                         >
-                                                            <Text style={[styles.optionsMenuText, styles.optionsMenuTextDanger]}>
+                                                            <Text
+                                                                style={[
+                                                                    styles.optionsMenuText,
+                                                                    styles.optionsMenuTextDanger,
+                                                                ]}
+                                                            >
                                                                 Delete
                                                             </Text>
                                                         </TouchableOpacity>
@@ -717,7 +822,9 @@ export default function ThreadModal({
                                     horizontal
                                     pagingEnabled
                                     showsHorizontalScrollIndicator={false}
-                                    onViewableItemsChanged={onViewableItemsChanged}
+                                    onViewableItemsChanged={
+                                        onViewableItemsChanged
+                                    }
                                     viewabilityConfig={viewabilityConfig}
                                     getItemLayout={getItemLayout}
                                     style={{
@@ -725,17 +832,17 @@ export default function ThreadModal({
                                         height: width - 20,
                                         flexGrow: 0,
                                     }}
-                                    initialScrollIndex={
-                                        (() => {
-                                            const index = initialPostId
-                                                ? threadPosts.findIndex(
-                                                    (p) => p.id === initialPostId
-                                                )
-                                                : 0
-                                            return index >= 0 ? index : 0
-                                        })()
+                                    initialScrollIndex={(() => {
+                                        const index = initialPostId
+                                            ? threadPosts.findIndex(
+                                                  (p) => p.id === initialPostId
+                                              )
+                                            : 0
+                                        return index >= 0 ? index : 0
+                                    })()}
+                                    onScrollToIndexFailed={
+                                        onScrollToIndexFailed
                                     }
-                                    onScrollToIndexFailed={onScrollToIndexFailed}
                                 />
 
                                 {/* Thread Timeline - dots with connecting line */}
@@ -748,7 +855,9 @@ export default function ThreadModal({
                                             <View
                                                 style={[
                                                     styles.timelineLineFilled,
-                                                    { width: `${(currentIndex / (threadPosts.length - 1)) * 100}%` }
+                                                    {
+                                                        width: `${(currentIndex / (threadPosts.length - 1)) * 100}%`,
+                                                    },
                                                 ]}
                                             />
                                             {/* Dots */}
@@ -757,24 +866,36 @@ export default function ThreadModal({
                                                     key={index}
                                                     style={[
                                                         styles.timelineDot,
-                                                        { left: `${(index / (threadPosts.length - 1)) * 100}%` },
-                                                        index <= currentIndex && styles.timelineDotFilled,
-                                                        index === currentIndex && styles.timelineDotActive,
+                                                        {
+                                                            left: `${(index / (threadPosts.length - 1)) * 100}%`,
+                                                        },
+                                                        index <= currentIndex &&
+                                                            styles.timelineDotFilled,
+                                                        index ===
+                                                            currentIndex &&
+                                                            styles.timelineDotActive,
                                                     ]}
                                                     onPress={() => {
-                                                        flatListRef.current?.scrollToIndex({
-                                                            index,
-                                                            animated: true,
-                                                        })
+                                                        flatListRef.current?.scrollToIndex(
+                                                            {
+                                                                index,
+                                                                animated: true,
+                                                            }
+                                                        )
                                                     }}
                                                     accessibilityLabel={`Go to photo ${index + 1} of ${threadPosts.length}`}
                                                     accessibilityRole="button"
-                                                    accessibilityState={{ selected: index === currentIndex }}
+                                                    accessibilityState={{
+                                                        selected:
+                                                            index ===
+                                                            currentIndex,
+                                                    }}
                                                 />
                                             ))}
                                         </View>
                                         <Text style={styles.progressText}>
-                                            {currentIndex + 1} of {threadPosts.length}
+                                            {currentIndex + 1} of{' '}
+                                            {threadPosts.length}
                                         </Text>
                                     </View>
                                 )}
@@ -783,28 +904,45 @@ export default function ThreadModal({
                                 <View style={styles.cardFooter}>
                                     {/* Title and Caption section */}
                                     <View style={styles.captionSection}>
-
-
                                         {currentPost?.caption && (
-                                            <Text style={styles.caption} numberOfLines={2}>
+                                            <Text
+                                                style={styles.caption}
+                                                numberOfLines={2}
+                                            >
                                                 {currentPost.caption}
                                             </Text>
                                         )}
 
                                         <View style={styles.metaRow}>
                                             <Text style={styles.dateText}>
-                                                {currentPost ? formatDate(currentPost.createdAt) : ''}
+                                                {currentPost
+                                                    ? formatDate(
+                                                          currentPost.createdAt
+                                                      )
+                                                    : ''}
                                             </Text>
-                                            {distance !== null && threadPosts[0]?.hasLocation && (
-                                                <>
-                                                    <Text style={styles.dateSeparator}> • </Text>
-                                                    <Text style={styles.distanceText}>
-                                                        {distance < 1000
-                                                            ? `${distance} m away`
-                                                            : `${(distance / 1000).toFixed(1)} km away`}
-                                                    </Text>
-                                                </>
-                                            )}
+                                            {distance !== null &&
+                                                threadPosts[0]?.hasLocation && (
+                                                    <>
+                                                        <Text
+                                                            style={
+                                                                styles.dateSeparator
+                                                            }
+                                                        >
+                                                            {' '}
+                                                            •{' '}
+                                                        </Text>
+                                                        <Text
+                                                            style={
+                                                                styles.distanceText
+                                                            }
+                                                        >
+                                                            {distance < 1000
+                                                                ? `${distance} m away`
+                                                                : `${(distance / 1000).toFixed(1)} km away`}
+                                                        </Text>
+                                                    </>
+                                                )}
                                         </View>
                                     </View>
 
@@ -816,17 +954,34 @@ export default function ThreadModal({
                                         <TouchableOpacity
                                             style={[
                                                 styles.catchButton,
-                                                threadPosts[0]?.authorId === user?.uid && styles.catchButtonDisabled,
+                                                threadPosts[0]?.authorId ===
+                                                    user?.uid &&
+                                                    styles.catchButtonDisabled,
                                             ]}
                                             onPress={handleCatchPress}
-                                            disabled={threadPosts[0]?.authorId === user?.uid}
+                                            disabled={
+                                                threadPosts[0]?.authorId ===
+                                                user?.uid
+                                            }
                                             accessibilityLabel="Catch This Shot"
                                             accessibilityRole="button"
-                                            accessibilityState={{ disabled: threadPosts[0]?.authorId === user?.uid }}
+                                            accessibilityState={{
+                                                disabled:
+                                                    threadPosts[0]?.authorId ===
+                                                    user?.uid,
+                                            }}
                                             accessibilityHint="Take a photo at this location"
                                         >
-                                            <Ionicons name="camera" size={20} color="#fff" />
-                                            <Text style={styles.catchButtonText}>Catch This Shot</Text>
+                                            <Ionicons
+                                                name="camera"
+                                                size={20}
+                                                color="#fff"
+                                            />
+                                            <Text
+                                                style={styles.catchButtonText}
+                                            >
+                                                Catch This Shot
+                                            </Text>
                                         </TouchableOpacity>
 
                                         {/* Locate on Map Button */}
@@ -837,24 +992,49 @@ export default function ThreadModal({
                                                 accessibilityLabel="Locate on Map"
                                                 accessibilityRole="button"
                                             >
-                                                <Ionicons name="map-outline" size={20} color={colors.primary} />
-                                                <Text style={styles.directionsButtonText}>Locate on Map</Text>
+                                                <Ionicons
+                                                    name="map-outline"
+                                                    size={20}
+                                                    color={colors.primary}
+                                                />
+                                                <Text
+                                                    style={
+                                                        styles.directionsButtonText
+                                                    }
+                                                >
+                                                    Locate on Map
+                                                </Text>
                                             </TouchableOpacity>
                                         )}
 
                                         {/* Get Directions Button */}
-                                        {threadPosts[0]?.hasLocation && postLocation && (
-                                            <TouchableOpacity
-                                                style={styles.directionsButton}
-                                                onPress={handleGetDirections}
-                                                accessibilityLabel="Get directions"
-                                                accessibilityRole="button"
-                                                accessibilityHint="Opens maps application"
-                                            >
-                                                <Ionicons name="navigate-outline" size={20} color={colors.primary} />
-                                                <Text style={styles.directionsButtonText}>Directions</Text>
-                                            </TouchableOpacity>
-                                        )}
+                                        {threadPosts[0]?.hasLocation &&
+                                            postLocation && (
+                                                <TouchableOpacity
+                                                    style={
+                                                        styles.directionsButton
+                                                    }
+                                                    onPress={
+                                                        handleGetDirections
+                                                    }
+                                                    accessibilityLabel="Get directions"
+                                                    accessibilityRole="button"
+                                                    accessibilityHint="Opens maps application"
+                                                >
+                                                    <Ionicons
+                                                        name="navigate-outline"
+                                                        size={20}
+                                                        color={colors.primary}
+                                                    />
+                                                    <Text
+                                                        style={
+                                                            styles.directionsButtonText
+                                                        }
+                                                    >
+                                                        Directions
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            )}
                                     </View>
                                 </View>
                             </View>
@@ -876,7 +1056,6 @@ export default function ThreadModal({
             )}
         </Modal>
     )
-
 }
 
 const styles = StyleSheet.create({
@@ -1130,4 +1309,4 @@ const styles = StyleSheet.create({
         right: 10,
         zIndex: 1,
     },
-});
+})

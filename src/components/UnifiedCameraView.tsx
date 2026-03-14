@@ -22,7 +22,7 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -59,7 +59,7 @@ export default function UnifiedCameraView({
             // Take the full picture
             const photo = await cameraRef.current.takePictureAsync({
                 quality: 0.8,
-                skipProcessing: true // specific to android usually, helps speed
+                skipProcessing: true, // specific to android usually, helps speed
             })
 
             if (photo) {
@@ -78,7 +78,7 @@ export default function UnifiedCameraView({
 
     // Toggle ghost mode visibility
     const toggleGhost = () => {
-        setShowGhost(prev => !prev)
+        setShowGhost((prev) => !prev)
     }
 
     // Calculate mask dimensions for the square guide
@@ -87,9 +87,9 @@ export default function UnifiedCameraView({
     // Center Y of screen
     const centerY = screenHeight / 2
     // Top of the square
-    const squareTop = centerY - (CAPTURE_SIZE / 2)
+    const squareTop = centerY - CAPTURE_SIZE / 2
     // Bottom of the square
-    const squareBottom = centerY + (CAPTURE_SIZE / 2)
+    const squareBottom = centerY + CAPTURE_SIZE / 2
 
     return (
         <View style={styles.container}>
@@ -106,7 +106,12 @@ export default function UnifiedCameraView({
             >
                 {/* Ghost Image Overlay */}
                 {originalPhotoUrl && showGhost && (
-                    <View style={[styles.ghostContainer, { opacity: ghostOpacity }]}>
+                    <View
+                        style={[
+                            styles.ghostContainer,
+                            { opacity: ghostOpacity },
+                        ]}
+                    >
                         <Image
                             source={{ uri: originalPhotoUrl }}
                             style={{
@@ -122,16 +127,23 @@ export default function UnifiedCameraView({
 
             {/* Crop Guides (Dimmed areas) */}
             <View style={[styles.mask, { height: squareTop, top: 0 }]} />
-            <View style={[styles.mask, { height: screenHeight - squareBottom, top: squareBottom }]} />
+            <View
+                style={[
+                    styles.mask,
+                    { height: screenHeight - squareBottom, top: squareBottom },
+                ]}
+            />
 
             {/* Square Border Indicator */}
-            <View style={[
-                styles.squareGuide,
-                {
-                    top: squareTop,
-                    height: CAPTURE_SIZE
-                }
-            ]} />
+            <View
+                style={[
+                    styles.squareGuide,
+                    {
+                        top: squareTop,
+                        height: CAPTURE_SIZE,
+                    },
+                ]}
+            />
 
             {/* Top Controls */}
             <View style={[styles.topControls, { top: insets.top + 10 }]}>
@@ -146,24 +158,44 @@ export default function UnifiedCameraView({
 
                 {originalPhotoUrl && (
                     <TouchableOpacity
-                        style={[styles.ghostToggle, !showGhost && styles.ghostToggleInactive]}
+                        style={[
+                            styles.ghostToggle,
+                            !showGhost && styles.ghostToggleInactive,
+                        ]}
                         onPress={toggleGhost}
-                        accessibilityLabel={showGhost ? 'Hide ghost overlay' : 'Show ghost overlay'}
+                        accessibilityLabel={
+                            showGhost
+                                ? 'Hide ghost overlay'
+                                : 'Show ghost overlay'
+                        }
                         accessibilityRole="button"
                         accessibilityState={{ selected: showGhost }}
                     >
-                        <Ionicons name={showGhost ? "eye" : "eye-off"} size={20} color="white" />
+                        <Ionicons
+                            name={showGhost ? 'eye' : 'eye-off'}
+                            size={20}
+                            color="white"
+                        />
                         <Text style={styles.ghostText}>Ghost</Text>
                     </TouchableOpacity>
                 )}
             </View>
 
             {/* Bottom Controls */}
-            <View style={[styles.bottomControls, { paddingBottom: insets.bottom + 20 }]}>
+            <View
+                style={[
+                    styles.bottomControls,
+                    { paddingBottom: insets.bottom + 20 },
+                ]}
+            >
                 <TouchableOpacity
                     style={styles.iconButton}
                     onPress={handleFlipCamera}
-                    accessibilityLabel={facing === 'back' ? 'Switch to front camera' : 'Switch to back camera'}
+                    accessibilityLabel={
+                        facing === 'back'
+                            ? 'Switch to front camera'
+                            : 'Switch to back camera'
+                    }
                     accessibilityRole="button"
                 >
                     <Ionicons name="camera-reverse" size={28} color="white" />
@@ -314,5 +346,5 @@ const styles = StyleSheet.create({
     loadingText: {
         color: 'white',
         fontSize: 16,
-    }
+    },
 })

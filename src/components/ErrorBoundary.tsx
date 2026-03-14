@@ -31,7 +31,9 @@ export default class ErrorBoundary extends Component<Props, State> {
         if (this.state.hasError) {
             return (
                 <View style={styles.container}>
-                    <Text style={styles.title} accessibilityRole="header">Something went wrong</Text>
+                    <Text style={styles.title} accessibilityRole="header">
+                        Something went wrong
+                    </Text>
                     <Text style={styles.message}>
                         The app ran into an unexpected error. Try reloading.
                     </Text>

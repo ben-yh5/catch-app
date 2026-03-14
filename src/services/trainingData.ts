@@ -52,7 +52,10 @@ export const uploadTrainingPair = async (
         // We do NOT wait for or need the download URL for the app to function.
         // Reading it back fails if the rules are "private".
         // We just upload blindly.
-        const uploadImage = async (uri: string, path: string): Promise<string> => {
+        const uploadImage = async (
+            uri: string,
+            path: string
+        ): Promise<string> => {
             const response = await fetch(uri)
             const blob = await response.blob()
             const storageRef = ref(storage, path)
@@ -64,7 +67,7 @@ export const uploadTrainingPair = async (
 
         const [originalPath, catchPath] = await Promise.all([
             uploadImage(originalImageUri, `${storageBasePath}/original.jpg`),
-            uploadImage(catchImageUri, `${storageBasePath}/catch.jpg`)
+            uploadImage(catchImageUri, `${storageBasePath}/catch.jpg`),
         ])
 
         // Save metadata record
@@ -78,14 +81,14 @@ export const uploadTrainingPair = async (
             catchStoragePath: catchPath,
             originalMeta: {
                 ...originalMeta,
-                date: originalMeta.date.toISOString()
+                date: originalMeta.date.toISOString(),
             },
             catchMeta: {
                 ...catchMeta,
-                date: catchMeta.date.toISOString()
+                date: catchMeta.date.toISOString(),
             },
             createdAt: new Date().toISOString(),
-            status: 'unverified' // ready for auto-training pipeline
+            status: 'unverified', // ready for auto-training pipeline
         })
 
         console.log(`[TrainingData] Successfully uploaded pair ${pairId}`)

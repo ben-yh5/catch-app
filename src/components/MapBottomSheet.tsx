@@ -1,20 +1,26 @@
-import { useAuth } from '@/context/AuthContext';
-import { colors } from '@/theme/colors';
-import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import React, { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import CompactPostCard from './CompactPostCard';
+import { useAuth } from '@/context/AuthContext'
+import { colors } from '@/theme/colors'
+import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet'
+import React, { useMemo, useRef, useState } from 'react'
+import {
+    ActivityIndicator,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native'
+import CompactPostCard from './CompactPostCard'
 
 interface MapBottomSheetProps {
-    posts: any[];
-    loading: boolean;
-    onPostPress: (postId: string) => void;
-    onJumpToLocation: (latitude: number, longitude: number) => void;
-    selectedPostId?: string | null;
-    title?: string;
-    subtitle?: string;
-    onClose?: () => void;
-    isListMode?: boolean;
+    posts: any[]
+    loading: boolean
+    onPostPress: (postId: string) => void
+    onJumpToLocation: (latitude: number, longitude: number) => void
+    selectedPostId?: string | null
+    title?: string
+    subtitle?: string
+    onClose?: () => void
+    isListMode?: boolean
 }
 
 export default function MapBottomSheet({
@@ -28,10 +34,10 @@ export default function MapBottomSheet({
     onClose,
     isListMode,
 }: MapBottomSheetProps) {
-    const { user } = useAuth();
-    const bottomSheetRef = useRef<BottomSheet>(null);
-    const snapPoints = useMemo(() => ['15%', '50%'], []);
-    const [sheetIndex, setSheetIndex] = useState(1);
+    const { user } = useAuth()
+    const bottomSheetRef = useRef<BottomSheet>(null)
+    const snapPoints = useMemo(() => ['15%', '50%'], [])
+    const [sheetIndex, setSheetIndex] = useState(1)
 
     const renderItem = ({ item }: { item: any }) => (
         <CompactPostCard
@@ -44,7 +50,7 @@ export default function MapBottomSheet({
             }
             highlighted={item.authorId === user?.uid}
         />
-    );
+    )
 
     const renderHeader = () => (
         <View style={styles.header}>
@@ -54,8 +60,12 @@ export default function MapBottomSheet({
             {isListMode ? (
                 <View style={styles.listHeaderContainer}>
                     <View style={styles.listTitleContainer}>
-                        <Text style={styles.listTitle} numberOfLines={1}>{title || 'List'}</Text>
-                        {subtitle && <Text style={styles.listSubtitle}>{subtitle}</Text>}
+                        <Text style={styles.listTitle} numberOfLines={1}>
+                            {title || 'List'}
+                        </Text>
+                        {subtitle && (
+                            <Text style={styles.listSubtitle}>{subtitle}</Text>
+                        )}
                     </View>
                     {onClose && (
                         <TouchableOpacity
@@ -72,12 +82,14 @@ export default function MapBottomSheet({
                 <View style={styles.countContainer}>
                     <Text style={styles.countIcon}>📍</Text>
                     <Text style={styles.countText}>
-                        {loading ? 'Loading...' : `${posts.length} shot${posts.length !== 1 ? 's' : ''} in this area`}
+                        {loading
+                            ? 'Loading...'
+                            : `${posts.length} shot${posts.length !== 1 ? 's' : ''} in this area`}
                     </Text>
                 </View>
             )}
         </View>
-    );
+    )
 
     const renderEmpty = () => (
         <View style={styles.emptyContainer}>
@@ -87,11 +99,13 @@ export default function MapBottomSheet({
                 <>
                     <Text style={styles.emptyIcon}>🗺️</Text>
                     <Text style={styles.emptyText}>No posts in this area</Text>
-                    <Text style={styles.emptySubtext}>Try zooming out or panning the map</Text>
+                    <Text style={styles.emptySubtext}>
+                        Try zooming out or panning the map
+                    </Text>
                 </>
             )}
         </View>
-    );
+    )
 
     return (
         <BottomSheet
@@ -118,7 +132,7 @@ export default function MapBottomSheet({
                 showsVerticalScrollIndicator={false}
             />
         </BottomSheet>
-    );
+    )
 }
 
 const styles = StyleSheet.create({
@@ -221,4 +235,4 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: colors.primary,
     },
-});
+})

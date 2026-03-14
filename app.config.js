@@ -1,7 +1,7 @@
 import 'dotenv/config'
 
-const variant = process.env.APP_VARIANT;
-const suffix = variant ? `.${variant}` : '';
+const variant = process.env.APP_VARIANT
+const suffix = variant ? `.${variant}` : ''
 
 export default {
     expo: {
@@ -21,7 +21,8 @@ export default {
         },
         android: {
             package: `app.catchapp.mobile${suffix}`,
-            googleServicesFile: process.env.GOOGLE_SERVICES_JSON || './google-services.json',
+            googleServicesFile:
+                process.env.GOOGLE_SERVICES_JSON || './google-services.json',
             adaptiveIcon: {
                 backgroundColor: '#E6F4FE',
                 foregroundImage: './assets/images/android-icon-foreground.png',
@@ -64,7 +65,10 @@ export default {
             '@rnmapbox/maps',
             '@react-native-firebase/app',
             '@react-native-firebase/app-check',
-            ['@sentry/react-native/expo', { organization: 'catchapp-va', project: 'catch-app' }],
+            [
+                '@sentry/react-native/expo',
+                { organization: 'catchapp-va', project: 'catch-app' },
+            ],
             './plugins/withModularHeaders',
         ],
         experiments: {
@@ -72,9 +76,9 @@ export default {
             reactCompiler: true,
         },
         extra: {
-            "eas": {
-                "projectId": "7d162c30-e195-4cf1-929d-9e3e2c6ebcda"
-            }
+            eas: {
+                projectId: '7d162c30-e195-4cf1-929d-9e3e2c6ebcda',
+            },
         },
     },
 }

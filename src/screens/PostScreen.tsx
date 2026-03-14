@@ -18,7 +18,16 @@ import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
 import { useRouter } from 'expo-router'
-import { addDoc, collection, doc, getDoc, getDocs, query, where, documentId } from 'firebase/firestore'
+import {
+    addDoc,
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    query,
+    where,
+    documentId,
+} from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { geohashForLocation } from 'geofire-common'
 import React, { useRef, useState } from 'react'
@@ -31,7 +40,8 @@ interface LocationData {
 
 export default function PostScreen() {
     const [permission, requestPermission] = useCameraPermissions()
-    const [status, requestLocationPermission] = Location.useForegroundPermissions()
+    const [status, requestLocationPermission] =
+        Location.useForegroundPermissions()
     const [showCamera, setShowCamera] = useState(false)
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [location, setLocation] = useState<LocationData | null>(null)
@@ -105,23 +115,39 @@ export default function PostScreen() {
                     accuracy: Location.Accuracy.Highest, // Highest accuracy for new posts
                 })
 
-                const timeoutPromise = new Promise<Location.LocationObject>((_, reject) => {
-                    setTimeout(() => reject(new Error('Location request timed out')), 10000)
-                })
+                const timeoutPromise = new Promise<Location.LocationObject>(
+                    (_, reject) => {
+                        setTimeout(
+                            () =>
+                                reject(new Error('Location request timed out')),
+                            10000
+                        )
+                    }
+                )
 
-                const location = await Promise.race([locationPromise, timeoutPromise])
+                const location = await Promise.race([
+                    locationPromise,
+                    timeoutPromise,
+                ])
                 console.log('[PostScreen] Got fresh location')
                 return {
                     latitude: location.coords.latitude,
                     longitude: location.coords.longitude,
                 }
             } catch (error) {
-                console.error('[PostScreen] Error getting fresh location:', error)
+                console.error(
+                    '[PostScreen] Error getting fresh location:',
+                    error
+                )
                 throw error
             }
         } catch (error) {
             console.error('Error getting device location:', error)
-            showToast('error', 'Location Error', 'Could not get your current location. Please try again or move to an area with better signal.')
+            showToast(
+                'error',
+                'Location Error',
+                'Could not get your current location. Please try again or move to an area with better signal.'
+            )
             return null
         }
     }
@@ -180,7 +206,10 @@ export default function PostScreen() {
      * Nudge: checks for visually similar nearby posts after photo capture.
      * Runs in background — doesn't block the preview screen.
      */
-    const checkForSimilarPosts = async (imageUri: string, loc: LocationData) => {
+    const checkForSimilarPosts = async (
+        imageUri: string,
+        loc: LocationData
+    ) => {
         try {
             // 1. Get nearby post locations
             const nearbyLocations = await getPostsInRadius({
@@ -193,8 +222,8 @@ export default function PostScreen() {
 
             // 2. Batch fetch full post data (need photoURL)
             const postIds = nearbyLocations
-                .map(l => l.postId)
-                .filter(id => id) // safety
+                .map((l) => l.postId)
+                .filter((id) => id) // safety
                 .slice(0, 10) // limit batch size
 
             if (postIds.length === 0) return
@@ -206,19 +235,23 @@ export default function PostScreen() {
             )
             const postsSnap = await getDocs(postsQuery)
             const nearbyPosts: Post[] = postsSnap.docs
-                .map(d => ({ id: d.id, ...d.data() } as Post))
-                .filter(p => p.authorId !== user?.uid) // can't catch your own
-                .filter(p => p.isOriginal) // only root posts
+                .map((d) => ({ id: d.id, ...d.data() }) as Post)
+                .filter((p) => p.authorId !== user?.uid) // can't catch your own
+                .filter((p) => p.isOriginal) // only root posts
                 .slice(0, 3) // limit similarity checks
 
             if (nearbyPosts.length === 0) return
 
             // 3. Run visual similarity (use thumbnails for speed)
-            const candidateUris = nearbyPosts.map(p => p.thumbnailURL || p.photoURL)
+            const candidateUris = nearbyPosts.map(
+                (p) => p.thumbnailURL || p.photoURL
+            )
             const match = await findMostSimilar(imageUri, candidateUris)
 
             if (match) {
-                console.log(`[PostScreen] Nudge: similar post found (score=${match.score.toFixed(3)})`)
+                console.log(
+                    `[PostScreen] Nudge: similar post found (score=${match.score.toFixed(3)})`
+                )
                 setSimilarPost(nearbyPosts[match.index])
             }
         } catch (error) {
@@ -237,7 +270,14 @@ export default function PostScreen() {
         const post = similarPost
         setSimilarPost(null)
 
-        if (!dataContributionEnabled || !post || !capturedImage || !location || !user) return
+        if (
+            !dataContributionEnabled ||
+            !post ||
+            !capturedImage ||
+            !location ||
+            !user
+        )
+            return
 
         // Upload as hard negative in background — model thought they matched, user disagreed
         const meta = {
@@ -259,7 +299,10 @@ export default function PostScreen() {
         )
     }
 
-    const handleCatchConfirm = async (caption?: string, listIds?: Set<string>) => {
+    const handleCatchConfirm = async (
+        caption?: string,
+        listIds?: Set<string>
+    ) => {
         if (!user || !capturedImage || !catchTarget || !location) {
             showToast('error', 'Missing information to complete catch.')
             return
@@ -269,10 +312,18 @@ export default function PostScreen() {
 
         try {
             // 1. Validate catch (proximity, self-catch, duplicate)
-            const validation = await validateCatch(catchTarget.id, location.latitude, location.longitude)
+            const validation = await validateCatch(
+                catchTarget.id,
+                location.latitude,
+                location.longitude
+            )
             if (!validation.isValid) {
                 setUploading(false)
-                showToast('warning', 'Too Far Away', `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m.`)
+                showToast(
+                    'warning',
+                    'Too Far Away',
+                    `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m.`
+                )
                 return
             }
 
@@ -280,13 +331,19 @@ export default function PostScreen() {
             const isSharpEnough = await checkBlur(capturedImage)
             if (!isSharpEnough) {
                 setUploading(false)
-                showToast('warning', 'Too Blurry', 'Please steady your hand and try again.')
+                showToast(
+                    'warning',
+                    'Too Blurry',
+                    'Please steady your hand and try again.'
+                )
                 return
             }
 
             // 3. Upload image
             const userDoc = await getDoc(doc(db, 'users', user.uid))
-            const username = userDoc.exists() ? userDoc.data().username : 'Anonymous'
+            const username = userDoc.exists()
+                ? userDoc.data().username
+                : 'Anonymous'
 
             const response = await fetch(capturedImage)
             const blob = await response.blob()
@@ -311,7 +368,10 @@ export default function PostScreen() {
             const docRef = await addDoc(collection(db, 'posts'), postData)
 
             // 5. Store location
-            const geohash = geohashForLocation([location.latitude, location.longitude])
+            const geohash = geohashForLocation([
+                location.latitude,
+                location.longitude,
+            ])
             await addDoc(collection(db, 'post_locations'), {
                 postId: docRef.id,
                 latitude: location.latitude,
@@ -325,8 +385,10 @@ export default function PostScreen() {
             // 6. Add to lists
             if (listIds && listIds.size > 0) {
                 await Promise.all(
-                    Array.from(listIds).map(id => addPostToList(id, docRef.id))
-                ).catch(e => console.error('Error adding to lists:', e))
+                    Array.from(listIds).map((id) =>
+                        addPostToList(id, docRef.id)
+                    )
+                ).catch((e) => console.error('Error adding to lists:', e))
             }
 
             showToast('success', 'Location caught!', '+14 Contribution')
@@ -364,7 +426,6 @@ export default function PostScreen() {
             return
         }
 
-
         // Location is now mandatory
         if (!location) {
             Alert.alert(
@@ -377,7 +438,11 @@ export default function PostScreen() {
         // Check for blur
         const isSharpEnough = await checkBlur(capturedImage)
         if (!isSharpEnough) {
-            showToast('warning', 'Too Blurry', 'Please steady your hand and try again.')
+            showToast(
+                'warning',
+                'Too Blurry',
+                'Please steady your hand and try again.'
+            )
             return
         }
 
@@ -422,7 +487,10 @@ export default function PostScreen() {
             const docRef = await addDoc(collection(db, 'posts'), postData)
 
             // Store actual location in separate private collection with geohash
-            const geohash = geohashForLocation([location.latitude, location.longitude])
+            const geohash = geohashForLocation([
+                location.latitude,
+                location.longitude,
+            ])
             await addDoc(collection(db, 'post_locations'), {
                 postId: docRef.id,
                 latitude: location.latitude,
@@ -437,7 +505,7 @@ export default function PostScreen() {
             if (listIds && listIds.size > 0) {
                 try {
                     await Promise.all(
-                        Array.from(listIds).map(listId =>
+                        Array.from(listIds).map((listId) =>
                             addPostToList(listId, docRef.id)
                         )
                     )
@@ -450,12 +518,14 @@ export default function PostScreen() {
             const nearbyPosts = await getPostsInRadius({
                 centerLat: location.latitude,
                 centerLng: location.longitude,
-                radiusInMeters: 50
+                radiusInMeters: 50,
             })
 
             const isPioneer = nearbyPosts.length === 0
 
-            const alertTitle = isPioneer ? 'Pioneer Bonus! (+10 XP)' : 'Shared! (+2 XP)'
+            const alertTitle = isPioneer
+                ? 'Pioneer Bonus! (+10 XP)'
+                : 'Shared! (+2 XP)'
             const alertMsg = isPioneer
                 ? 'You mapped a new area! You are the first to post here.'
                 : 'You added to the map! Nice shot.'
@@ -487,7 +557,6 @@ export default function PostScreen() {
         setCatchTarget(null)
         setLoadingLocation(false)
     }
-
 
     // Camera View
     if (showCamera) {
@@ -546,7 +615,9 @@ export default function PostScreen() {
                 color="#ccc"
                 style={styles.icon}
             />
-            <Text style={styles.title} accessibilityRole="header">Share a Shot</Text>
+            <Text style={styles.title} accessibilityRole="header">
+                Share a Shot
+            </Text>
             <Text style={styles.subtitle}>
                 Capture and share photo-worthy views around the world
             </Text>

@@ -37,12 +37,16 @@ interface AuthContextType {
     logout: () => Promise<void>
     dataContributionEnabled: boolean
     toggleDataContribution: (enabled: boolean) => Promise<void>
-    
+
     // Contribution stats
     contribution: number
     totalPosts: number
     totalCatches: number
-    updateStats: (stats: { contribution: number; totalPosts: number; totalCatches: number }) => void
+    updateStats: (stats: {
+        contribution: number
+        totalPosts: number
+        totalCatches: number
+    }) => void
 
     // Notifications
     notifications: Notification[]
@@ -51,7 +55,10 @@ interface AuthContextType {
         notifyOnCatch: boolean
         notifyOnFollow: boolean
     }
-    toggleNotificationSetting: (type: 'notifyOnCatch' | 'notifyOnFollow', enabled: boolean) => Promise<void>
+    toggleNotificationSetting: (
+        type: 'notifyOnCatch' | 'notifyOnFollow',
+        enabled: boolean
+    ) => Promise<void>
     markNotificationAsRead: (id: string) => Promise<void>
     markAllNotificationsAsRead: () => Promise<void>
     clearAllNotifications: () => Promise<void>
@@ -64,7 +71,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
-    const [dataContributionEnabled, setDataContributionEnabled] = useState(false)
+    const [dataContributionEnabled, setDataContributionEnabled] =
+        useState(false)
     const [contribution, setContribution] = useState(0)
     const [totalPosts, setTotalPosts] = useState(0)
     const [totalCatches, setTotalCatches] = useState(0)
@@ -74,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [unreadCount, setUnreadCount] = useState(0)
     const [notificationSettings, setNotificationSettings] = useState({
         notifyOnCatch: true,
-        notifyOnFollow: true
+        notifyOnFollow: true,
     })
 
     useEffect(() => {
@@ -92,7 +100,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     const userDoc = await getDoc(doc(db, 'users', user.uid))
                     if (userDoc.exists()) {
                         const data = userDoc.data()
-                        setDataContributionEnabled(data.dataContributionEnabled || false)
+                        setDataContributionEnabled(
+                            data.dataContributionEnabled || false
+                        )
                         setContribution(data.contribution || 0)
                         setTotalPosts(data.totalPosts || 0)
                         setTotalCatches(data.totalCatches || 0)
@@ -100,8 +110,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                         // Load notification settings
                         if (data.notificationSettings) {
                             setNotificationSettings({
-                                notifyOnCatch: data.notificationSettings.notifyOnCatch ?? true,
-                                notifyOnFollow: data.notificationSettings.notifyOnFollow ?? true
+                                notifyOnCatch:
+                                    data.notificationSettings.notifyOnCatch ??
+                                    true,
+                                notifyOnFollow:
+                                    data.notificationSettings.notifyOnFollow ??
+                                    true,
                             })
                         }
                     }
@@ -110,8 +124,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     registerForPushNotificationsAsync().then((token) => {
                         if (token) {
                             updateDoc(doc(db, 'users', user.uid), {
-                                pushToken: token
-                            }).catch(err => console.error("Error saving push token:", err))
+                                pushToken: token,
+                            }).catch((err) =>
+                                console.error('Error saving push token:', err)
+                            )
                         }
                     })
                 } catch (error) {
@@ -136,40 +152,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         let unsubscribe: (() => void) | undefined
 
-        import('firebase/firestore').then(({ collection, query, onSnapshot, limit }) => {
-            console.log(`[AuthContext] Setting up listener for: users/${user.uid}/notifications`)
+        import('firebase/firestore').then(
+            ({ collection, query, onSnapshot, limit }) => {
+                console.log(
+                    `[AuthContext] Setting up listener for: users/${user.uid}/notifications`
+                )
 
-            const q = query(
-                collection(db, 'users', user.uid, 'notifications'),
-                limit(100)
-            )
+                const q = query(
+                    collection(db, 'users', user.uid, 'notifications'),
+                    limit(100)
+                )
 
-            unsubscribe = onSnapshot(q, (snapshot) => {
-                console.log(`[AuthContext] Notification snapshot size: ${snapshot.size} for user ${user.uid}`)
-                if (!snapshot.empty) {
-                    console.log('[AuthContext] Latest notification sample:', snapshot.docs[0].data())
-                }
+                unsubscribe = onSnapshot(
+                    q,
+                    (snapshot) => {
+                        console.log(
+                            `[AuthContext] Notification snapshot size: ${snapshot.size} for user ${user.uid}`
+                        )
+                        if (!snapshot.empty) {
+                            console.log(
+                                '[AuthContext] Latest notification sample:',
+                                snapshot.docs[0].data()
+                            )
+                        }
 
-                const newNotifications = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                } as Notification))
-                // Sort manually since we removed orderBy
-                newNotifications.sort((a, b) => {
-                    const tA = a.createdAt?.toMillis?.() || 0
-                    const tB = b.createdAt?.toMillis?.() || 0
-                    return tB - tA
-                })
+                        const newNotifications = snapshot.docs.map(
+                            (doc) =>
+                                ({
+                                    id: doc.id,
+                                    ...doc.data(),
+                                }) as Notification
+                        )
+                        // Sort manually since we removed orderBy
+                        newNotifications.sort((a, b) => {
+                            const tA = a.createdAt?.toMillis?.() || 0
+                            const tB = b.createdAt?.toMillis?.() || 0
+                            return tB - tA
+                        })
 
-                setNotifications(newNotifications)
+                        setNotifications(newNotifications)
 
-                // Update unread count
-                const unread = newNotifications.filter(n => !n.read).length
-                setUnreadCount(unread)
-            }, (error) => {
-                console.error("Error listening to notifications:", error)
-            })
-        })
+                        // Update unread count
+                        const unread = newNotifications.filter(
+                            (n) => !n.read
+                        ).length
+                        setUnreadCount(unread)
+                    },
+                    (error) => {
+                        console.error(
+                            'Error listening to notifications:',
+                            error
+                        )
+                    }
+                )
+            }
+        )
 
         return () => {
             if (unsubscribe) {
@@ -178,7 +215,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }, [user])
 
-    const toggleNotificationSetting = async (type: 'notifyOnCatch' | 'notifyOnFollow', enabled: boolean) => {
+    const toggleNotificationSetting = async (
+        type: 'notifyOnCatch' | 'notifyOnFollow',
+        enabled: boolean
+    ) => {
         if (!user) return
 
         const newSettings = { ...notificationSettings, [type]: enabled }
@@ -186,10 +226,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         try {
             await updateDoc(doc(db, 'users', user.uid), {
-                notificationSettings: newSettings
+                notificationSettings: newSettings,
             })
         } catch (error) {
-            console.error("Error updating notification settings:", error)
+            console.error('Error updating notification settings:', error)
             // Revert on error
             setNotificationSettings(notificationSettings)
         }
@@ -200,10 +240,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         try {
             await updateDoc(doc(db, 'users', user.uid, 'notifications', id), {
-                read: true
+                read: true,
             })
         } catch (error) {
-            console.error("Error marking notification as read:", error)
+            console.error('Error marking notification as read:', error)
         }
     }
 
@@ -211,8 +251,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (!user) return
 
         try {
-            const { collection, getDocs, writeBatch, doc } = await import('firebase/firestore')
-            const notificationsRef = collection(db, 'users', user.uid, 'notifications')
+            const { collection, getDocs, writeBatch, doc } =
+                await import('firebase/firestore')
+            const notificationsRef = collection(
+                db,
+                'users',
+                user.uid,
+                'notifications'
+            )
             const snapshot = await getDocs(notificationsRef)
 
             if (snapshot.empty) return
@@ -235,7 +281,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // This should potentialy be a batch update or cloud function for efficiency
         // For now, client-side loop is okay for small numbers
-        const unreadNotifications = notifications.filter(n => !n.read)
+        const unreadNotifications = notifications.filter((n) => !n.read)
 
         if (unreadNotifications.length === 0) return
 
@@ -243,7 +289,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         import('firebase/firestore').then(async ({ writeBatch, doc }) => {
             const batch = writeBatch(db)
 
-            unreadNotifications.forEach(n => {
+            unreadNotifications.forEach((n) => {
                 const ref = doc(db, 'users', user.uid, 'notifications', n.id)
                 batch.update(ref, { read: true })
             })
@@ -251,7 +297,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             try {
                 await batch.commit()
             } catch (error) {
-                console.error("Error batch marking read:", error)
+                console.error('Error batch marking read:', error)
             }
         })
     }
@@ -309,7 +355,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
      */
     const loginWithGoogle = async () => {
         try {
-            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true })
+            await GoogleSignin.hasPlayServices({
+                showPlayServicesUpdateDialog: true,
+            })
 
             const signInResult = await GoogleSignin.signIn()
 
@@ -334,7 +382,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         } catch (error: any) {
             console.error('Google Sign-In Error:', error)
 
-            if (error.code === 'auth/account-exists-with-different-credential') {
+            if (
+                error.code === 'auth/account-exists-with-different-credential'
+            ) {
                 throw new Error(
                     'An account already exists with this email. Try signing in with email and password instead.'
                 )
@@ -356,7 +406,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }
 
-    const updateStats = (stats: { contribution: number; totalPosts: number; totalCatches: number }) => {
+    const updateStats = (stats: {
+        contribution: number
+        totalPosts: number
+        totalCatches: number
+    }) => {
         setContribution(stats.contribution)
         setTotalPosts(stats.totalPosts)
         setTotalCatches(stats.totalCatches)
@@ -370,37 +424,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         try {
             await updateDoc(doc(db, 'users', user.uid), {
-                dataContributionEnabled: enabled
+                dataContributionEnabled: enabled,
             })
             setDataContributionEnabled(enabled)
         } catch (error: any) {
-            console.error("Error updating data contribution setting", error)
+            console.error('Error updating data contribution setting', error)
             throw new Error(error.message)
         }
     }
 
     return (
-        <AuthContext.Provider value={{
-            user,
-            loading,
-            login,
-            signup,
-            loginWithGoogle,
-            logout,
-            dataContributionEnabled,
-            toggleDataContribution,
-            contribution,
-            totalPosts,
-            totalCatches,
-            updateStats,
-            notifications,
-            unreadCount,
-            notificationSettings,
-            toggleNotificationSetting,
-            markNotificationAsRead,
-            markAllNotificationsAsRead,
-            clearAllNotifications,
-        }}>
+        <AuthContext.Provider
+            value={{
+                user,
+                loading,
+                login,
+                signup,
+                loginWithGoogle,
+                logout,
+                dataContributionEnabled,
+                toggleDataContribution,
+                contribution,
+                totalPosts,
+                totalCatches,
+                updateStats,
+                notifications,
+                unreadCount,
+                notificationSettings,
+                toggleNotificationSetting,
+                markNotificationAsRead,
+                markAllNotificationsAsRead,
+                clearAllNotifications,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     )

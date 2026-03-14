@@ -119,22 +119,26 @@ export default function ListDetailScreen() {
     const handleDeleteList = () => {
         if (!list) return
 
-        Alert.alert('Delete List', `Are you sure you want to delete "${list.name}"?`, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: async () => {
-                    try {
-                        await deleteDoc(doc(db, 'lists', listId))
-                        router.back()
-                    } catch (error) {
-                        console.error('Error deleting list:', error)
-                        showToast('error', 'Failed to delete list')
-                    }
+        Alert.alert(
+            'Delete List',
+            `Are you sure you want to delete "${list.name}"?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deleteDoc(doc(db, 'lists', listId))
+                            router.back()
+                        } catch (error) {
+                            console.error('Error deleting list:', error)
+                            showToast('error', 'Failed to delete list')
+                        }
+                    },
                 },
-            },
-        ])
+            ]
+        )
     }
 
     const handleRemovePost = (postId: string) => {
@@ -148,13 +152,17 @@ export default function ListDetailScreen() {
                         await updateDoc(doc(db, 'lists', listId), {
                             postIds: arrayRemove(postId),
                         })
-                        setPosts((prev) => prev.filter((post) => post.id !== postId))
+                        setPosts((prev) =>
+                            prev.filter((post) => post.id !== postId)
+                        )
                         setList((prev) =>
                             prev
                                 ? {
-                                    ...prev,
-                                    postIds: prev.postIds.filter((id) => id !== postId),
-                                }
+                                      ...prev,
+                                      postIds: prev.postIds.filter(
+                                          (id) => id !== postId
+                                      ),
+                                  }
                                 : null
                         )
                     } catch (error) {
@@ -188,7 +196,11 @@ export default function ListDetailScreen() {
                         accessibilityLabel="Remove post from list"
                         accessibilityRole="button"
                     >
-                        <Ionicons name="close-circle" size={24} color={colors.danger} />
+                        <Ionicons
+                            name="close-circle"
+                            size={24}
+                            color={colors.danger}
+                        />
                     </TouchableOpacity>
                 )}
             </View>
@@ -197,9 +209,15 @@ export default function ListDetailScreen() {
 
     const renderEmptyState = () => (
         <View style={styles.emptyContainer}>
-            <Ionicons name="images-outline" size={64} color={colors.textTertiary} />
+            <Ionicons
+                name="images-outline"
+                size={64}
+                color={colors.textTertiary}
+            />
             <Text style={styles.emptyText}>No Shots Yet</Text>
-            <Text style={styles.emptySubtext}>Add shots to this list from any thread</Text>
+            <Text style={styles.emptySubtext}>
+                Add shots to this list from any thread
+            </Text>
         </View>
     )
 
@@ -223,27 +241,44 @@ export default function ListDetailScreen() {
                     accessibilityLabel="Go back"
                     accessibilityRole="button"
                 >
-                    <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+                    <Ionicons
+                        name="arrow-back"
+                        size={24}
+                        color={colors.textPrimary}
+                    />
                 </TouchableOpacity>
                 <View style={styles.headerContent}>
-                    <Text style={styles.listName} accessibilityRole="header">{list.name}</Text>
+                    <Text style={styles.listName} accessibilityRole="header">
+                        {list.name}
+                    </Text>
                     {list.description ? (
-                        <Text style={styles.listDescription}>{list.description}</Text>
+                        <Text style={styles.listDescription}>
+                            {list.description}
+                        </Text>
                     ) : null}
                     <Text style={styles.listMeta}>
-                        {list.postIds.length} {list.postIds.length === 1 ? 'shot' : 'shots'} •
-                        @{list.creatorUsername}
+                        {list.postIds.length}{' '}
+                        {list.postIds.length === 1 ? 'shot' : 'shots'} • @
+                        {list.creatorUsername}
                     </Text>
                 </View>
                 {isOwner && (
                     <View style={styles.headerActions}>
                         <TouchableOpacity
-                            onPress={() => router.push(`/create-list?listId=${listId}` as any)}
+                            onPress={() =>
+                                router.push(
+                                    `/create-list?listId=${listId}` as any
+                                )
+                            }
                             style={styles.iconButton}
                             accessibilityLabel="Edit list"
                             accessibilityRole="button"
                         >
-                            <Ionicons name="pencil" size={20} color={colors.primary} />
+                            <Ionicons
+                                name="pencil"
+                                size={20}
+                                color={colors.primary}
+                            />
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={handleDeleteList}
@@ -251,7 +286,11 @@ export default function ListDetailScreen() {
                             accessibilityLabel="Delete list"
                             accessibilityRole="button"
                         >
-                            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                            <Ionicons
+                                name="trash-outline"
+                                size={20}
+                                color={colors.danger}
+                            />
                         </TouchableOpacity>
                     </View>
                 )}
@@ -263,7 +302,12 @@ export default function ListDetailScreen() {
                 renderItem={renderPost}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handleRefresh}
+                    />
+                }
                 ListEmptyComponent={renderEmptyState}
             />
 

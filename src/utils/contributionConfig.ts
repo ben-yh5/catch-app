@@ -1,6 +1,6 @@
 /**
  * Contribution System Configuration
- * 
+ *
  * Central config for all contribution point values.
  * Used by both frontend (for display) and referenced by backend logic.
  */
@@ -35,4 +35,4 @@ export const CONTRIBUTION = {
 
     /** Days of inactivity before a post becomes a bounty */
     BOUNTY_INACTIVITY_DAYS: 30,
-};
+}

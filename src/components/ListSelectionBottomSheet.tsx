@@ -18,10 +18,22 @@ import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { List } from '@/types'
-import { addPostToList, getListsContainingPost, getOrCreateSavedList, removePostFromList } from '@/utils/listUtils'
+import {
+    addPostToList,
+    getListsContainingPost,
+    getOrCreateSavedList,
+    removePostFromList,
+} from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
+import {
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    query,
+    where,
+} from 'firebase/firestore'
 import React, { useCallback, useEffect, useState } from 'react'
 import {
     ActivityIndicator,
@@ -55,68 +67,81 @@ export default function ListSelectionBottomSheet({
 }: ListSelectionBottomSheetProps) {
     const { user } = useAuth()
     const [lists, setLists] = useState<List[]>([])
-    const [selectedListIds, setSelectedListIds] = useState<Set<string>>(new Set())
+    const [selectedListIds, setSelectedListIds] = useState<Set<string>>(
+        new Set()
+    )
     const [loading, setLoading] = useState(false)
     const [updating, setUpdating] = useState<string | null>(null)
     const slideAnim = React.useRef(new Animated.Value(0)).current
 
-    const handleToggleList = useCallback(async (listId: string, skipUpdate = false) => {
-        if (updating && !skipUpdate) return
+    const handleToggleList = useCallback(
+        async (listId: string, skipUpdate = false) => {
+            if (updating && !skipUpdate) return
 
-        const isSelected = selectedListIds.has(listId)
+            const isSelected = selectedListIds.has(listId)
 
-        // Update local state
-        const newSelected = new Set(selectedListIds)
-        if (isSelected) {
-            newSelected.delete(listId)
-        } else {
-            newSelected.add(listId)
-        }
-        setSelectedListIds(newSelected)
+            // Update local state
+            const newSelected = new Set(selectedListIds)
+            if (isSelected) {
+                newSelected.delete(listId)
+            } else {
+                newSelected.add(listId)
+            }
+            setSelectedListIds(newSelected)
 
-        // Notify parent of selection change (for preview mode)
-        onSelectionChange?.(newSelected)
+            // Notify parent of selection change (for preview mode)
+            onSelectionChange?.(newSelected)
 
-        // If in "preview mode" (no postId), we don't write to DB yet
-        if (!postId) {
+            // If in "preview mode" (no postId), we don't write to DB yet
+            if (!postId) {
+                const isSaved = newSelected.size > 0
+                onSaveStateChange?.(isSaved)
+                return
+            }
+
+            // Real mode: write to DB
+            if (!skipUpdate) {
+                setUpdating(listId)
+                try {
+                    if (isSelected) {
+                        await removePostFromList(listId, postId)
+                    } else {
+                        await addPostToList(listId, postId)
+                        await AsyncStorage.setItem(LAST_USED_LIST_KEY, listId)
+                    }
+
+                    // Update lists UI (post count)
+                    setLists((prev) =>
+                        prev.map((list) => {
+                            if (list.id === listId) {
+                                const postIds = isSelected
+                                    ? list.postIds.filter((id) => id !== postId)
+                                    : [...list.postIds, postId]
+                                return { ...list, postIds }
+                            }
+                            return list
+                        })
+                    )
+                } catch (error) {
+                    console.error('Error toggling list:', error)
+                    // Revert on error
+                    setSelectedListIds(selectedListIds)
+                } finally {
+                    setUpdating(null)
+                }
+            }
+
             const isSaved = newSelected.size > 0
             onSaveStateChange?.(isSaved)
-            return
-        }
-
-        // Real mode: write to DB
-        if (!skipUpdate) {
-            setUpdating(listId)
-            try {
-                if (isSelected) {
-                    await removePostFromList(listId, postId)
-                } else {
-                    await addPostToList(listId, postId)
-                    await AsyncStorage.setItem(LAST_USED_LIST_KEY, listId)
-                }
-
-                // Update lists UI (post count)
-                setLists(prev => prev.map(list => {
-                    if (list.id === listId) {
-                        const postIds = isSelected
-                            ? list.postIds.filter(id => id !== postId)
-                            : [...list.postIds, postId]
-                        return { ...list, postIds }
-                    }
-                    return list
-                }))
-            } catch (error) {
-                console.error('Error toggling list:', error)
-                // Revert on error
-                setSelectedListIds(selectedListIds)
-            } finally {
-                setUpdating(null)
-            }
-        }
-
-        const isSaved = newSelected.size > 0
-        onSaveStateChange?.(isSaved)
-    }, [updating, selectedListIds, postId, onSaveStateChange, onSelectionChange])
+        },
+        [
+            updating,
+            selectedListIds,
+            postId,
+            onSaveStateChange,
+            onSelectionChange,
+        ]
+    )
 
     const fetchUserLists = useCallback(async () => {
         if (!user) return
@@ -125,7 +150,9 @@ export default function ListSelectionBottomSheet({
         try {
             // Get or create the default "My List"
             const userDoc = await getDoc(doc(db, 'users', user.uid))
-            const username = userDoc.exists() ? userDoc.data().username : 'Unknown'
+            const username = userDoc.exists()
+                ? userDoc.data().username
+                : 'Unknown'
             await getOrCreateSavedList(user.uid, username)
 
             // Fetch all user's lists
@@ -145,17 +172,23 @@ export default function ListSelectionBottomSheet({
             })
 
             // Sort: My List first, then others by updatedAt
-            const myList = fetchedLists.find(l => l.isSavedList)
+            const myList = fetchedLists.find((l) => l.isSavedList)
             const otherLists = fetchedLists
-                .filter(l => !l.isSavedList)
-                .sort((a, b) => b.updatedAt?.toMillis?.() - a.updatedAt?.toMillis?.())
+                .filter((l) => !l.isSavedList)
+                .sort(
+                    (a, b) =>
+                        b.updatedAt?.toMillis?.() - a.updatedAt?.toMillis?.()
+                )
 
             const sortedLists = myList ? [myList, ...otherLists] : otherLists
             setLists(sortedLists)
 
             // If we're in "real" mode (postId exists), fetch current state from DB
             if (postId) {
-                const listsWithPost = await getListsContainingPost(user.uid, postId)
+                const listsWithPost = await getListsContainingPost(
+                    user.uid,
+                    postId
+                )
                 setSelectedListIds(new Set(listsWithPost))
 
                 // Auto-select "My List" if post is not in any list (legacy behavior for existing posts)
@@ -171,7 +204,7 @@ export default function ListSelectionBottomSheet({
         } finally {
             setLoading(false)
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, postId])
 
     useEffect(() => {
@@ -207,11 +240,25 @@ export default function ListSelectionBottomSheet({
                 disabled={isUpdating}
                 accessibilityRole="checkbox"
                 accessibilityLabel={`${item.name}, ${item.postIds.length} ${item.postIds.length === 1 ? 'shot' : 'shots'}`}
-                accessibilityState={{ checked: isSelected, disabled: isUpdating }}
+                accessibilityState={{
+                    checked: isSelected,
+                    disabled: isUpdating,
+                }}
             >
                 <View style={styles.listItemLeft}>
-                    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                        {isSelected && <Ionicons name="checkmark" size={18} color={colors.white} />}
+                    <View
+                        style={[
+                            styles.checkbox,
+                            isSelected && styles.checkboxSelected,
+                        ]}
+                    >
+                        {isSelected && (
+                            <Ionicons
+                                name="checkmark"
+                                size={18}
+                                color={colors.white}
+                            />
+                        )}
                     </View>
                     <View style={styles.listItemInfo}>
                         <View style={styles.listItemHeader}>
@@ -224,11 +271,14 @@ export default function ListSelectionBottomSheet({
                             <Text style={styles.listItemName}>{item.name}</Text>
                         </View>
                         <Text style={styles.listItemMeta}>
-                            {item.postIds.length} {item.postIds.length === 1 ? 'shot' : 'shots'}
+                            {item.postIds.length}{' '}
+                            {item.postIds.length === 1 ? 'shot' : 'shots'}
                         </Text>
                     </View>
                 </View>
-                {isUpdating && <ActivityIndicator size="small" color={colors.primary} />}
+                {isUpdating && (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                )}
             </TouchableOpacity>
         )
     }
@@ -260,20 +310,32 @@ export default function ListSelectionBottomSheet({
                     ]}
                 >
                     <View style={styles.header}>
-                        <Text style={styles.headerTitle} accessibilityRole="header">Save to list</Text>
+                        <Text
+                            style={styles.headerTitle}
+                            accessibilityRole="header"
+                        >
+                            Save to list
+                        </Text>
                         <TouchableOpacity
                             onPress={onClose}
                             style={styles.closeButton}
                             accessibilityLabel="Close"
                             accessibilityRole="button"
                         >
-                            <Ionicons name="close" size={24} color={colors.textPrimary} />
+                            <Ionicons
+                                name="close"
+                                size={24}
+                                color={colors.textPrimary}
+                            />
                         </TouchableOpacity>
                     </View>
 
                     {loading ? (
                         <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color={colors.primary} />
+                            <ActivityIndicator
+                                size="large"
+                                color={colors.primary}
+                            />
                         </View>
                     ) : (
                         <FlatList

@@ -56,10 +56,13 @@ export default function CreateListModal() {
 
     // Handle hardware back button
     React.useEffect(() => {
-        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-            router.back()
-            return true
-        })
+        const backHandler = BackHandler.addEventListener(
+            'hardwareBackPress',
+            () => {
+                router.back()
+                return true
+            }
+        )
 
         return () => backHandler.remove()
     }, [router])
@@ -123,7 +126,10 @@ export default function CreateListModal() {
             style={styles.container}
         >
             <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.cancelButton}>
+                <TouchableOpacity
+                    onPress={() => router.back()}
+                    style={styles.cancelButton}
+                >
                     <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>
@@ -135,7 +141,10 @@ export default function CreateListModal() {
                     style={styles.saveButton}
                 >
                     {loading ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
+                        <ActivityIndicator
+                            size="small"
+                            color={colors.primary}
+                        />
                     ) : (
                         <Text style={styles.saveText}>Save</Text>
                     )}
@@ -170,11 +179,17 @@ export default function CreateListModal() {
                         numberOfLines={4}
                         textAlignVertical="top"
                     />
-                    <Text style={styles.charCount}>{description.length}/200</Text>
+                    <Text style={styles.charCount}>
+                        {description.length}/200
+                    </Text>
                 </View>
 
                 <View style={styles.infoBox}>
-                    <Ionicons name="information-circle" size={20} color={colors.textSecondary} />
+                    <Ionicons
+                        name="information-circle"
+                        size={20}
+                        color={colors.textSecondary}
+                    />
                     <Text style={styles.infoText}>
                         Lists are public and can be viewed by anyone
                     </Text>

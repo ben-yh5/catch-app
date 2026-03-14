@@ -4,7 +4,13 @@ import { colors } from '@/theme/colors'
 import { RecommendedPost } from '@/types'
 import { Image } from 'expo-image'
 import React from 'react'
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import {
+    Dimensions,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native'
 
 const SCREEN_WIDTH = Dimensions.get('window').width
 const CARD_WIDTH = SCREEN_WIDTH - 32
@@ -21,7 +27,11 @@ const REASON_COLORS: Record<string, { bg: string; text: string }> = {
     city_trending: { bg: 'rgba(255, 179, 0, 0.15)', text: '#FFB300' },
 }
 
-export default function RecommendedPostCard({ post, onPress, isOwnPost }: RecommendedPostCardProps) {
+export default function RecommendedPostCard({
+    post,
+    onPress,
+    isOwnPost,
+}: RecommendedPostCardProps) {
     const reasonStyle = REASON_COLORS[post.reasonType] || REASON_COLORS.social
 
     return (
@@ -42,13 +52,18 @@ export default function RecommendedPostCard({ post, onPress, isOwnPost }: Recomm
                 accessibilityLabel="Post photo"
             />
 
-            {isOwnPost && (
-                <CaughtBadge containerStyle={styles.cornerBadge} />
-            )}
+            {isOwnPost && <CaughtBadge containerStyle={styles.cornerBadge} />}
 
             <View style={styles.content}>
-                <View style={[styles.reasonChip, { backgroundColor: reasonStyle.bg }]}>
-                    <Text style={[styles.reasonText, { color: reasonStyle.text }]}>
+                <View
+                    style={[
+                        styles.reasonChip,
+                        { backgroundColor: reasonStyle.bg },
+                    ]}
+                >
+                    <Text
+                        style={[styles.reasonText, { color: reasonStyle.text }]}
+                    >
                         {post.reasonLabel}
                     </Text>
                 </View>
@@ -56,7 +71,11 @@ export default function RecommendedPostCard({ post, onPress, isOwnPost }: Recomm
                 <View style={styles.infoRow}>
                     <View style={styles.textContainer}>
                         {post.caption ? (
-                            <Text style={styles.caption} numberOfLines={2} ellipsizeMode="tail">
+                            <Text
+                                style={styles.caption}
+                                numberOfLines={2}
+                                ellipsizeMode="tail"
+                            >
                                 {post.caption}
                             </Text>
                         ) : null}

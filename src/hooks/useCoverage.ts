@@ -33,7 +33,8 @@ export function useCoverage(
     mode: CoverageMode
 ): UseCoverageReturn {
     const { user } = useAuth()
-    const [coverageGeoJSON, setCoverageGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null)
+    const [coverageGeoJSON, setCoverageGeoJSON] =
+        useState<GeoJSON.FeatureCollection | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
     const precision = getPrecisionForZoom(zoomLevel)
@@ -51,7 +52,9 @@ export function useCoverage(
                 setCoverageGeoJSON(coverageCellsToGeoJSON(cells))
             } else if (mode === 'personal' && user) {
                 const coverage = await getUserCoverage(user.uid)
-                setCoverageGeoJSON(userCoverageToGeoJSON(coverage, precision, bounds))
+                setCoverageGeoJSON(
+                    userCoverageToGeoJSON(coverage, precision, bounds)
+                )
             }
         } catch (error) {
             console.error('Error fetching coverage:', error)
@@ -76,12 +79,15 @@ export function useCoverage(
     }, [fetchCoverage, mode, precision])
 
     // Invalidate user coverage cache on post creation
-    usePostEvents((event) => {
-        if (event.action === 'create' && mode === 'personal') {
-            invalidateUserCoverageCache()
-            fetchCoverage()
-        }
-    }, [mode, fetchCoverage])
+    usePostEvents(
+        (event) => {
+            if (event.action === 'create' && mode === 'personal') {
+                invalidateUserCoverageCache()
+                fetchCoverage()
+            }
+        },
+        [mode, fetchCoverage]
+    )
 
     return { coverageGeoJSON, isLoading, precision }
 }

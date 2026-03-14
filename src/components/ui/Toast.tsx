@@ -1,28 +1,39 @@
-import { colors } from '@/theme/colors';
-import { Ionicons } from '@expo/vector-icons';
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { colors } from '@/theme/colors'
+import { Ionicons } from '@expo/vector-icons'
+import React, {
+    createContext,
+    useCallback,
+    useContext,
+    useRef,
+    useState,
+} from 'react'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import Animated, {
     FadeInUp,
     FadeOutUp,
     LinearTransition,
-} from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from 'react-native-reanimated'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 // --- Types ---
 
-type ToastType = 'success' | 'error' | 'warning' | 'info';
+type ToastType = 'success' | 'error' | 'warning' | 'info'
 
 interface ToastMessage {
-    id: number;
-    type: ToastType;
-    title: string;
-    message?: string;
-    duration?: number;
+    id: number
+    type: ToastType
+    title: string
+    message?: string
+    duration?: number
 }
 
 interface ToastContextValue {
-    showToast: (type: ToastType, title: string, message?: string, duration?: number) => void;
+    showToast: (
+        type: ToastType,
+        title: string,
+        message?: string,
+        duration?: number
+    ) => void
 }
 
 // --- Config ---
@@ -32,34 +43,40 @@ const TOAST_COLORS: Record<ToastType, string> = {
     error: '#FF453A',
     warning: '#FF9F0A',
     info: '#007AFF',
-};
+}
 
 const TOAST_ICONS: Record<ToastType, keyof typeof Ionicons.glyphMap> = {
     success: 'checkmark-circle',
     error: 'close-circle',
     warning: 'warning',
     info: 'information-circle',
-};
+}
 
-const DEFAULT_DURATION = 3000;
+const DEFAULT_DURATION = 3000
 
 // --- Context ---
 
-const ToastContext = createContext<ToastContextValue | null>(null);
+const ToastContext = createContext<ToastContextValue | null>(null)
 
 export function useToast(): ToastContextValue {
-    const context = useContext(ToastContext);
+    const context = useContext(ToastContext)
     if (!context) {
-        throw new Error('useToast must be used within a ToastProvider');
+        throw new Error('useToast must be used within a ToastProvider')
     }
-    return context;
+    return context
 }
 
 // --- Toast Item ---
 
-function ToastItem({ toast, onDismiss }: { toast: ToastMessage; onDismiss: (id: number) => void }) {
-    const accentColor = TOAST_COLORS[toast.type];
-    const iconName = TOAST_ICONS[toast.type];
+function ToastItem({
+    toast,
+    onDismiss,
+}: {
+    toast: ToastMessage
+    onDismiss: (id: number) => void
+}) {
+    const accentColor = TOAST_COLORS[toast.type]
+    const iconName = TOAST_ICONS[toast.type]
 
     return (
         <Animated.View
@@ -77,50 +94,70 @@ function ToastItem({ toast, onDismiss }: { toast: ToastMessage; onDismiss: (id: 
             >
                 <Ionicons name={iconName} size={20} color={accentColor} />
                 <View style={styles.toastTextContainer}>
-                    <Text style={styles.toastTitle} numberOfLines={1}>{toast.title}</Text>
+                    <Text style={styles.toastTitle} numberOfLines={1}>
+                        {toast.title}
+                    </Text>
                     {toast.message && (
-                        <Text style={styles.toastMessage} numberOfLines={2}>{toast.message}</Text>
+                        <Text style={styles.toastMessage} numberOfLines={2}>
+                            {toast.message}
+                        </Text>
                     )}
                 </View>
             </TouchableOpacity>
         </Animated.View>
-    );
+    )
 }
 
 // --- Provider ---
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-    const [toasts, setToasts] = useState<ToastMessage[]>([]);
-    const nextId = useRef(0);
-    const timerRefs = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
-    const insets = useSafeAreaInsets();
+    const [toasts, setToasts] = useState<ToastMessage[]>([])
+    const nextId = useRef(0)
+    const timerRefs = useRef<Map<number, ReturnType<typeof setTimeout>>>(
+        new Map()
+    )
+    const insets = useSafeAreaInsets()
 
     const dismiss = useCallback((id: number) => {
-        const timer = timerRefs.current.get(id);
+        const timer = timerRefs.current.get(id)
         if (timer) {
-            clearTimeout(timer);
-            timerRefs.current.delete(id);
+            clearTimeout(timer)
+            timerRefs.current.delete(id)
         }
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, []);
+        setToasts((prev) => prev.filter((t) => t.id !== id))
+    }, [])
 
-    const showToast = useCallback((type: ToastType, title: string, message?: string, duration?: number) => {
-        const id = nextId.current++;
-        const ms = duration ?? DEFAULT_DURATION;
+    const showToast = useCallback(
+        (
+            type: ToastType,
+            title: string,
+            message?: string,
+            duration?: number
+        ) => {
+            const id = nextId.current++
+            const ms = duration ?? DEFAULT_DURATION
 
-        const toast: ToastMessage = { id, type, title, message, duration: ms };
+            const toast: ToastMessage = {
+                id,
+                type,
+                title,
+                message,
+                duration: ms,
+            }
 
-        setToasts((prev) => {
-            // Keep max 2 toasts visible
-            const updated = prev.length >= 2 ? prev.slice(1) : prev;
-            return [...updated, toast];
-        });
+            setToasts((prev) => {
+                // Keep max 2 toasts visible
+                const updated = prev.length >= 2 ? prev.slice(1) : prev
+                return [...updated, toast]
+            })
 
-        const timer = setTimeout(() => {
-            dismiss(id);
-        }, ms);
-        timerRefs.current.set(id, timer);
-    }, [dismiss]);
+            const timer = setTimeout(() => {
+                dismiss(id)
+            }, ms)
+            timerRefs.current.set(id, timer)
+        },
+        [dismiss]
+    )
 
     return (
         <ToastContext.Provider value={{ showToast }}>
@@ -130,11 +167,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 pointerEvents="box-none"
             >
                 {toasts.map((toast) => (
-                    <ToastItem key={toast.id} toast={toast} onDismiss={dismiss} />
+                    <ToastItem
+                        key={toast.id}
+                        toast={toast}
+                        onDismiss={dismiss}
+                    />
                 ))}
             </View>
         </ToastContext.Provider>
-    );
+    )
 }
 
 // --- Styles ---
@@ -176,4 +217,4 @@ const styles = StyleSheet.create({
         marginTop: 2,
         lineHeight: 17,
     },
-});
+})

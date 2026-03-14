@@ -10,16 +10,22 @@ interface ViewToggleProps {
     bottomOffset?: number
 }
 
-export default function ViewToggle({ activeMode, onToggle, bottomOffset = 20 }: ViewToggleProps) {
+export default function ViewToggle({
+    activeMode,
+    onToggle,
+    bottomOffset = 20,
+}: ViewToggleProps) {
     const insets = useSafeAreaInsets()
 
     return (
-        <View style={[
-            styles.container,
-            { bottom: insets.bottom + bottomOffset }
-        ]}>
+        <View
+            style={[styles.container, { bottom: insets.bottom + bottomOffset }]}
+        >
             <TouchableOpacity
-                style={[styles.option, activeMode === 'map' && styles.optionActive]}
+                style={[
+                    styles.option,
+                    activeMode === 'map' && styles.optionActive,
+                ]}
                 onPress={() => onToggle('map')}
                 activeOpacity={0.8}
                 accessibilityRole="button"
@@ -31,11 +37,21 @@ export default function ViewToggle({ activeMode, onToggle, bottomOffset = 20 }: 
                     size={16}
                     color={activeMode === 'map' ? '#fff' : colors.textSecondary}
                 />
-                <Text style={[styles.text, activeMode === 'map' && styles.textActive]}>Map</Text>
+                <Text
+                    style={[
+                        styles.text,
+                        activeMode === 'map' && styles.textActive,
+                    ]}
+                >
+                    Map
+                </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-                style={[styles.option, activeMode === 'list' && styles.optionActive]}
+                style={[
+                    styles.option,
+                    activeMode === 'list' && styles.optionActive,
+                ]}
                 onPress={() => onToggle('list')}
                 activeOpacity={0.8}
                 accessibilityRole="button"
@@ -45,9 +61,18 @@ export default function ViewToggle({ activeMode, onToggle, bottomOffset = 20 }: 
                 <Ionicons
                     name="list"
                     size={16}
-                    color={activeMode === 'list' ? '#fff' : colors.textSecondary}
+                    color={
+                        activeMode === 'list' ? '#fff' : colors.textSecondary
+                    }
                 />
-                <Text style={[styles.text, activeMode === 'list' && styles.textActive]}>List</Text>
+                <Text
+                    style={[
+                        styles.text,
+                        activeMode === 'list' && styles.textActive,
+                    ]}
+                >
+                    List
+                </Text>
             </TouchableOpacity>
         </View>
     )

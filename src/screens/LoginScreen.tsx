@@ -7,12 +7,7 @@ import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import React, { useState } from 'react'
-import {
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 
 export default function LoginScreen() {
@@ -66,7 +61,13 @@ export default function LoginScreen() {
                     autoCapitalize="none"
                     keyboardType="email-address"
                     editable={!loading}
-                    leftIcon={<Ionicons name="mail-outline" size={20} color={colors.textTertiary} />}
+                    leftIcon={
+                        <Ionicons
+                            name="mail-outline"
+                            size={20}
+                            color={colors.textTertiary}
+                        />
+                    }
                     accessibilityLabel="Email"
                     accessibilityHint="Enter your email address"
                 />
@@ -77,7 +78,13 @@ export default function LoginScreen() {
                     onChangeText={setPassword}
                     secureTextEntry
                     editable={!loading}
-                    leftIcon={<Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />}
+                    leftIcon={
+                        <Ionicons
+                            name="lock-closed-outline"
+                            size={20}
+                            color={colors.textTertiary}
+                        />
+                    }
                     accessibilityLabel="Password"
                     accessibilityHint="Enter your password"
                 />
@@ -109,7 +116,14 @@ export default function LoginScreen() {
                     onPress={handleGoogleLogin}
                     loading={loading}
                     variant="outline"
-                    icon={<Ionicons name="logo-google" size={18} color={colors.textPrimary} style={{ marginRight: 8 }} />}
+                    icon={
+                        <Ionicons
+                            name="logo-google"
+                            size={18}
+                            color={colors.textPrimary}
+                            style={{ marginRight: 8 }}
+                        />
+                    }
                     accessibilityLabel="Continue with Google"
                     accessibilityRole="button"
                     accessibilityState={{ disabled: loading }}
@@ -120,7 +134,9 @@ export default function LoginScreen() {
                 style={styles.signupContainer}
                 entering={FadeInDown.delay(400).duration(500)}
             >
-                <Text style={styles.signupText}>Don&apos;t have an account? </Text>
+                <Text style={styles.signupText}>
+                    Don&apos;t have an account?{' '}
+                </Text>
                 <TouchableOpacity
                     onPress={goToSignup}
                     disabled={loading}

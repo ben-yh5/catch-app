@@ -36,8 +36,8 @@ Notifications.setNotificationHandler({
 })
 
 export const unstable_settings = {
-  initialRouteName: '(tabs)',
-};
+    initialRouteName: '(tabs)',
+}
 
 async function registerForPushNotificationsAsync() {
     let token
@@ -96,9 +96,13 @@ function RootLayoutNav() {
                     const userDoc = await getDoc(userDocRef)
                     if (userDoc.exists()) {
                         // User exists, update push token
-                        await setDoc(userDocRef, {
-                            pushToken: token,
-                        }, { merge: true })
+                        await setDoc(
+                            userDocRef,
+                            {
+                                pushToken: token,
+                            },
+                            { merge: true }
+                        )
                     }
                     // If user doc doesn't exist, do nothing - they're in the username setup flow
                 } catch (error) {
@@ -108,16 +112,20 @@ function RootLayoutNav() {
         })
 
         // Listen for notification responses (user taps notification)
-        responseListener.current = Notifications.addNotificationResponseReceivedListener(
-            (response) => {
-                const data = response.notification.request.content.data
+        responseListener.current =
+            Notifications.addNotificationResponseReceivedListener(
+                (response) => {
+                    const data = response.notification.request.content.data
 
-                // Navigate to user profile if notification contains userId
-                if (data.userId) {
-                    router.push({ pathname: '/user-profile', params: { userId: data.userId } } as any)
+                    // Navigate to user profile if notification contains userId
+                    if (data.userId) {
+                        router.push({
+                            pathname: '/user-profile',
+                            params: { userId: data.userId },
+                        } as any)
+                    }
                 }
-            }
-        )
+            )
 
         return () => {
             if (responseListener.current) {
@@ -134,12 +142,16 @@ function RootLayoutNav() {
         }
 
         const userDocRef = doc(db, 'users', user.uid)
-        const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-            setHasUserDoc(docSnap.exists())
-        }, (error) => {
-            console.error('Error listening to user document:', error)
-            setHasUserDoc(false)
-        })
+        const unsubscribe = onSnapshot(
+            userDocRef,
+            (docSnap) => {
+                setHasUserDoc(docSnap.exists())
+            },
+            (error) => {
+                console.error('Error listening to user document:', error)
+                setHasUserDoc(false)
+            }
+        )
 
         return () => unsubscribe()
     }, [user])
@@ -179,7 +191,10 @@ function RootLayoutNav() {
             <Stack>
                 <Stack.Screen name="login" options={{ headerShown: false }} />
                 <Stack.Screen name="signup" options={{ headerShown: false }} />
-                <Stack.Screen name="username-setup" options={{ headerShown: false }} />
+                <Stack.Screen
+                    name="username-setup"
+                    options={{ headerShown: false }}
+                />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen
                     name="user-profile"

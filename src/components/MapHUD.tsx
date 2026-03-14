@@ -22,7 +22,7 @@ export default function MapHUD({
     searchQuery,
     isSearchMode,
     activeFilter,
-    onFilterChange
+    onFilterChange,
 }: MapHUDProps) {
     const insets = useSafeAreaInsets()
 
@@ -72,7 +72,8 @@ const styles = StyleSheet.create({
         width: '100%',
         borderRadius: 28,
         overflow: 'hidden',
-        backgroundColor: Platform.OS === 'android' ? 'rgba(30,30,30,0.9)' : 'transparent',
+        backgroundColor:
+            Platform.OS === 'android' ? 'rgba(30,30,30,0.9)' : 'transparent',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,

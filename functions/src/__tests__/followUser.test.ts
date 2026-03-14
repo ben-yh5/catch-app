@@ -17,16 +17,32 @@ const mockCollection = jest.fn((name: string) => {
 jest.mock('firebase-admin', () => ({
     initializeApp: jest.fn(),
     firestore: Object.assign(
-        () => ({ collection: mockCollection, runTransaction: mockRunTransaction }),
-        { FieldValue: { arrayUnion: jest.fn((v: any) => ({ _arrayUnion: v })), arrayRemove: jest.fn((v: any) => ({ _arrayRemove: v })), serverTimestamp: jest.fn(), increment: jest.fn() } }
+        () => ({
+            collection: mockCollection,
+            runTransaction: mockRunTransaction,
+        }),
+        {
+            FieldValue: {
+                arrayUnion: jest.fn((v: any) => ({ _arrayUnion: v })),
+                arrayRemove: jest.fn((v: any) => ({ _arrayRemove: v })),
+                serverTimestamp: jest.fn(),
+                increment: jest.fn(),
+            },
+        }
     ),
 }))
 
 import { makeContext, makeUnauthContext } from './setup'
 import { followUser, unfollowUser } from '../index'
 
-const runFollow = (followUser as any).run as (data: any, context: any) => Promise<any>
-const runUnfollow = (unfollowUser as any).run as (data: any, context: any) => Promise<any>
+const runFollow = (followUser as any).run as (
+    data: any,
+    context: any
+) => Promise<any>
+const runUnfollow = (unfollowUser as any).run as (
+    data: any,
+    context: any
+) => Promise<any>
 
 describe('followUser', () => {
     beforeEach(() => {
@@ -41,9 +57,9 @@ describe('followUser', () => {
     })
 
     it('rejects missing targetUserId', async () => {
-        await expect(
-            runFollow({}, makeContext('user1'))
-        ).rejects.toMatchObject({ code: 'invalid-argument' })
+        await expect(runFollow({}, makeContext('user1'))).rejects.toMatchObject(
+            { code: 'invalid-argument' }
+        )
     })
 
     it('rejects non-string targetUserId', async () => {

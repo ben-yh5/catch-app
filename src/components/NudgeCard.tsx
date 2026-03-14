@@ -21,7 +21,12 @@ interface NudgeCardProps {
     onNotAMatch: () => void
 }
 
-export default function NudgeCard({ post, onCatchInstead, onDismiss, onNotAMatch }: NudgeCardProps) {
+export default function NudgeCard({
+    post,
+    onCatchInstead,
+    onDismiss,
+    onNotAMatch,
+}: NudgeCardProps) {
     return (
         <View style={styles.container}>
             <TouchableOpacity

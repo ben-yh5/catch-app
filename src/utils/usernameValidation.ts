@@ -18,7 +18,9 @@ import { db } from '@/services/firebase'
  * @param username - The username to check
  * @returns true if username is available, false if taken
  */
-export const isUsernameAvailable = async (username: string): Promise<boolean> => {
+export const isUsernameAvailable = async (
+    username: string
+): Promise<boolean> => {
     try {
         const usersRef = collection(db, 'users')
         const q = query(usersRef, where('username', '==', username))

@@ -1,24 +1,30 @@
-import CatchBadge from '@/components/ui/CatchBadge';
-import CaughtBadge from '@/components/ui/CaughtBadge';
-import { colors } from '@/theme/colors';
-import { Image } from 'expo-image';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
+import CatchBadge from '@/components/ui/CatchBadge'
+import CaughtBadge from '@/components/ui/CaughtBadge'
+import { colors } from '@/theme/colors'
+import { Image } from 'expo-image'
+import React from 'react'
+import {
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    ViewStyle,
+} from 'react-native'
 
 interface FeaturedPostCardProps {
     post: {
-        id: string;
-        photoURL: string;
-        authorId: string;
-        authorUsername: string;
-        caption?: string;
-        catchCount: number;
-        mediumURL?: string;
-    };
-    onPress: () => void;
-    size: number;
-    isOwnPost?: boolean;
-    containerStyle?: ViewStyle;
+        id: string
+        photoURL: string
+        authorId: string
+        authorUsername: string
+        caption?: string
+        catchCount: number
+        mediumURL?: string
+    }
+    onPress: () => void
+    size: number
+    isOwnPost?: boolean
+    containerStyle?: ViewStyle
 }
 
 /**
@@ -29,7 +35,7 @@ export default function FeaturedPostCard({
     onPress,
     size,
     isOwnPost,
-    containerStyle
+    containerStyle,
 }: FeaturedPostCardProps) {
     return (
         <TouchableOpacity
@@ -49,14 +55,16 @@ export default function FeaturedPostCard({
                 accessibilityLabel="Post photo"
             />
 
-            {isOwnPost && (
-                <CaughtBadge containerStyle={styles.cornerBadge} />
-            )}
+            {isOwnPost && <CaughtBadge containerStyle={styles.cornerBadge} />}
 
             <View style={styles.cardInfo}>
                 <View style={styles.textContainer}>
                     {post.caption && (
-                        <Text style={styles.cardTitle} numberOfLines={2} ellipsizeMode="tail">
+                        <Text
+                            style={styles.cardTitle}
+                            numberOfLines={2}
+                            ellipsizeMode="tail"
+                        >
                             {post.caption}
                         </Text>
                     )}
@@ -65,13 +73,10 @@ export default function FeaturedPostCard({
                     </Text>
                 </View>
 
-                <CatchBadge
-                    count={post.catchCount}
-                    variant="dark"
-                />
+                <CatchBadge count={post.catchCount} variant="dark" />
             </View>
         </TouchableOpacity>
-    );
+    )
 }
 
 const styles = StyleSheet.create({
@@ -109,4 +114,4 @@ const styles = StyleSheet.create({
         right: 6,
         zIndex: 1,
     },
-});
+})

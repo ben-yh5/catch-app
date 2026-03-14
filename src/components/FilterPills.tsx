@@ -1,32 +1,32 @@
-import { colors } from '@/theme/colors';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { colors } from '@/theme/colors'
+import React from 'react'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 
-export type FilterType = 'trending' | 'new';
+export type FilterType = 'trending' | 'new'
 
 interface FilterPillsProps {
-    activeFilter: FilterType;
-    onFilterChange: (filter: FilterType) => void;
+    activeFilter: FilterType
+    onFilterChange: (filter: FilterType) => void
 }
 
-export default function FilterPills({ activeFilter, onFilterChange }: FilterPillsProps) {
-    const filters: { type: FilterType; label: string; }[] = [
-        { type: 'trending', label: 'Trending'},
-        { type: 'new', label: 'New'},
-    ];
+export default function FilterPills({
+    activeFilter,
+    onFilterChange,
+}: FilterPillsProps) {
+    const filters: { type: FilterType; label: string }[] = [
+        { type: 'trending', label: 'Trending' },
+        { type: 'new', label: 'New' },
+    ]
 
     return (
         <View style={styles.container}>
             {filters.map((filter) => {
-                const isActive = activeFilter === filter.type;
+                const isActive = activeFilter === filter.type
 
                 return (
                     <TouchableOpacity
                         key={filter.type}
-                        style={[
-                            styles.pill,
-                            isActive && styles.pillActive,
-                        ]}
+                        style={[styles.pill, isActive && styles.pillActive]}
                         onPress={() => onFilterChange(filter.type)}
                         activeOpacity={0.7}
                         accessibilityRole="button"
@@ -42,10 +42,10 @@ export default function FilterPills({ activeFilter, onFilterChange }: FilterPill
                             {filter.label}
                         </Text>
                     </TouchableOpacity>
-                );
+                )
             })}
         </View>
-    );
+    )
 }
 
 const styles = StyleSheet.create({
@@ -81,4 +81,4 @@ const styles = StyleSheet.create({
     labelActive: {
         color: '#fff',
     },
-});
+})

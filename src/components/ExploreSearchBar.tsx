@@ -20,7 +20,14 @@ interface ExploreSearchBarProps {
     initialQuery?: string
 }
 
-export default function ExploreSearchBar({ onSubmit, onClear, loading, containerStyle, inputContainerStyle, initialQuery }: ExploreSearchBarProps) {
+export default function ExploreSearchBar({
+    onSubmit,
+    onClear,
+    loading,
+    containerStyle,
+    inputContainerStyle,
+    initialQuery,
+}: ExploreSearchBarProps) {
     const [query, setQuery] = useState(initialQuery || '')
 
     useEffect(() => {
@@ -45,7 +52,12 @@ export default function ExploreSearchBar({ onSubmit, onClear, loading, container
     return (
         <View style={[styles.container, containerStyle]}>
             <View style={[styles.inputContainer, inputContainerStyle]}>
-                <Ionicons name="search" size={20} color={colors.textTertiary} style={styles.icon} />
+                <Ionicons
+                    name="search"
+                    size={20}
+                    color={colors.textTertiary}
+                    style={styles.icon}
+                />
                 <TextInput
                     style={styles.input}
                     placeholder="Search for anything..."
@@ -59,7 +71,12 @@ export default function ExploreSearchBar({ onSubmit, onClear, loading, container
                     accessibilityHint="Search for posts and locations"
                 />
                 {loading && (
-                    <ActivityIndicator size="small" color={colors.primary} style={styles.loader} accessibilityLabel="Searching" />
+                    <ActivityIndicator
+                        size="small"
+                        color={colors.primary}
+                        style={styles.loader}
+                        accessibilityLabel="Searching"
+                    />
                 )}
                 {query.length > 0 && !loading && (
                     <TouchableOpacity
@@ -68,7 +85,11 @@ export default function ExploreSearchBar({ onSubmit, onClear, loading, container
                         accessibilityLabel="Clear search"
                         accessibilityRole="button"
                     >
-                        <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                        <Ionicons
+                            name="close-circle"
+                            size={18}
+                            color={colors.textTertiary}
+                        />
                     </TouchableOpacity>
                 )}
             </View>

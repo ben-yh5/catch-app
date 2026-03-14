@@ -48,7 +48,7 @@ export interface PostSummary {
     photoURL: string
     thumbnailURL?: string
     catchCount: number
-    createdAt: number    // epoch millis (converted server-side)
+    createdAt: number // epoch millis (converted server-side)
     isOriginal: boolean
     isPioneer?: boolean
     lastCaughtAt?: number // epoch millis
@@ -61,7 +61,7 @@ export interface PostSummary {
  * Extends Post with a reason label explaining why this post was recommended.
  */
 export interface RecommendedPost extends Post {
-    reasonLabel: string       // "Posted by @jane", "Trending in Tokyo"
+    reasonLabel: string // "Posted by @jane", "Trending in Tokyo"
     reasonType: 'social' | 'city_trending'
     score: number
 }
