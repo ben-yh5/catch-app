@@ -93,7 +93,6 @@ export function useDeviceSensors(): DeviceSensorsResult {
         const Nz = G.x * Ey_n - G.y * Ex_n
 
         const N_norm = Math.sqrt(Nx * Nx + Ny * Ny + Nz * Nz)
-        const Nx_n = Nx / N_norm
         const Ny_n = Ny / N_norm
         const Nz_n = Nz / N_norm
 

@@ -46,7 +46,6 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import React, { useEffect, useRef, useState } from 'react'
 import {
-    ActivityIndicator,
     Alert,
     FlatList, // Renamed to avoid conflict with expo-linking
     Modal,
@@ -83,7 +82,7 @@ export default function ThreadModal({
     onPostDelete,
     initialPostId,
 }: ThreadModalProps) {
-    const { user, dataContributionEnabled } = useAuth()
+    const { user } = useAuth()
     const { notifyPostEvent } = usePost()
     const { showToast } = useToast()
     const router = useRouter()
@@ -112,7 +111,6 @@ export default function ThreadModal({
         fetchingLocation,
         uploading,
         statusMessage,
-        heading,
         handleCatchPress,
         handlePhotoTaken,
         handleCameraCancel,
@@ -154,6 +152,7 @@ export default function ThreadModal({
         if (visible && post) {
             fetchThread()
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, post])
 
     // Scroll to initial post when thread loads
@@ -180,6 +179,7 @@ export default function ThreadModal({
         if (currentPost && user) {
             fetchSaveStatus()
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPost?.id, user])
 
     // Fetch location data when root post changes
@@ -193,6 +193,7 @@ export default function ThreadModal({
                 setDistance(null)
             }
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, threadPosts])
 
     const fetchThread = async () => {
@@ -322,7 +323,7 @@ export default function ThreadModal({
                         setTimeout(() => reject(new Error('Location request timed out')), 5000)
                     })
                     userLoc = await Promise.race([locationPromise, timeoutPromise])
-                } catch (e) {
+                } catch {
                     console.warn('Current location timed out, trying last known...')
                     userLoc = await Location.getLastKnownPositionAsync();
                 }
@@ -391,10 +392,6 @@ export default function ThreadModal({
     const handleSavePress = () => {
         setShowAddToListModal(true)
         setShowOptionsMenu(false)
-    }
-
-    const handleSaveStateChange = (saved: boolean) => {
-        setIsSaved(saved)
     }
 
     const handleShare = async () => {

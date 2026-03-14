@@ -27,6 +27,7 @@ export const loadVerifierModel = async () => {
     try {
         // Model should be placed in assets/models/
         // This is a single-input encoder model (e.g., MobileNetV3-Small)
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         model = await loadTensorflowModel(require('../../assets/models/view_encoder.tflite'));
         console.log('[VisualMatcher] Model loaded successfully');
         return model;

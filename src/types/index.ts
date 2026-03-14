@@ -102,6 +102,8 @@ export interface SearchPost {
     vectorDistance: number
 }
 
+export { Notification } from './Notification'
+
 export interface List {
     id: string
     name: string

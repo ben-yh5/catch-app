@@ -26,6 +26,7 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import React, { createContext, useContext, useEffect, useState } from 'react'
+import { Notification } from '@/types'
 
 interface AuthContextType {
     user: User | null
@@ -36,6 +37,7 @@ interface AuthContextType {
     logout: () => Promise<void>
     dataContributionEnabled: boolean
     toggleDataContribution: (enabled: boolean) => Promise<void>
+    
     // Contribution stats
     contribution: number
     totalPosts: number
@@ -43,7 +45,7 @@ interface AuthContextType {
     updateStats: (stats: { contribution: number; totalPosts: number; totalCatches: number }) => void
 
     // Notifications
-    notifications: any[] // Using any to avoid circular deps or dup types for now, will fix
+    notifications: Notification[]
     unreadCount: number
     notificationSettings: {
         notifyOnCatch: boolean
@@ -68,7 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [totalCatches, setTotalCatches] = useState(0)
 
     // Notification State
-    const [notifications, setNotifications] = useState<any[]>([])
+    const [notifications, setNotifications] = useState<Notification[]>([])
     const [unreadCount, setUnreadCount] = useState(0)
     const [notificationSettings, setNotificationSettings] = useState({
         notifyOnCatch: true,
@@ -151,19 +153,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 const newNotifications = snapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
-                }))
+                } as Notification))
                 // Sort manually since we removed orderBy
-                newNotifications.sort((a: any, b: any) => {
+                newNotifications.sort((a, b) => {
                     const tA = a.createdAt?.toMillis?.() || 0
                     const tB = b.createdAt?.toMillis?.() || 0
                     return tB - tA
                 })
 
-                console.log(`[AuthContext] Processed ${newNotifications.length} notifications`)
                 setNotifications(newNotifications)
 
                 // Update unread count
-                const unread = newNotifications.filter((n: any) => !n.read).length
+                const unread = newNotifications.filter(n => !n.read).length
                 setUnreadCount(unread)
             }, (error) => {
                 console.error("Error listening to notifications:", error)
@@ -234,7 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // This should potentialy be a batch update or cloud function for efficiency
         // For now, client-side loop is okay for small numbers
-        const unreadNotifications = notifications.filter((n: any) => !n.read)
+        const unreadNotifications = notifications.filter(n => !n.read)
 
         if (unreadNotifications.length === 0) return
 
@@ -242,7 +243,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         import('firebase/firestore').then(async ({ writeBatch, doc }) => {
             const batch = writeBatch(db)
 
-            unreadNotifications.forEach((n: any) => {
+            unreadNotifications.forEach(n => {
                 const ref = doc(db, 'users', user.uid, 'notifications', n.id)
                 batch.update(ref, { read: true })
             })

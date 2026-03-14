@@ -4,15 +4,6 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as jpeg from 'jpeg-js';
 
 /**
- * Validation Result interface
- */
-interface ValidationResult {
-    isValid: boolean;
-    value: number;
-    message?: string;
-}
-
-/**
  * Helper to decode image to raw pixel data
  */
 const decodeImage = async (uri: string, width: number, height: number) => {
@@ -124,9 +115,6 @@ export const checkBlur = async (uri: string, threshold: number = 1000): Promise<
                 // Online/Welford's algorithm or simple variance
                 // Since we iterate once, let's just sum and sumSq
                 // But simple variance is fine here.
-                const lap = Math.abs(val); // Use absolute response or just raw? 
-                // Standard formulation uses raw values then variance
-
                 // Welford's algorithm for variance to prevent overflow/precision issues
                 count++;
                 const delta = val - mean;

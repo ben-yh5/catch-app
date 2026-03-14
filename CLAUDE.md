@@ -228,3 +228,7 @@ Rules enforce authorization, not just authentication:
 - **Posts**: Owner-only writes to `/posts/{userId}/`, public reads.
 - **Training data**: Any authenticated user can write (client-side opt-in check), authenticated reads.
 - **User profiles**: Owner-only writes to `/users/{userId}/`, public reads.
+
+## TODOs
+
+- **Notification performance**: `markAllNotificationsAsRead()` in `AuthContext.tsx` currently uses a client-side batch update. For better efficiency, implement a Cloud Function that does a bulk update: `UPDATE notifications SET read=true WHERE userId=X AND read=false`.

@@ -446,22 +446,7 @@ export default function PostScreen() {
                 }
             }
 
-            // Calculate expected points based on nearby posts
-            // This is a client-side estimate matching server logic
-            let expectedPoints = 10 // PIONEER
-            let type = 'Pioneer'
-
-            // We need to check if there are nearby posts
-            // Since we can't easily query geohashes here without bringing in more logic,
-            // we'll rely on the server validation for the exact points.
-            // But for immediate feedback, we can optimistically assume Pioneer unless we know otherwise.
-            // Actually, we can't easily know without querying.
-            // Let's just say "Contribution points incoming" but make it specific to the action.
-
-            // Edit: Requirement is "show how many points are awarded".
-            // Implementation Plan says: "Perform client-side check using getPostsInRadius(50) to estimate points."
-
-            // Let's do that check
+            // Check nearby posts to estimate contribution points
             const nearbyPosts = await getPostsInRadius({
                 centerLat: location.latitude,
                 centerLng: location.longitude,
@@ -469,8 +454,6 @@ export default function PostScreen() {
             })
 
             const isPioneer = nearbyPosts.length === 0
-            const points = isPioneer ? 10 : 2
-            const badge = isPioneer ? 'Pioneer' : 'Nearby'
 
             const alertTitle = isPioneer ? 'Pioneer Bonus! (+10 XP)' : 'Shared! (+2 XP)'
             const alertMsg = isPioneer

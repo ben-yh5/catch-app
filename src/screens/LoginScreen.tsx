@@ -120,7 +120,7 @@ export default function LoginScreen() {
                 style={styles.signupContainer}
                 entering={FadeInDown.delay(400).duration(500)}
             >
-                <Text style={styles.signupText}>Don't have an account? </Text>
+                <Text style={styles.signupText}>Don&apos;t have an account? </Text>
                 <TouchableOpacity
                     onPress={goToSignup}
                     disabled={loading}

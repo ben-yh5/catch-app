@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons'
 import Mapbox, { Camera, CircleLayer, FillLayer, LocationPuck, MapView, ShapeSource, SymbolLayer } from '@rnmapbox/maps'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { arrayRemove, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -79,7 +79,7 @@ export default function MapScreen() {
         searchQuery: string;
     }>()
     const [activeList, setActiveList] = useState<any | null>(null)
-    const [listPosts, setListPosts] = useState<Post[]>([])
+    const [, setListPosts] = useState<Post[]>([])
     const [isListMode, setIsListMode] = useState(false)
 
 
@@ -105,95 +105,8 @@ export default function MapScreen() {
     )
     const showCoverage = coverageMode !== 'off' && coverageGeoJSON && coveragePrecision !== null
 
-    // Get user's current location
-    useEffect(() => {
-        ; (async () => {
-            try {
-                const { status } = await Location.requestForegroundPermissionsAsync()
-                if (status !== 'granted') {
-                    Alert.alert(
-                        'Location Required',
-                        'Location permission is required to use the map. Please enable location in your device settings.'
-                    )
-                    setLocationLoading(false)
-                    return
-                }
-
-                // Use last known location first for speed
-                const lastKnown = await Location.getLastKnownPositionAsync({})
-                if (lastKnown) {
-                    setUserLocation(lastKnown)
-                    setInitialLocation(lastKnown)
-                    setLocationLoading(false)
-                }
-
-                // Get current position in background for accuracy
-                const location = await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Balanced,
-                })
-                setUserLocation(location)
-                if (!lastKnown) {
-                    setInitialLocation(location)
-                    setLocationLoading(false)
-                }
-            } catch (error) {
-                console.error('Error getting location:', error)
-                setLocationLoading(false)
-            }
-        })()
-    }, [])
-
-    // Handle Deep Links (Filter & Location)
-    useEffect(() => {
-        if (filter) {
-            if (['trending', 'new'].includes(filter as string)) {
-                setActiveFilter(filter as FilterType)
-            }
-        }
-
-        if (panToUser === 'true' && userLocation) {
-            if (isMapReadyRef.current) {
-                centerOnUserLocation()
-            } else {
-                pendingCameraActionRef.current = () => centerOnUserLocation()
-            }
-        }
-    }, [filter, panToUser, userLocation])
-
-    // Handle search query from Explore tab deep link
-    useEffect(() => {
-        if (searchQuery && searchQuery.trim().length > 0 && !locationLoading) {
-            handleSearch(searchQuery)
-        }
-    }, [searchQuery, locationLoading])
-
-    // Handle List Focus Mode
-    useEffect(() => {
-        if (listId) {
-            fetchListDetails(listId)
-        } else if (postId) {
-            fetchPostForLocate(postId)
-        } else {
-            setIsListMode(false)
-            setActiveList(null)
-            setListPosts([])
-            setActiveList(null)
-            setListPosts([])
-            // setViewMode('map')
-        }
-
-        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-            if (isListMode) {
-                handleListClose()
-                return true
-            }
-            return false
-        })
-
-        return () => backHandler.remove()
-    }, [listId, postId, isListMode])
-
-    const fetchListDetails = async (id: string) => {
+    // Wrap fetchListDetails in useCallback
+    const fetchListDetails = useCallback(async (id: string) => {
         try {
             setLoadingPosts(true)
             const listDoc = await getDoc(doc(db, 'lists', id))
@@ -265,16 +178,10 @@ export default function MapScreen() {
         } finally {
             setLoadingPosts(false)
         }
-    }
+    }, [showToast])
 
-    // Reload posts when exiting list mode
-    useEffect(() => {
-        if (!isListMode && !locationLoading) {
-            loadVisiblePosts()
-        }
-    }, [isListMode, locationLoading])
-
-    const fetchPostForLocate = async (id: string) => {
+    // Wrap fetchPostForLocate in useCallback
+    const fetchPostForLocate = useCallback(async (id: string) => {
         try {
             setLoadingPosts(true)
             // Fetch the post
@@ -326,15 +233,189 @@ export default function MapScreen() {
         } finally {
             setLoadingPosts(false)
         }
-    }
+    }, [showToast])
 
-
-    const handleListClose = () => {
+    // Wrap handleListClose in useCallback
+    const handleListClose = useCallback(() => {
         router.setParams({ listId: '', postId: '' }) // Clear params
         setIsListMode(false)
         setActiveList(null)
         setListPosts([])
-    }
+    }, [router])
+
+    const centerOnUserLocation = useCallback(() => {
+        if (userLocation && cameraRef.current) {
+            cameraRef.current.setCamera({
+                centerCoordinate: [userLocation.coords.longitude, userLocation.coords.latitude],
+                zoomLevel: 14,
+                animationDuration: 1000,
+            })
+        }
+    }, [userLocation])
+
+    // Search mode handlers
+    const handleSearch = useCallback(async (queryText: string) => {
+        isSearchModeRef.current = true
+        setIsSearchMode(true)
+        setSearchLoading(true)
+        setActiveSearchQuery(queryText)
+        setSearchPostResults([])
+
+        try {
+            const searchPostsFn = httpsCallable(functions, 'searchPosts')
+            const result = await searchPostsFn({
+                query: queryText,
+                ...(userLocation ? {
+                    location: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
+                } : {}),
+            })
+            const { posts } = result.data as { posts: SearchPost[] }
+
+            // Convert SearchPost[] → Post[] for map pins and bottom sheet
+            const converted: Post[] = posts
+                .filter(sp => sp.latitude && sp.longitude)
+                .map(sp => ({
+                    id: sp.postId,
+                    authorId: sp.authorId,
+                    authorUsername: sp.authorUsername,
+                    photoURL: sp.photoURL,
+                    caption: sp.caption,
+                    hasLocation: true,
+                    catchCount: sp.catchCount,
+                    parentPostId: null,
+                    rootPostId: null,
+                    isOriginal: sp.isOriginal,
+                    createdAt: sp.createdAt,
+                    thumbnailURL: sp.thumbnailURL ?? undefined,
+                    mediumURL: sp.mediumURL ?? undefined,
+                    isPioneer: sp.isPioneer,
+                    latitude: sp.latitude,
+                    longitude: sp.longitude,
+                } as Post))
+
+            setSearchPostResults(converted)
+            setVisiblePosts(converted)
+
+            // Fit camera to show all result pins
+            if (converted.length > 0 && cameraRef.current) {
+                const lats = converted.map(p => p.latitude!)
+                const lngs = converted.map(p => p.longitude!)
+
+                if (converted.length === 1) {
+                    cameraRef.current.setCamera({
+                        centerCoordinate: [lngs[0], lats[0]],
+                        zoomLevel: 14,
+                        animationDuration: 1000,
+                    })
+                } else {
+                    // Fit bounds for multiple pins
+                    const padding = 100
+                    cameraRef.current.fitBounds(
+                        [Math.min(...lngs), Math.min(...lats)],
+                        [Math.max(...lngs), Math.max(...lats)],
+                        padding,
+                        1000
+                    )
+                }
+            }
+
+            isSearchModeRef.current = true
+        } catch (error) {
+            console.error('Error searching posts:', error)
+            showToast('error', 'Search failed')
+            isSearchModeRef.current = false
+        } finally {
+            setSearchLoading(false)
+        }
+    }, [userLocation, showToast])
+
+    // Get user's current location
+    useEffect(() => {
+        ; (async () => {
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync()
+                if (status !== 'granted') {
+                    Alert.alert(
+                        'Location Required',
+                        'Location permission is required to use the map. Please enable location in your device settings.'
+                    )
+                    setLocationLoading(false)
+                    return
+                }
+
+                // Use last known location first for speed
+                const lastKnown = await Location.getLastKnownPositionAsync({})
+                if (lastKnown) {
+                    setUserLocation(lastKnown)
+                    setInitialLocation(lastKnown)
+                    setLocationLoading(false)
+                }
+
+                // Get current position in background for accuracy
+                const location = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.Balanced,
+                })
+                setUserLocation(location)
+                if (!lastKnown) {
+                    setInitialLocation(location)
+                    setLocationLoading(false)
+                }
+            } catch (error) {
+                console.error('Error getting location:', error)
+                setLocationLoading(false)
+            }
+        })()
+    }, [])
+
+    // Handle Deep Links (Filter & Location)
+    useEffect(() => {
+        if (filter) {
+            if (['trending', 'new'].includes(filter as string)) {
+                setActiveFilter(filter as FilterType)
+            }
+        }
+
+        if (panToUser === 'true' && userLocation) {
+            if (isMapReadyRef.current) {
+                centerOnUserLocation()
+            } else {
+                pendingCameraActionRef.current = () => centerOnUserLocation()
+            }
+        }
+    }, [filter, panToUser, userLocation, centerOnUserLocation])
+
+    // Handle search query from Explore tab deep link
+    useEffect(() => {
+        if (searchQuery && searchQuery.trim().length > 0 && !locationLoading) {
+            handleSearch(searchQuery)
+        }
+    }, [searchQuery, locationLoading, handleSearch])
+
+    // Handle List Focus Mode
+    useEffect(() => {
+        if (listId) {
+            fetchListDetails(listId)
+        } else if (postId) {
+            fetchPostForLocate(postId)
+        } else {
+            setIsListMode(false)
+            setActiveList(null)
+            setListPosts([])
+            setActiveList(null)
+            setListPosts([])
+            // setViewMode('map')
+        }
+
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+            if (isListMode) {
+                handleListClose()
+                return true
+            }
+            return false
+        })
+
+        return () => backHandler.remove()
+    }, [listId, postId, isListMode, fetchListDetails, fetchPostForLocate, handleListClose])
 
     // Apply sorting based on active filter
     const applySorting = useCallback((posts: Post[], filter: FilterType): Post[] => {
@@ -464,7 +545,7 @@ export default function MapScreen() {
                                 west: Math.min(ne[0], sw[0]),
                             })
                         }
-                    } catch (e) {
+                    } catch {
                         // getVisibleBounds can fail during rapid map interactions
                     }
                 }
@@ -582,127 +663,11 @@ export default function MapScreen() {
         setSelectedPostId(null)
     }
 
-    const handleRemovePostFromList = async (postId: string) => {
-        if (!activeList) return
-
-        try {
-            await updateDoc(doc(db, 'lists', activeList.id), {
-                postIds: arrayRemove(postId),
-            })
-            setListPosts((prev) => prev.filter((p) => p.id !== postId))
-            // Also update the visible posts on the map if in list mode
-            setVisiblePosts((prev) => prev.filter((p) => p.id !== postId))
-
-            // Update active list state locally
-            setActiveList((prev: any) => ({
-                ...prev,
-                postIds: prev.postIds.filter((id: string) => id !== postId)
-            }))
-
-        } catch (error) {
-            console.error('Error removing post from list:', error)
-            showToast('error', 'Failed to remove post')
-        }
-    }
-
-    const handleDeleteList = async () => {
-        if (!activeList) return
-
-        try {
-            await deleteDoc(doc(db, 'lists', activeList.id))
-            handleListClose()
-        } catch (error) {
-            console.error('Error deleting list:', error)
-            showToast('error', 'Failed to delete list')
-        }
-    }
-
-
 
     const mapStyle =
         colorScheme === 'dark'
             ? 'mapbox://styles/mapbox/dark-v11'
             : 'mapbox://styles/mapbox/streets-v12'
-
-    const centerOnUserLocation = () => {
-        if (userLocation && cameraRef.current) {
-            cameraRef.current.setCamera({
-                centerCoordinate: [userLocation.coords.longitude, userLocation.coords.latitude],
-                zoomLevel: 14,
-                animationDuration: 1000,
-            })
-        }
-    }
-
-    // Search mode handlers
-    const handleSearch = useCallback(async (queryText: string) => {
-        isSearchModeRef.current = true
-        setIsSearchMode(true)
-        setSearchLoading(true)
-        setActiveSearchQuery(queryText)
-        setSearchPostResults([])
-
-        try {
-            const searchPostsFn = httpsCallable(functions, 'searchPosts')
-            const result = await searchPostsFn({
-                query: queryText,
-                ...(userLocation ? {
-                    location: { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude },
-                } : {}),
-            })
-            const { posts } = result.data as { posts: SearchPost[] }
-
-            // Convert SearchPost[] → Post[] for map pins and bottom sheet
-            const converted: Post[] = posts
-                .filter(sp => sp.latitude && sp.longitude)
-                .map(sp => ({
-                    id: sp.postId,
-                    authorId: sp.authorId,
-                    authorUsername: sp.authorUsername,
-                    photoURL: sp.photoURL,
-                    caption: sp.caption,
-                    hasLocation: true,
-                    catchCount: sp.catchCount,
-                    parentPostId: null,
-                    rootPostId: null,
-                    isOriginal: sp.isOriginal,
-                    createdAt: sp.createdAt,
-                    thumbnailURL: sp.thumbnailURL ?? undefined,
-                    mediumURL: sp.mediumURL ?? undefined,
-                    isPioneer: sp.isPioneer,
-                    latitude: sp.latitude,
-                    longitude: sp.longitude,
-                } as Post))
-
-            setSearchPostResults(converted)
-            setVisiblePosts(converted)
-
-            // Fit camera to show all result pins
-            if (converted.length > 0 && cameraRef.current) {
-                const lats = converted.map(p => p.latitude!)
-                const lngs = converted.map(p => p.longitude!)
-
-                if (converted.length === 1) {
-                    cameraRef.current.setCamera({
-                        centerCoordinate: [lngs[0], lats[0]],
-                        zoomLevel: 14,
-                        animationDuration: 1000,
-                    })
-                } else {
-                    cameraRef.current.fitBounds(
-                        [Math.max(...lngs), Math.max(...lats)], // NE
-                        [Math.min(...lngs), Math.min(...lats)], // SW
-                        [80, 40, 200, 40], // padding: top (HUD), right, bottom (sheet), left
-                        1000,
-                    )
-                }
-            }
-        } catch (error) {
-            console.error('Search error:', error)
-        } finally {
-            setSearchLoading(false)
-        }
-    }, [userLocation])
 
     const handleSearchClear = useCallback(() => {
         isSearchModeRef.current = false

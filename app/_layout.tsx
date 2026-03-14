@@ -8,7 +8,7 @@ import * as Notifications from 'expo-notifications'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useRef, useState } from 'react'
-import { Platform } from 'react-native'
+import { Platform, useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import 'react-native-reanimated'
 
@@ -16,7 +16,6 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import { ToastProvider } from '@/components/ui/Toast'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { PostProvider } from '@/context/PostContext'
-import { useColorScheme } from '@/hooks/use-color-scheme'
 import { db } from '@/services/firebase'
 import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 
@@ -80,7 +79,6 @@ function RootLayoutNav() {
     const segments = useSegments()
     const router = useRouter()
     const [hasUserDoc, setHasUserDoc] = useState<boolean | null>(null)
-    const notificationListener = useRef<any>(null)
     const responseListener = useRef<any>(null)
 
     // Register for push notifications when user is authenticated
@@ -109,13 +107,6 @@ function RootLayoutNav() {
             }
         })
 
-        // Listen for incoming notifications
-        notificationListener.current = Notifications.addNotificationReceivedListener(
-            () => {
-                // Notification received
-            }
-        )
-
         // Listen for notification responses (user taps notification)
         responseListener.current = Notifications.addNotificationResponseReceivedListener(
             (response) => {
@@ -129,9 +120,6 @@ function RootLayoutNav() {
         )
 
         return () => {
-            if (notificationListener.current) {
-                notificationListener.current.remove()
-            }
             if (responseListener.current) {
                 responseListener.current.remove()
             }

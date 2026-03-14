@@ -21,11 +21,9 @@ import {
     updateDoc,
     where,
 } from 'firebase/firestore'
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
-    ActivityIndicator,
     Alert,
-    Dimensions,
     FlatList,
     RefreshControl,
     StyleSheet,
@@ -34,8 +32,6 @@ import {
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-
-const { width } = Dimensions.get('window')
 
 export default function ListDetailScreen() {
     const { user } = useAuth()
@@ -52,7 +48,7 @@ export default function ListDetailScreen() {
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
 
-    const fetchListAndPosts = async () => {
+    const fetchListAndPosts = useCallback(async () => {
         if (!listId) return
 
         try {
@@ -108,11 +104,11 @@ export default function ListDetailScreen() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [listId, showToast, router])
 
     useEffect(() => {
         fetchListAndPosts()
-    }, [listId])
+    }, [fetchListAndPosts])
 
     const handleRefresh = async () => {
         setRefreshing(true)

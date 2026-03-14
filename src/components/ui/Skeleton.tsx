@@ -9,7 +9,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const SHIMMER_DURATION = 1000;
-const COLOR_LOW = colors.border; // #2c2c2e
 const COLOR_HIGH = '#3a3a3c';
 
 // --- Base Skeleton Block ---
@@ -30,6 +29,7 @@ export function Skeleton({ width, height, borderRadius = 8, style }: SkeletonPro
             -1,
             true
         );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const animatedStyle = useAnimatedStyle(() => ({

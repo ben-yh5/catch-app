@@ -147,7 +147,7 @@ export default function ExploreScreen() {
         setRefreshing(false)
     }
 
-    const handlePostPress = (postId: string) => {
+    const handlePostPress = useCallback((postId: string) => {
         const post = trendingPosts.find(p => p.id === postId)
             || newPosts.find(p => p.id === postId)
             || recommendedFeed.posts.find(p => p.id === postId)
@@ -155,7 +155,7 @@ export default function ExploreScreen() {
             setSelectedPost(post)
             setModalVisible(true)
         }
-    }
+    }, [trendingPosts, newPosts, recommendedFeed.posts])
 
     const handlePostUpdate = (updated: Post) => {
         const update = (prev: Post[]) => prev.map(p => p.id === updated.id ? updated : p)
@@ -181,7 +181,7 @@ export default function ExploreScreen() {
         />
     ), [user?.uid, handlePostPress])
 
-    const renderFeaturedListSection = () => {
+    const renderFeaturedListSection = useCallback(() => {
         if (loadingLists) return null; // Simplified loading for lists
         if (featuredLists.length === 0) return null;
 
@@ -225,7 +225,7 @@ export default function ExploreScreen() {
                 </ScrollView>
             </View>
         )
-    }
+    }, [loadingLists, featuredLists, router])
 
     const listHeaderComponent = useMemo(() => (
         <>
@@ -259,8 +259,9 @@ export default function ExploreScreen() {
             )}
         </>
     ), [
-        handleSearch, featuredLists, loadingLists,
+        handleSearch, renderFeaturedListSection,
         trendingPosts, loadingTrending, newPosts, loadingNew,
+        handlePostPress, router,
         recommendedFeed.loading, recommendedFeed.posts.length,
     ])
 

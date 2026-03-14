@@ -100,10 +100,12 @@ jest.mock('@/theme/colors', () => ({
     },
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.spyOn(require('react-native').Alert, 'alert');
 
 // Mock UnifiedCameraView to simulating taking a photo immediately
 jest.mock('@/components/UnifiedCameraView', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Button, Text, View } = require('react-native');
     const Component = ({ onPhotoTaken }: any) => (
         <View>
@@ -119,6 +121,7 @@ jest.mock('@/components/UnifiedCameraView', () => {
 
 // Mock UnifiedPreviewScreen to inspect props
 jest.mock('@/components/UnifiedPreviewScreen', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Text, View } = require('react-native');
     const Component = (props: any) => (
         <View>
@@ -145,7 +148,7 @@ describe('PostScreen', () => {
         // Mock location hanging (never resolving promise)
         (Location.getCurrentPositionAsync as jest.Mock).mockReturnValue(new Promise(() => { }));
 
-        const { getByText, queryByText } = render(<PostScreen />);
+        const { getByText } = render(<PostScreen />);
 
         // Open Camera
         fireEvent.press(getByText('Open Camera'));

@@ -26,7 +26,7 @@ export default function AppInput({
     onBlur,
     ...props
 }: AppInputProps) {
-    const [isFocused, setIsFocused] = useState(false)
+    const [, setIsFocused] = useState(false)
     const focusAnim = useRef(new Animated.Value(0)).current
 
     const handleFocus = (e: any) => {

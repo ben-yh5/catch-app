@@ -1,6 +1,5 @@
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
-import { usePost } from '@/context/PostContext';
 import { useDeviceSensors } from '@/hooks/useDeviceSensors';
 import { db, storage } from '@/services/firebase';
 import { ImageMetadata, uploadTrainingPair } from '@/services/trainingData';
@@ -30,7 +29,6 @@ interface UseCatchFlowProps {
  */
 export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlowProps) {
     const { user, dataContributionEnabled } = useAuth();
-    const { notifyPostEvent } = usePost();
     const { showToast } = useToast();
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
@@ -46,7 +44,6 @@ export function useCatchFlow({ rootPost, postLocation, onSuccess }: UseCatchFlow
 
     const {
         heading,
-        pitch,
         capturedHeading,
         capturedPitch,
         startSensors,

@@ -29,7 +29,7 @@ export default function ListsScreen() {
     const [activeTab, setActiveTab] = useState<'my' | 'community'>('my')
     const [refreshEnabled, setRefreshEnabled] = useState(true)
 
-    const fetchMyLists = async () => {
+    const fetchMyLists = useCallback(async () => {
         if (!user) return
 
         try {
@@ -61,9 +61,9 @@ export default function ListsScreen() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [user])
 
-    const fetchCommunityLists = async () => {
+    const fetchCommunityLists = useCallback(async () => {
         try {
             const listsQuery = query(
                 collection(db, 'lists'),
@@ -87,7 +87,7 @@ export default function ListsScreen() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
 
     const fetchLists = useCallback(() => {
         if (activeTab === 'my') {
@@ -95,7 +95,7 @@ export default function ListsScreen() {
         } else {
             fetchCommunityLists()
         }
-    }, [activeTab, user])
+    }, [activeTab, fetchMyLists, fetchCommunityLists])
 
     // Handle page swipe
     const handlePageSelected = (e: any) => {

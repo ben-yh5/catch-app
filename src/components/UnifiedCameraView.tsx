@@ -43,7 +43,7 @@ export default function UnifiedCameraView({
 }: UnifiedCameraViewProps) {
     const [facing, setFacing] = useState<CameraType>('back')
     const [isCameraReady, setIsCameraReady] = useState(false)
-    const [ghostOpacity, setGhostOpacity] = useState(0.5)
+    const [ghostOpacity] = useState(0.5)
     const [showGhost, setShowGhost] = useState(true)
     const cameraRef = useRef<CameraView>(null)
     const insets = useSafeAreaInsets()

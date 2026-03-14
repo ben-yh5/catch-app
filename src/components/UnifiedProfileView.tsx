@@ -5,7 +5,7 @@ import AppButton from '@/components/ui/AppButton'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { PostEvent, usePost, usePostEvents } from '@/context/PostContext'
-import { db } from '@/services/firebase'
+import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
@@ -25,12 +25,9 @@ import {
     where,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { functions } from '@/services/firebase'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
-    Alert,
-    Dimensions,
     FlatList,
     Modal,
     RefreshControl,
@@ -49,7 +46,6 @@ interface ProfileViewProps {
     isOwnProfile: boolean
 }
 
-const { width } = Dimensions.get('window')
 const POSTS_PER_PAGE = 20
 
 export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileViewProps) {
@@ -61,9 +57,9 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     const isFocused = useIsFocused()
     const insets = useSafeAreaInsets()
     const [username, setUsername] = useState<string>('')
-    const [totalCatches, setTotalCatches] = useState<number>(0)
+    const [, setTotalCatches] = useState<number>(0)
     const [contribution, setContribution] = useState<number>(0)
-    const [totalPosts, setTotalPosts] = useState<number>(0)
+    const [, setTotalPosts] = useState<number>(0)
     const [followerCount, setFollowerCount] = useState<number>(0)
     const [followingCount, setFollowingCount] = useState<number>(0)
     const [isFollowing, setIsFollowing] = useState<boolean>(false)
@@ -197,6 +193,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
     useEffect(() => {
         setLoading(true)
         fetchUserData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId])
 
     // Subscribe to post events for granular updates
@@ -254,6 +251,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         })
 
         return unsubscribe
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigation, isFocused, isOwnProfile])
 
     const onRefresh = useCallback(async () => {
@@ -264,6 +262,7 @@ export default function UnifiedProfileView({ userId, isOwnProfile }: ProfileView
         setLastCatchDoc(null)
         await fetchUserData()
         setRefreshing(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId])
 
     const loadMorePosts = async () => {

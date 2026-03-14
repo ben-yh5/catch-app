@@ -58,6 +58,7 @@ export default function ActivityFeed({
         } else {
             setHydratedNotifications([])
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, notifications])
 
     const hydrateNotifications = async () => {
@@ -167,7 +168,7 @@ export default function ActivityFeed({
                     onPress: async () => {
                         try {
                             await clearAllNotifications()
-                        } catch (error) {
+                        } catch {
                             Alert.alert('Error', 'Failed to clear activity')
                         }
                     }

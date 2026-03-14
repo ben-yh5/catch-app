@@ -23,6 +23,8 @@ export default function ExploreSection({
     onSeeAllPress,
     loading = false,
 }: ExploreSectionProps) {
+    const { user } = useAuth();
+
     if (loading) {
         return (
             <View style={styles.container}>
@@ -39,8 +41,6 @@ export default function ExploreSection({
     if (!posts || posts.length === 0) {
         return null;
     }
-
-    const { user } = useAuth();
 
     const renderPostCard = ({ item }: { item: any }) => (
         <FeaturedPostCard

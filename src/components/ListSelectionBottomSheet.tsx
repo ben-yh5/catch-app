@@ -21,9 +21,8 @@ import { List } from '@/types'
 import { addPostToList, getListsContainingPost, getOrCreateSavedList, removePostFromList } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useRouter } from 'expo-router'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
     ActivityIndicator,
     Animated,
@@ -55,91 +54,13 @@ export default function ListSelectionBottomSheet({
     onSelectionChange,
 }: ListSelectionBottomSheetProps) {
     const { user } = useAuth()
-    const router = useRouter()
     const [lists, setLists] = useState<List[]>([])
     const [selectedListIds, setSelectedListIds] = useState<Set<string>>(new Set())
     const [loading, setLoading] = useState(false)
     const [updating, setUpdating] = useState<string | null>(null)
     const slideAnim = React.useRef(new Animated.Value(0)).current
 
-    useEffect(() => {
-        if (visible) {
-            Animated.spring(slideAnim, {
-                toValue: 1,
-                useNativeDriver: true,
-                tension: 65,
-                friction: 11,
-            }).start()
-
-            // Initialize selection from props if provided
-            if (initialSelectedIds) {
-                setSelectedListIds(new Set(initialSelectedIds))
-            }
-
-            if (user) {
-                fetchUserLists()
-            }
-        } else {
-            slideAnim.setValue(0)
-        }
-    }, [visible, user, slideAnim, initialSelectedIds])
-
-    const fetchUserLists = async () => {
-        if (!user) return
-
-        setLoading(true)
-        try {
-            // Get or create the default "My List"
-            const userDoc = await getDoc(doc(db, 'users', user.uid))
-            const username = userDoc.exists() ? userDoc.data().username : 'Unknown'
-            await getOrCreateSavedList(user.uid, username)
-
-            // Fetch all user's lists
-            const listsQuery = query(
-                collection(db, 'lists'),
-                where('creatorId', '==', user.uid)
-            )
-
-            const snapshot = await getDocs(listsQuery)
-            const fetchedLists: List[] = []
-
-            snapshot.forEach((doc) => {
-                fetchedLists.push({
-                    id: doc.id,
-                    ...doc.data(),
-                } as List)
-            })
-
-            // Sort: My List first, then others by updatedAt
-            const myList = fetchedLists.find(l => l.isSavedList)
-            const otherLists = fetchedLists
-                .filter(l => !l.isSavedList)
-                .sort((a, b) => b.updatedAt?.toMillis?.() - a.updatedAt?.toMillis?.())
-
-            const sortedLists = myList ? [myList, ...otherLists] : otherLists
-            setLists(sortedLists)
-
-            // If we're in "real" mode (postId exists), fetch current state from DB
-            if (postId) {
-                const listsWithPost = await getListsContainingPost(user.uid, postId)
-                setSelectedListIds(new Set(listsWithPost))
-
-                // Auto-select "My List" if post is not in any list (legacy behavior for existing posts)
-                if (listsWithPost.length === 0 && sortedLists.length > 0) {
-                    const defaultList = myList || sortedLists[0]
-                    if (defaultList) {
-                        await handleToggleList(defaultList.id, false)
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching lists:', error)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const handleToggleList = async (listId: string, skipUpdate = false) => {
+    const handleToggleList = useCallback(async (listId: string, skipUpdate = false) => {
         if (updating && !skipUpdate) return
 
         const isSelected = selectedListIds.has(listId)
@@ -195,7 +116,85 @@ export default function ListSelectionBottomSheet({
 
         const isSaved = newSelected.size > 0
         onSaveStateChange?.(isSaved)
-    }
+    }, [updating, selectedListIds, postId, onSaveStateChange, onSelectionChange])
+
+    const fetchUserLists = useCallback(async () => {
+        if (!user) return
+
+        setLoading(true)
+        try {
+            // Get or create the default "My List"
+            const userDoc = await getDoc(doc(db, 'users', user.uid))
+            const username = userDoc.exists() ? userDoc.data().username : 'Unknown'
+            await getOrCreateSavedList(user.uid, username)
+
+            // Fetch all user's lists
+            const listsQuery = query(
+                collection(db, 'lists'),
+                where('creatorId', '==', user.uid)
+            )
+
+            const snapshot = await getDocs(listsQuery)
+            const fetchedLists: List[] = []
+
+            snapshot.forEach((doc) => {
+                fetchedLists.push({
+                    id: doc.id,
+                    ...doc.data(),
+                } as List)
+            })
+
+            // Sort: My List first, then others by updatedAt
+            const myList = fetchedLists.find(l => l.isSavedList)
+            const otherLists = fetchedLists
+                .filter(l => !l.isSavedList)
+                .sort((a, b) => b.updatedAt?.toMillis?.() - a.updatedAt?.toMillis?.())
+
+            const sortedLists = myList ? [myList, ...otherLists] : otherLists
+            setLists(sortedLists)
+
+            // If we're in "real" mode (postId exists), fetch current state from DB
+            if (postId) {
+                const listsWithPost = await getListsContainingPost(user.uid, postId)
+                setSelectedListIds(new Set(listsWithPost))
+
+                // Auto-select "My List" if post is not in any list (legacy behavior for existing posts)
+                if (listsWithPost.length === 0 && sortedLists.length > 0) {
+                    const defaultList = myList || sortedLists[0]
+                    if (defaultList) {
+                        await handleToggleList(defaultList.id, false)
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching lists:', error)
+        } finally {
+            setLoading(false)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user, postId])
+
+    useEffect(() => {
+        if (visible) {
+            Animated.spring(slideAnim, {
+                toValue: 1,
+                useNativeDriver: true,
+                tension: 65,
+                friction: 11,
+            }).start()
+
+            // Initialize selection from props if provided
+            if (initialSelectedIds) {
+                setSelectedListIds(new Set(initialSelectedIds))
+            }
+
+            if (user) {
+                fetchUserLists()
+            }
+        } else {
+            slideAnim.setValue(0)
+        }
+    }, [visible, user, slideAnim, initialSelectedIds, fetchUserLists])
 
     const renderListItem = ({ item }: { item: List }) => {
         const isSelected = selectedListIds.has(item.id)
