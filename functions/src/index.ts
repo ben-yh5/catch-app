@@ -138,7 +138,7 @@ const CONTRIBUTION = {
 const GEOHASH_QUERY_LIMIT = 200
 
 /** Maximum total results returned from getPostsInArea */
-const MAX_AREA_RESULTS = 500
+const MAX_AREA_RESULTS = 200
 
 /** Rate limiting configuration */
 const RATE_LIMITS = {
@@ -1495,15 +1495,15 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
         // OPTION A: Query by radius (circular area)
         if (data.centerLat && data.centerLng && data.radiusInMeters) {
             const center: [number, number] = [data.centerLat, data.centerLng]
-            const radiusInM = data.radiusInMeters
 
-            // Validate radius to prevent abuse
-            if (radiusInM <= 0 || radiusInM > 100000) {
+            // Validate and cap radius to prevent massive geohash fan-out
+            if (data.radiusInMeters <= 0) {
                 throw new functions.https.HttpsError(
                     'invalid-argument',
-                    'Radius must be between 0 and 100km'
+                    'Radius must be greater than 0'
                 )
             }
+            const radiusInM = Math.min(data.radiusInMeters, 100000)
 
             // Validate coordinate ranges
             if (
@@ -1607,14 +1607,17 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
             const centerLng = (data.east + data.west) / 2
 
             // Calculate diagonal distance as radius (ensures we cover entire viewport)
-            const radiusInM =
+            const rawRadiusInM =
                 distanceBetween(
                     [data.south, data.west],
                     [data.north, data.east]
                 ) / 2
 
+            // Cap at 100km to prevent massive geohash fan-out at low zoom levels
+            const radiusInM = Math.min(rawRadiusInM, 100000)
+
             functions.logger.info(
-                `Viewport center: ${centerLat}, ${centerLng}, radius: ${radiusInM}m`
+                `Viewport center: ${centerLat}, ${centerLng}, radius: ${radiusInM}m${rawRadiusInM > 100000 ? ` (capped from ${Math.round(rawRadiusInM)}m)` : ''}`
             )
 
             // Use same geohash query approach
@@ -1680,13 +1683,18 @@ export const getPostsInArea = functions.https.onCall(async (data, context) => {
                 db.collection('posts').doc(id)
             )
 
-            // Batch fetch post documents using admin SDK getAll (chunks of 100)
+            // Batch fetch post documents using admin SDK getAll (chunks of 100, parallel)
             const ENRICH_BATCH_SIZE = 100
             const postDataMap = new Map<string, any>()
 
+            const chunks: FirebaseFirestore.DocumentReference[][] = []
             for (let i = 0; i < postRefs.length; i += ENRICH_BATCH_SIZE) {
-                const chunk = postRefs.slice(i, i + ENRICH_BATCH_SIZE)
-                const snapshots = await db.getAll(...chunk)
+                chunks.push(postRefs.slice(i, i + ENRICH_BATCH_SIZE))
+            }
+            const batchResults = await Promise.all(
+                chunks.map((chunk) => db.getAll(...chunk))
+            )
+            for (const snapshots of batchResults) {
                 snapshots.forEach((snap) => {
                     if (snap.exists) {
                         postDataMap.set(snap.id, snap.data())
@@ -2891,41 +2899,76 @@ export const searchPosts = functions.https.onCall(async (data, context) => {
     const db = admin.firestore()
 
     try {
-        // 1. Expand short queries for better semantic coverage
-        let searchText = query.trim()
-        if (searchText.split(/\s+/).length <= 4) {
-            try {
-                const flashModel = getGenAI().getGenerativeModel({
-                    model: 'gemini-2.0-flash',
-                })
-                const expansion = await flashModel.generateContent(
-                    `You are a search query expander for a travel photo app. Given the short search query below, output a single comma-separated list of 5-8 related phrases that someone might use to describe travel photos matching this query. Include synonyms, related visual descriptions, and broader concepts. Output ONLY the comma-separated list, nothing else.\n\nQuery: "${searchText}"`
-                )
-                const expanded = expansion.response.text().trim()
-                if (expanded.length > 0 && expanded.length < 500) {
-                    searchText = `${searchText}, ${expanded}`
-                    functions.logger.info(
-                        `[searchPosts] Expanded query: "${query}" → "${searchText}"`
-                    )
-                }
-            } catch (e) {
-                functions.logger.warn(
-                    '[searchPosts] Query expansion failed, using raw query',
-                    e
-                )
-            }
-        }
+        const rawQuery = query.trim()
+        const isShortQuery = rawQuery.split(/\s+/).length <= 4
 
-        // 2. Embed the search query
+        // 1. Run query expansion and base embedding in parallel
+        // For short queries, expansion feeds a second embedding call.
+        // For long queries, we only need the single embedding.
         const embModel = getGenAI().getGenerativeModel({
             model: 'gemini-embedding-001',
         })
-        const embResult = await embModel.embedContent({
-            content: { role: 'user', parts: [{ text: searchText }] },
-            taskType: TaskType.RETRIEVAL_QUERY,
-            outputDimensionality: 768,
-        } as any)
-        const queryVector = embResult.embedding.values
+
+        let queryVector: number[]
+
+        if (isShortQuery) {
+            // Run expansion + base embedding concurrently
+            const flashModel = getGenAI().getGenerativeModel({
+                model: 'gemini-2.0-flash',
+            })
+            const [expansionResult, baseEmbResult] = await Promise.all([
+                flashModel
+                    .generateContent(
+                        `You are a search query expander for a travel photo app. Given the short search query below, output a single comma-separated list of 5-8 related phrases that someone might use to describe travel photos matching this query. Include synonyms, related visual descriptions, and broader concepts. Output ONLY the comma-separated list, nothing else.\n\nQuery: "${rawQuery}"`
+                    )
+                    .catch((e: any) => {
+                        functions.logger.warn(
+                            '[searchPosts] Query expansion failed, using raw query',
+                            e
+                        )
+                        return null
+                    }),
+                embModel.embedContent({
+                    content: {
+                        role: 'user',
+                        parts: [{ text: rawQuery }],
+                    },
+                    taskType: TaskType.RETRIEVAL_QUERY,
+                    outputDimensionality: 768,
+                } as any),
+            ])
+
+            // If expansion succeeded, embed the expanded text; otherwise use base embedding
+            const expanded = expansionResult?.response?.text()?.trim()
+            if (expanded && expanded.length > 0 && expanded.length < 500) {
+                const searchText = `${rawQuery}, ${expanded}`
+                functions.logger.info(
+                    `[searchPosts] Expanded query: "${rawQuery}" → "${searchText}"`
+                )
+                const expandedEmb = await embModel.embedContent({
+                    content: {
+                        role: 'user',
+                        parts: [{ text: searchText }],
+                    },
+                    taskType: TaskType.RETRIEVAL_QUERY,
+                    outputDimensionality: 768,
+                } as any)
+                queryVector = expandedEmb.embedding.values
+            } else {
+                queryVector = baseEmbResult.embedding.values
+            }
+        } else {
+            // Long query — embed directly, no expansion needed
+            const embResult = await embModel.embedContent({
+                content: {
+                    role: 'user',
+                    parts: [{ text: rawQuery }],
+                },
+                taskType: TaskType.RETRIEVAL_QUERY,
+                outputDimensionality: 768,
+            } as any)
+            queryVector = embResult.embedding.values
+        }
 
         // 3. Vector similarity search via Firestore findNearest
         const vectorQuery = db.collection('post_locations').findNearest({

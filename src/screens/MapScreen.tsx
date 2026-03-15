@@ -78,6 +78,7 @@ export default function MapScreen() {
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
     const { cachePosts, caughtThreadIds } = usePost()
     const lastFetchRef = useRef<number>(0)
+    const lastFetchBoundsRef = useRef<MapBounds | null>(null)
     const fetchTimeoutRef = useRef<any>(undefined)
     const isMapReadyRef = useRef(false)
     const initialFetchDoneRef = useRef(false)
@@ -511,6 +512,10 @@ export default function MapScreen() {
     const loadVisiblePosts = useCallback(async () => {
         if (!mapRef.current || isListMode || isSearchModeRef.current) return
 
+        // Skip fetch at very low zoom — viewport too large for meaningful pin display
+        const zoom = await mapRef.current.getZoom()
+        if (zoom < 5) return
+
         // Debounce if called too frequently (unless forced)
         const now = Date.now()
         if (now - lastFetchRef.current < 1000) return
@@ -547,6 +552,22 @@ export default function MapScreen() {
                 east: Math.max(lng1, lng2),
                 west: Math.min(lng1, lng2),
             }
+
+            // Skip fetch if bounds haven't changed meaningfully (~100m at mid-latitudes)
+            const prev = lastFetchBoundsRef.current
+            if (prev) {
+                const delta = 0.001
+                if (
+                    Math.abs(bounds.north - prev.north) < delta &&
+                    Math.abs(bounds.south - prev.south) < delta &&
+                    Math.abs(bounds.east - prev.east) < delta &&
+                    Math.abs(bounds.west - prev.west) < delta
+                ) {
+                    setLoadingPosts(false)
+                    return
+                }
+            }
+            lastFetchBoundsRef.current = bounds
 
             // Single enriched call: locations + summaries, pre-filtered to originals
             const enrichedLocations = await fetchViewportPosts(bounds, {
@@ -643,15 +664,11 @@ export default function MapScreen() {
             pendingCameraActionRef.current()
             pendingCameraActionRef.current = null
         }
-        // Delay initial fetch to let the Camera component settle at its coordinates
-        if (!listId) {
-            setTimeout(() => {
-                if (!initialFetchDoneRef.current) {
-                    initialFetchDoneRef.current = true
-                    lastFetchRef.current = 0
-                    loadVisiblePosts()
-                }
-            }, 500)
+        // Trigger initial fetch once the map is ready
+        if (!listId && !initialFetchDoneRef.current) {
+            initialFetchDoneRef.current = true
+            lastFetchRef.current = 0
+            loadVisiblePosts()
         }
     }, [listId, loadVisiblePosts])
 
@@ -685,8 +702,8 @@ export default function MapScreen() {
         }
     }
 
-    // Convert posts to GeoJSON for Mapbox
-    const getGeoJSONData = () => {
+    // Convert posts to GeoJSON for Mapbox (memoized to avoid recalculating on every render)
+    const geoJSONData = React.useMemo(() => {
         const features = sortedVisiblePosts
             .filter((post) => post.latitude && post.longitude)
             .map((post) => ({
@@ -710,7 +727,7 @@ export default function MapScreen() {
             type: 'FeatureCollection' as const,
             features,
         }
-    }
+    }, [sortedVisiblePosts, selectedPostId, user?.uid, caughtThreadIds])
 
     const handleMarkerPress = (event: any) => {
         const feature = event.features?.[0]
@@ -865,7 +882,7 @@ export default function MapScreen() {
                         <ShapeSource
                             id="posts-source"
                             ref={shapeSourceRef}
-                            shape={getGeoJSONData()}
+                            shape={geoJSONData}
                             onPress={async (event) => {
                                 const feature = event.features?.[0]
                                 if (!feature) return

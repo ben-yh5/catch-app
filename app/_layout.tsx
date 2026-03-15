@@ -8,7 +8,7 @@ import * as Notifications from 'expo-notifications'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useRef, useState } from 'react'
-import { Platform, useColorScheme } from 'react-native'
+import { useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import 'react-native-reanimated'
 
@@ -17,7 +17,7 @@ import { ToastProvider } from '@/components/ui/Toast'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { PostProvider } from '@/context/PostContext'
 import { db } from '@/services/firebase'
-import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
+import { doc, onSnapshot } from 'firebase/firestore'
 
 Sentry.init({
     dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
@@ -39,40 +39,6 @@ export const unstable_settings = {
     initialRouteName: '(tabs)',
 }
 
-async function registerForPushNotificationsAsync() {
-    let token
-
-    if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-            name: 'default',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FF231F7C',
-        })
-    }
-
-    const { status: existingStatus } = await Notifications.getPermissionsAsync()
-    let finalStatus = existingStatus
-
-    if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync()
-        finalStatus = status
-    }
-
-    if (finalStatus !== 'granted') {
-        return null
-    }
-
-    try {
-        // For bare workflow, get the device push token (FCM token for Android, APNs for iOS)
-        token = (await Notifications.getDevicePushTokenAsync()).data
-    } catch {
-        return null
-    }
-
-    return token
-}
-
 function RootLayoutNav() {
     const colorScheme = useColorScheme()
     const { user, loading } = useAuth()
@@ -81,37 +47,10 @@ function RootLayoutNav() {
     const [hasUserDoc, setHasUserDoc] = useState<boolean | null>(null)
     const responseListener = useRef<any>(null)
 
-    // Register for push notifications when user is authenticated
+    // Listen for notification responses (user taps notification)
     useEffect(() => {
         if (!user) return
 
-        registerForPushNotificationsAsync().then(async (token) => {
-            if (token) {
-                try {
-                    // Only update push token for existing users
-                    // Do not create user documents here - let signup/username-setup handle that
-                    const userDocRef = doc(db, 'users', user.uid)
-
-                    // Check if user doc exists
-                    const userDoc = await getDoc(userDocRef)
-                    if (userDoc.exists()) {
-                        // User exists, update push token
-                        await setDoc(
-                            userDocRef,
-                            {
-                                pushToken: token,
-                            },
-                            { merge: true }
-                        )
-                    }
-                    // If user doc doesn't exist, do nothing - they're in the username setup flow
-                } catch (error) {
-                    console.error('Error updating push token:', error)
-                }
-            }
-        })
-
-        // Listen for notification responses (user taps notification)
         responseListener.current =
             Notifications.addNotificationResponseReceivedListener(
                 (response) => {

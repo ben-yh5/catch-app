@@ -38,6 +38,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **Admin SDK** | `firebase-admin` 11.x |
 | **Image Processing** | `sharp` (thumbnail/medium generation) |
 | **Geospatial** | `geofire-common` (geohash queries) |
+| **AI / Embeddings** | `@google/generative-ai` (Gemini 2.0 Flash for vision/query expansion, `gemini-embedding-001` for 768-dim vectors) |
 | **File System** | `fs-extra` |
 
 ### Dev & Testing
@@ -136,6 +137,27 @@ Post coordinates are **never** sent to clients. The `posts` collection only has 
 - `onImageUpload` Cloud Function (Storage trigger) auto-generates `_thumb` (200x200) and `_medium` (600x600) variants
 - Posts store `photoURL`, `thumbnailURL`, `mediumURL`
 
+### Semantic Search (Vector Search)
+
+Natural language search powered by Gemini and Firestore vector search. Users search for locations like "sunset viewpoints" or "colorful street art".
+
+**Post enrichment pipeline** (`onPostCreated` trigger, async — failures don't block post creation):
+1. **Reverse geocoding**: Nominatim API → `locationMeta` (country, city, neighborhood, street, formattedAddress)
+2. **Vision auto-tagging**: Gemini 2.0 Flash analyzes the post image → `visualMeta` (tags, scene, landmark, mood)
+3. **Embedding generation**: Combines caption + address + city + scene + tags + mood + landmark → `gemini-embedding-001` (768-dim, `RETRIEVAL_DOCUMENT`) → stored as Firestore Vector on `post_locations`
+
+**Search flow** (`searchPosts` callable):
+1. Short queries (≤4 words) expanded via Gemini 2.0 Flash (synonyms/related phrases)
+2. Query embedded with `gemini-embedding-001` (768-dim, `RETRIEVAL_QUERY`)
+3. `post_locations.findNearest()` — top 50 by cosine distance
+4. Geo re-ranking if user location provided: `vectorDistance × (1 + log10(1 + distanceKm) × 0.3)`
+5. Relevance filter: discard results with `vectorDistance > 0.50`
+6. Batch fetch full post docs, merge location/visual metadata, return `SearchPost[]`
+
+**Client integration**: `ExploreSearchBar` component → MapScreen calls `searchPosts` → displays results as map pins with bottom sheet.
+
+**Backfill**: `backfillEmbeddings` (admin-only) retroactively enriches existing posts. Supports `force` and `embeddingsOnly` flags.
+
 ### Notifications
 
 In-app notifications stored in `users/{userId}/notifications/` subcollection. Push notifications via FCM/APNs using native device tokens (not Expo push service).
@@ -166,6 +188,10 @@ Notification types: `new_post`, `follow`, `royalty`.
 ### post_locations/{locationId} (server-only, client reads blocked)
 - `postId`, `latitude`, `longitude`, `geohash`
 - `heading`, `pitch` (optional)
+- `locationMeta`: `{ country, city, neighborhood, street, formattedAddress }` (from Nominatim)
+- `visualMeta`: `{ tags: string[], scene, landmark, mood }` (from Gemini vision)
+- `embedding`: 768-dim Firestore Vector (from Gemini embedding-001)
+- `metadataVersion`: number
 
 ### lists/{listId}
 - `name`, `userId`, `postIds` (array), `isPublic`
@@ -194,6 +220,8 @@ Notification types: `new_post`, `follow`, `royalty`.
 | `onPostCreated` | Firestore Trigger | Contribution points, Pioneer/Nearby check, catchCount increment, notifications. Idempotent via `context.eventId` dedup |
 | `onPostDeleted` | Firestore Trigger | Thread promotion, counter decrements (catchCount), list cleanup. Idempotent via `context.eventId` dedup |
 | `onUserFollowed` | Firestore Trigger | Follow notifications (in-app + push) |
+| `searchPosts` | HTTPS Callable | Semantic vector search: query expansion → embedding → Firestore `findNearest()` → geo re-ranking |
+| `backfillEmbeddings` | HTTPS Callable | Admin-only: retroactively enriches existing posts with geocoding, vision tags, and embeddings |
 | `onImageUpload` | Storage Trigger | Auto-generates thumbnail and medium image variants |
 
 ## Key Patterns
@@ -211,6 +239,9 @@ Notification types: `new_post`, `follow`, `royalty`.
 - **Rate limiting**: All callable Cloud Functions enforce per-user rate limits via `checkRateLimit()` helper using `rate_limits/{userId}` Firestore docs. Three tiers: GENERAL (30/min), EXPENSIVE (10/min), SETUP (5/min). Fail-open design.
 - **App Check**: Native attestation (App Attest for iOS, Play Integrity for Android) bridged to JS SDK via `CustomProvider` in `src/services/firebase.js`. Server-side `verifyAppCheck()` helper in Cloud Functions with configurable `warn`/`enforce` mode. Currently in `warn` mode.
 - **Geospatial query limits**: `getPostsInArea` caps results at 200 per geohash sub-query and 500 total. Validates `radiusInMeters > 0`, coordinate ranges, and viewport bounds.
+- **Async post enrichment**: `onPostCreated` runs geocoding, vision tagging, and embedding generation in try/catch blocks — failures are logged but don't block post creation or other trigger logic.
+- **Vector index**: `post_locations` requires a Firestore vector index on the `embedding` field (768-dim, flat, cosine). Created via `gcloud firestore indexes composite create`.
+- **Gemini lazy init**: `getGenAI()` initializes the Gemini client on first use to avoid cold start overhead when the function isn't needed.
 
 ## Firestore Security Rules
 

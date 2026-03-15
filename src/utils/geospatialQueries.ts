@@ -78,8 +78,8 @@ export async function getPostsInViewport(
             bounds.east
         )
 
-        // Add a small buffer to radius to ensure we cover the corners
-        const bufferRadius = radiusInMeters * 1.1
+        // Add a small buffer to radius to ensure we cover the corners, cap at 100km
+        const bufferRadius = Math.min(radiusInMeters * 1.1, 100000)
 
         const results = await getPostsInRadius(
             {

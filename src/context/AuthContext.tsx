@@ -118,18 +118,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                                     true,
                             })
                         }
-                    }
 
-                    // Register for push notifications
-                    registerForPushNotificationsAsync().then((token) => {
-                        if (token) {
-                            updateDoc(doc(db, 'users', user.uid), {
-                                pushToken: token,
-                            }).catch((err) =>
-                                console.error('Error saving push token:', err)
-                            )
-                        }
-                    })
+                        // Register for push notifications
+                        registerForPushNotificationsAsync().then((token) => {
+                            if (token) {
+                                updateDoc(doc(db, 'users', user.uid), {
+                                    pushToken: token,
+                                }).catch((err) =>
+                                    console.error(
+                                        'Error saving push token:',
+                                        err
+                                    )
+                                )
+                            }
+                        })
+                    }
                 } catch (error) {
                     console.error('Error fetching user settings:', error)
                 }
