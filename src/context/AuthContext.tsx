@@ -24,7 +24,16 @@ import {
     signOut,
     User,
 } from 'firebase/auth'
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import {
+    collection,
+    doc,
+    getDoc,
+    limit,
+    onSnapshot,
+    query,
+    setDoc,
+    updateDoc,
+} from 'firebase/firestore'
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { Notification } from '@/types'
 
@@ -143,6 +152,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 setTotalCatches(0)
                 setNotifications([])
                 setUnreadCount(0)
+                setNotificationSettings({
+                    notifyOnCatch: true,
+                    notifyOnFollow: true,
+                })
             }
             setLoading(false)
         })
@@ -153,69 +166,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     useEffect(() => {
         if (!user) return
 
-        let unsubscribe: (() => void) | undefined
+        const q = query(
+            collection(db, 'users', user.uid, 'notifications'),
+            limit(100)
+        )
 
-        import('firebase/firestore').then(
-            ({ collection, query, onSnapshot, limit }) => {
-                console.log(
-                    `[AuthContext] Setting up listener for: users/${user.uid}/notifications`
+        const unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+                const newNotifications = snapshot.docs.map(
+                    (d) =>
+                        ({
+                            id: d.id,
+                            ...d.data(),
+                        }) as Notification
                 )
+                newNotifications.sort((a, b) => {
+                    const tA = a.createdAt?.toMillis?.() || 0
+                    const tB = b.createdAt?.toMillis?.() || 0
+                    return tB - tA
+                })
 
-                const q = query(
-                    collection(db, 'users', user.uid, 'notifications'),
-                    limit(100)
+                setNotifications(newNotifications)
+                setUnreadCount(
+                    newNotifications.filter((n) => !n.read).length
                 )
-
-                unsubscribe = onSnapshot(
-                    q,
-                    (snapshot) => {
-                        console.log(
-                            `[AuthContext] Notification snapshot size: ${snapshot.size} for user ${user.uid}`
-                        )
-                        if (!snapshot.empty) {
-                            console.log(
-                                '[AuthContext] Latest notification sample:',
-                                snapshot.docs[0].data()
-                            )
-                        }
-
-                        const newNotifications = snapshot.docs.map(
-                            (doc) =>
-                                ({
-                                    id: doc.id,
-                                    ...doc.data(),
-                                }) as Notification
-                        )
-                        // Sort manually since we removed orderBy
-                        newNotifications.sort((a, b) => {
-                            const tA = a.createdAt?.toMillis?.() || 0
-                            const tB = b.createdAt?.toMillis?.() || 0
-                            return tB - tA
-                        })
-
-                        setNotifications(newNotifications)
-
-                        // Update unread count
-                        const unread = newNotifications.filter(
-                            (n) => !n.read
-                        ).length
-                        setUnreadCount(unread)
-                    },
-                    (error) => {
-                        console.error(
-                            'Error listening to notifications:',
-                            error
-                        )
-                    }
-                )
+            },
+            (error) => {
+                console.error('Error listening to notifications:', error)
             }
         )
 
-        return () => {
-            if (unsubscribe) {
-                unsubscribe()
-            }
-        }
+        return unsubscribe
     }, [user])
 
     const toggleNotificationSetting = async (
@@ -402,6 +384,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
      */
     const logout = async () => {
         try {
+            // Clear push token before signing out so the old user
+            // doesn't keep receiving notifications on this device
+            if (auth.currentUser) {
+                await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+                    pushToken: null,
+                }).catch((err) =>
+                    console.error('Error clearing push token:', err)
+                )
+            }
             await signOut(auth)
             await GoogleSignin.signOut()
         } catch (error: any) {

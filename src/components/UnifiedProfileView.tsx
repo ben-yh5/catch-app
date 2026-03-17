@@ -115,8 +115,14 @@ export default function UnifiedProfileView({
                 setTotalCatches(userData.totalCatches || 0)
                 setContribution(userData.contribution || 0)
                 setTotalPosts(userData.totalPosts || 0)
-                setFollowerCount(userData.followers?.length || 0)
-                setFollowingCount(userData.following?.length || 0)
+                const followers = (userData.followers || []).filter(
+                    (id: string) => id !== userId
+                )
+                const following = (userData.following || []).filter(
+                    (id: string) => id !== userId
+                )
+                setFollowerCount(followers.length)
+                setFollowingCount(following.length)
 
                 // Sync stats to AuthContext so Explore page stays in sync
                 if (isOwnProfile) {
@@ -461,10 +467,11 @@ export default function UnifiedProfileView({
             }
 
             const userData = userDoc.data()
-            const userIds =
+            const userIds = (
                 type === 'followers'
                     ? userData.followers || []
                     : userData.following || []
+            ).filter((id: string) => id !== userId)
 
             if (userIds.length === 0) {
                 setFollowList([])
@@ -518,7 +525,7 @@ export default function UnifiedProfileView({
     }
 
     const handleFollowFromList = async (targetUserId: string) => {
-        if (!user) return
+        if (!user || targetUserId === user.uid) return
 
         // Find the user in the list
         const userInList = followList.find((u) => u.id === targetUserId)

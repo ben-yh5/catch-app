@@ -333,7 +333,7 @@ export function useCatchFlow({
                 )
             }
 
-            showToast('success', 'Location caught!', '+14 Contribution')
+            showToast('success', 'Location caught!', 'Contribution earned!')
             onSuccess({ id: docRef.id, ...postData } as Post)
             setStatusMessage('')
             handlePreviewCancel()

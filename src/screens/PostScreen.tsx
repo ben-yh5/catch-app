@@ -391,7 +391,7 @@ export default function PostScreen() {
                 ).catch((e) => console.error('Error adding to lists:', e))
             }
 
-            showToast('success', 'Location caught!', '+14 Contribution')
+            showToast('success', 'Location caught!', 'Contribution earned!')
 
             // Reset state
             setCapturedImage(null)
@@ -486,6 +486,14 @@ export default function PostScreen() {
 
             const docRef = await addDoc(collection(db, 'posts'), postData)
 
+            // Check nearby posts BEFORE writing location to estimate pioneer status
+            const nearbyPosts = await getPostsInRadius({
+                centerLat: location.latitude,
+                centerLng: location.longitude,
+                radiusInMeters: 50,
+            })
+            const isPioneer = nearbyPosts.length === 0
+
             // Store actual location in separate private collection with geohash
             const geohash = geohashForLocation([
                 location.latitude,
@@ -513,15 +521,6 @@ export default function PostScreen() {
                     console.error('Error adding to lists:', listError)
                 }
             }
-
-            // Check nearby posts to estimate contribution points
-            const nearbyPosts = await getPostsInRadius({
-                centerLat: location.latitude,
-                centerLng: location.longitude,
-                radiusInMeters: 50,
-            })
-
-            const isPioneer = nearbyPosts.length === 0
 
             const alertTitle = isPioneer
                 ? 'Pioneer Bonus! (+10 XP)'

@@ -206,6 +206,11 @@ export const PostProvider: React.FC<{ children: React.ReactNode }> = ({
     )
     const { user } = useAuth()
 
+    // Clear post cache when user changes (prevents stale data across account switches)
+    useEffect(() => {
+        postCacheRef.current.clear()
+    }, [user?.uid])
+
     /**
      * Fetch all threads caught by the current user
      */
