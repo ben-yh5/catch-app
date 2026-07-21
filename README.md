@@ -25,6 +25,10 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## ML model training
+
+`assets/models/view_encoder.tflite` (the visual-similarity model used to verify catches) is trained in a separate [`catch-ml-training`](../catch-ml-training) repo — this repo only ships the exported model, not the training pipeline or raw datasets.
+
 ## Learn more
 
 To learn more about developing your project with Expo, look at the following resources:

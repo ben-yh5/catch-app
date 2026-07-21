@@ -4,15 +4,8 @@ const mockRunTransaction = jest.fn(async (fn: any) => {
     return fn({ get: mockTransactionGet, set: mockTransactionSet })
 })
 
-const mockRateLimitGet = jest.fn().mockResolvedValue({ data: () => ({}) })
-const mockRateLimitSet = jest.fn().mockResolvedValue(undefined)
 const mockDoc = jest.fn()
-const mockCollection = jest.fn((name: string) => {
-    if (name === 'rate_limits') {
-        return { doc: () => ({ get: mockRateLimitGet, set: mockRateLimitSet }) }
-    }
-    return { doc: mockDoc }
-})
+const mockCollection = jest.fn(() => ({ doc: mockDoc }))
 
 jest.mock('firebase-admin', () => ({
     initializeApp: jest.fn(),
@@ -43,7 +36,6 @@ const run = (setupUsername as any).run as (
 describe('setupUsername', () => {
     beforeEach(() => {
         jest.clearAllMocks()
-        mockRateLimitGet.mockResolvedValue({ data: () => ({}) })
     })
 
     it('rejects unauthenticated calls', async () => {

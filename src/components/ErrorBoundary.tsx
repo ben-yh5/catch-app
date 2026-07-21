@@ -1,4 +1,3 @@
-import * as Sentry from '@sentry/react-native'
 import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 
@@ -18,9 +17,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     }
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-        Sentry.captureException(error, {
-            extra: { componentStack: errorInfo.componentStack },
-        })
+        console.error(error, errorInfo.componentStack)
     }
 
     handleReload = () => {

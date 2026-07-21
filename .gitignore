@@ -57,11 +57,5 @@ firebase-debug.log
 !README.md
 !CLAUDE.md
 
-# ML sensitive & data
-serviceAccountKey.json
-training_data/
+# ML: tuned model variant not yet in use
 assets/models/view_encoder_tuned.tflite
-__pycache__/
-*.pyc
-
-*.h5

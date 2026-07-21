@@ -16,36 +16,6 @@
       "android": {
         "buildType": "apk"
       }
-    },
-    "preview": {
-      "distribution": "internal",
-      "env": {
-        "APP_VARIANT": "preview"
-      },
-      "ios": {
-        "resourceClass": "m-medium"
-      },
-      "android": {
-        "buildType": "apk"
-      }
-    },
-    "production": {
-      "ios": {
-        "resourceClass": "m-medium"
-      },
-      "android": {
-        "buildType": "app-bundle"
-      },
-      "autoIncrement": true
-    }
-  },
-  "submit": {
-    "production": {
-      "ios": {
-        "appleId": "YOUR_APPLE_ID@example.com",
-        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "YOUR_APPLE_TEAM_ID"
-      }
     }
   }
 }

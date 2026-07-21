@@ -102,12 +102,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Rate limits collection (managed by Cloud Functions only)
-    match /rate_limits/{userId} {
-      // No client access — only written by Cloud Functions (admin SDK)
-      allow read, write: if false;
-    }
-
     // User recommendations collection (managed by Cloud Functions only)
     match /user_recommendations/{userId} {
       // Only the user themselves can read their recommendations

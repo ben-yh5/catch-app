@@ -3,7 +3,6 @@ import {
     DefaultTheme,
     ThemeProvider,
 } from '@react-navigation/native'
-import * as Sentry from '@sentry/react-native'
 import * as Notifications from 'expo-notifications'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -18,12 +17,6 @@ import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { PostProvider } from '@/context/PostContext'
 import { db } from '@/services/firebase'
 import { doc, onSnapshot } from 'firebase/firestore'
-
-Sentry.init({
-    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-    enabled: !__DEV__,
-    tracesSampleRate: 0.2,
-})
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -173,4 +166,4 @@ function RootLayoutInner() {
     )
 }
 
-export default Sentry.wrap(RootLayoutInner)
+export default RootLayoutInner

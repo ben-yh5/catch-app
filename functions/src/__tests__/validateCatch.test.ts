@@ -35,17 +35,6 @@ const run = (validateCatch as any).run as (
 describe('validateCatch', () => {
     beforeEach(() => {
         jest.clearAllMocks()
-        mockCollection.mockImplementation((name: string) => {
-            if (name === 'rate_limits') {
-                return {
-                    doc: () => ({
-                        get: jest.fn().mockResolvedValue({ data: () => ({}) }),
-                        set: jest.fn().mockResolvedValue(undefined),
-                    }),
-                }
-            }
-            return { doc: mockDoc, where: mockWhere }
-        })
     })
 
     it('rejects unauthenticated calls', async () => {
