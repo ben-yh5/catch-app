@@ -34,7 +34,6 @@ export const loadVerifierModel = async () => {
         model = await loadTensorflowModel(
             require('../../assets/models/view_encoder.tflite')
         )
-        console.log('[VisualMatcher] Model loaded successfully')
         return model
     } catch (error) {
         console.error('[VisualMatcher] Failed to load TFLite model:', error)
@@ -112,26 +111,9 @@ export const verifyViewSimilarity = async (
 ): Promise<number> => {
     const tflite = await loadVerifierModel()
 
-    console.log(`[VisualMatcher] Starting verification for:`)
-    console.log(`  Original: ${originalUri.substring(0, 50)}...`)
-    console.log(`  Catch: ${catchUri.substring(0, 50)}...`)
-
     // 1. Convert to Tensors
     const tensorA = await imageToTensor(originalUri)
     const tensorB = await imageToTensor(catchUri)
-
-    // DEBUG: Log input samples
-    console.log(`[VisualMatcher] Input Tensor Samples:`)
-    console.log(
-        `  Tensor A (1st 3px): ${Array.from(tensorA.slice(0, 9))
-            .map((v) => v.toFixed(3))
-            .join(', ')}`
-    )
-    console.log(
-        `  Tensor B (1st 3px): ${Array.from(tensorB.slice(0, 9))
-            .map((v) => v.toFixed(3))
-            .join(', ')}`
-    )
 
     // 2. Run inference SEQUENTIALLY
     // Mobile hardware buffers can sometimes be clobbered by parallel calls.
@@ -146,23 +128,7 @@ export const verifyViewSimilarity = async (
     const vectorB = new Float32Array(resB[0] as Float32Array) // Explicit COPY to new buffer
 
     // 3. Compare vectors
-    const similarity = calculateCosineSimilarity(vectorA, vectorB)
-
-    // DEBUG LOGGING
-    console.log(`[VisualMatcher] Inference Complete:`)
-    console.log(
-        `  Embed A (First 5): ${Array.from(vectorA.slice(0, 5))
-            .map((v) => v.toFixed(4))
-            .join(', ')}...`
-    )
-    console.log(
-        `  Embed B (First 5): ${Array.from(vectorB.slice(0, 5))
-            .map((v) => v.toFixed(4))
-            .join(', ')}...`
-    )
-    console.log(`  Final Similarity: ${similarity.toFixed(4)}`)
-
-    return similarity
+    return calculateCosineSimilarity(vectorA, vectorB)
 }
 
 /** Nudge similarity threshold (lower than catch validation — loose matching for suggestions) */
@@ -206,9 +172,6 @@ export const findMostSimilar = async (
                     capturedVector,
                     candidateVector
                 )
-                console.log(
-                    `[VisualMatcher] Nudge candidate ${i}: similarity=${score.toFixed(4)}`
-                )
 
                 if (score > bestScore) {
                     bestScore = score
@@ -223,15 +186,9 @@ export const findMostSimilar = async (
         }
 
         if (bestIndex >= 0 && bestScore >= NUDGE_SIMILARITY_THRESHOLD) {
-            console.log(
-                `[VisualMatcher] Nudge best match: index=${bestIndex}, score=${bestScore.toFixed(4)}`
-            )
             return { index: bestIndex, score: bestScore }
         }
 
-        console.log(
-            `[VisualMatcher] No nudge match found (best=${bestScore.toFixed(4)})`
-        )
         return null
     } catch (error) {
         console.warn('[VisualMatcher] Nudge similarity check failed:', error)

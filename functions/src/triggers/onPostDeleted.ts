@@ -1,7 +1,7 @@
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { decrementCoverageCells } from '../lib/coverage'
-import { CONTRIBUTION } from '../lib/constants'
+import { CONTRIBUTION, MAX_INSTANCES } from '../lib/constants'
 
 /**
  * Firestore Trigger: Handles post deletion events
@@ -13,8 +13,9 @@ import { CONTRIBUTION } from '../lib/constants'
  *
  * Also removes the post from any lists containing it
  */
-export const onPostDeleted = functions.firestore
-    .document('posts/{postId}')
+export const onPostDeleted = functions
+    .runWith({ maxInstances: MAX_INSTANCES.DEFAULT })
+    .firestore.document('posts/{postId}')
     .onDelete(async (snap, context) => {
         const db = admin.firestore()
 

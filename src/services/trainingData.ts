@@ -4,7 +4,11 @@
  * Handles the collection and uploading of image pairs (Original + Catch)
  * for training the View Verification AI model.
  *
- * Only uploads data if the user has opted-in via Settings.
+ * Only uploads data if the user has opted-in via Settings ("Improve Catch AI").
+ * Uploads land in the `training_data/` Storage prefix and a `training_pairs`
+ * Firestore collection; the offline training pipeline that consumes this data
+ * (download, manual verification, fine-tuning) lives in the separate
+ * catch-ml-training repo, not in this app repo.
  */
 
 import { db, storage } from '@/services/firebase'

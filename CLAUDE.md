@@ -156,7 +156,7 @@ Natural language search powered by Gemini and Firestore vector search. Users sea
 
 **Client integration**: `ExploreSearchBar` component → MapScreen calls `searchPosts` → displays results as map pins with bottom sheet.
 
-**Backfill**: `backfillEmbeddings` (admin-only) retroactively enriches existing posts. Supports `force` and `embeddingsOnly` flags.
+**Backfill**: `backfillEmbeddings` (admin-only, enforced via `requireAdmin()`) retroactively enriches existing posts. Supports `force` and `embeddingsOnly` flags.
 
 ### Notifications
 
@@ -202,8 +202,11 @@ Notification types: `new_post`, `follow`, `royalty`.
 ### processed_events/{eventId} (trigger deduplication, server-only)
 - `processedAt`: timestamp
 
-### rate_limits/{userId} (per-user rate limiting, server-only)
-- `{functionName}_ts`: array of timestamps (sliding window)
+### training_pairs/{pairId} (opt-in ML training data, written by client when `dataContributionEnabled`)
+- `pairId`, `userId`, `originalId`, `catchId`, `label` (`POSITIVE` | `HARD_NEGATIVE`)
+- `originalStoragePath`, `catchStoragePath` — images live under the `training_data/` Storage prefix
+- `originalMeta`, `catchMeta`: `{ latitude, longitude, heading?, pitch?, date }`
+- Consumed by the offline training pipeline in the separate `catch-ml-training` repo (not part of this repo) — see `src/services/trainingData.ts` for the upload path
 
 ## Cloud Functions (`functions/src/index.ts`)
 
@@ -213,7 +216,6 @@ Notification types: `new_post`, `follow`, `royalty`.
 | `getPostLocation` | HTTPS Callable | Returns coordinates for a single post |
 | `getPostLocations` | HTTPS Callable | Batch coordinates (max 500 posts) |
 | `getPostsInArea` | HTTPS Callable | Geospatial query by viewport bounds or radius |
-| `recountUserData` | HTTPS Callable | Recalculates authenticated user's own stats only |
 | `setupUsername` | HTTPS Callable | Atomically claims username + creates user doc (prevents TOCTOU race) |
 | `followUser` | HTTPS Callable | Atomically updates both users' following/followers arrays in a transaction |
 | `unfollowUser` | HTTPS Callable | Atomically removes from both users' following/followers arrays in a transaction |
@@ -222,6 +224,7 @@ Notification types: `new_post`, `follow`, `royalty`.
 | `onUserFollowed` | Firestore Trigger | Follow notifications (in-app + push) |
 | `searchPosts` | HTTPS Callable | Semantic vector search: query expansion → embedding → Firestore `findNearest()` → geo re-ranking |
 | `backfillEmbeddings` | HTTPS Callable | Admin-only: retroactively enriches existing posts with geocoding, vision tags, and embeddings |
+| `backfillCoverage` | HTTPS Callable | Admin-only: rebuilds `geohash_cells`/`user_coverage` from existing `post_locations` |
 | `onImageUpload` | Storage Trigger | Auto-generates thumbnail and medium image variants |
 
 ## Key Patterns
@@ -236,12 +239,14 @@ Notification types: `new_post`, `follow`, `royalty`.
 - **Trigger idempotency**: `onPostCreated` and `onPostDeleted` deduplicate via `context.eventId` using a `processed_events` collection to handle Firestore's at-least-once delivery.
 - **Username uniqueness**: `setupUsername` Cloud Function uses a `usernames/{lowercase}` collection as an atomic uniqueness index via Firestore transaction.
 - **Atomic follow/unfollow**: `followUser`/`unfollowUser` Cloud Functions update both users' arrays in a single transaction. No client-side writes to `followers` or `following`.
-- **Rate limiting**: All callable Cloud Functions enforce per-user rate limits via `checkRateLimit()` helper using `rate_limits/{userId}` Firestore docs. Three tiers: GENERAL (30/min), EXPENSIVE (10/min), SETUP (5/min). Fail-open design.
-- **App Check**: Native attestation (App Attest for iOS, Play Integrity for Android) bridged to JS SDK via `CustomProvider` in `src/services/firebase.js`. Server-side `verifyAppCheck()` helper in Cloud Functions with configurable `warn`/`enforce` mode. Currently in `warn` mode.
 - **Geospatial query limits**: `getPostsInArea` caps results at 200 per geohash sub-query and 500 total. Validates `radiusInMeters > 0`, coordinate ranges, and viewport bounds.
 - **Async post enrichment**: `onPostCreated` runs geocoding, vision tagging, and embedding generation in try/catch blocks — failures are logged but don't block post creation or other trigger logic.
 - **Vector index**: `post_locations` requires a Firestore vector index on the `embedding` field (768-dim, flat, cosine). Created via `gcloud firestore indexes composite create`.
 - **Gemini lazy init**: `getGenAI()` initializes the Gemini client on first use to avoid cold start overhead when the function isn't needed.
+- **Admin-only functions**: `backfillEmbeddings` and `backfillCoverage` call `requireAdmin()` (`functions/src/lib/adminAuth.ts`), which checks the caller's UID against the comma-separated `ADMIN_UIDS` env var. Fails closed — if unset, nobody passes.
+- **Cost-control backstop**: every callable and trigger sets `runWith({ maxInstances })` (`MAX_INSTANCES` in `functions/src/lib/constants.ts`) — a hard cap on concurrent instances independent of any app-level rate limiting, so a traffic spike or abuse can't scale a single function unboundedly.
+- **Visual match verification ("the Judge")**: `src/utils/visualMatcher.ts` runs a TFLite Siamese-style similarity check (`assets/models/view_encoder.tflite`) between the original post photo and a catch attempt. Fails open — if the model errors, `useCatchFlow.ts` logs a warning, shows an "Visual Match Unavailable" toast, and lets the catch proceed on location/angle checks alone rather than silently skipping.
+- **ML training pipeline lives outside this repo**: the model above is trained in a separate `catch-ml-training` repo (GLDv2 base training + fine-tuning on opt-in app data). This repo only ships the exported `.tflite` file and the opt-in collection flow (`dataContributionEnabled`, `src/services/trainingData.ts`) that feeds it.
 
 ## Firestore Security Rules
 
@@ -251,7 +256,6 @@ Rules enforce authorization, not just authentication:
 - **Posts**: `create` requires `authorId == auth.uid`. No client-side updates allowed (`catchCount` managed by Cloud Functions). Only author can delete.
 - **Notifications**: Proper subcollection rules under `match /notifications/{notifId}` with owner-only access. Updates restricted to `read` field only.
 - **Post locations**: `create` validates required fields (`postId`, `latitude`, `longitude`, `geohash`) and coordinate ranges. No client reads.
-- **Rate limits**: `rate_limits/{userId}` collection — admin SDK only (`allow read, write: if false`).
 
 ## Storage Security Rules
 

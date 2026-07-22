@@ -1,7 +1,11 @@
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
-import { distanceBetween, geohashForLocation, geohashQueryBounds } from 'geofire-common'
-import { GEOHASH_QUERY_LIMIT } from '../lib/constants'
+import {
+    distanceBetween,
+    geohashForLocation,
+    geohashQueryBounds,
+} from 'geofire-common'
+import { GEOHASH_QUERY_LIMIT, MAX_INSTANCES } from '../lib/constants'
 
 // ─── Recommendation System (Phase 1) ────────────────────────────────────────
 
@@ -30,8 +34,9 @@ const FOLLOWING_BATCH_SIZE = 30
  * @param data.latitude - City center latitude
  * @param data.longitude - City center longitude
  */
-export const recordCityIntent = functions.https.onCall(
-    async (data, context) => {
+export const recordCityIntent = functions
+    .runWith({ maxInstances: MAX_INSTANCES.DEFAULT })
+    .https.onCall(async (data, context) => {
         if (!context.auth) {
             throw new functions.https.HttpsError(
                 'unauthenticated',
@@ -146,8 +151,7 @@ export const recordCityIntent = functions.https.onCall(
                 'Failed to record city intent'
             )
         }
-    }
-)
+    })
 
 /**
  * HTTPS Callable Function: Returns a paginated personalized feed
@@ -162,8 +166,9 @@ export const recordCityIntent = functions.https.onCall(
  * @param data.pageSize - Number of posts to return (default 20, max 50)
  * @returns { posts, nextCursor, hasMore }
  */
-export const getRecommendedFeed = functions.https.onCall(
-    async (data, context) => {
+export const getRecommendedFeed = functions
+    .runWith({ maxInstances: MAX_INSTANCES.EXPENSIVE })
+    .https.onCall(async (data, context) => {
         if (!context.auth) {
             throw new functions.https.HttpsError(
                 'unauthenticated',
@@ -410,5 +415,4 @@ export const getRecommendedFeed = functions.https.onCall(
                 'Failed to get recommended feed'
             )
         }
-    }
-)
+    })

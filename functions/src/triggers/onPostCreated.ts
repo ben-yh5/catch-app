@@ -4,7 +4,7 @@ import { distanceBetween, geohashQueryBounds } from 'geofire-common'
 import { TaskType } from '@google/generative-ai'
 import { getGenAI } from '../lib/gemini'
 import { updateCoverageCells } from '../lib/coverage'
-import { CONTRIBUTION } from '../lib/constants'
+import { CONTRIBUTION, MAX_INSTANCES } from '../lib/constants'
 import { sendPushNotification } from '../lib/notifications'
 
 /**
@@ -16,8 +16,9 @@ import { sendPushNotification } from '../lib/notifications'
  * 3. Increments user's totalCatches/totalPosts counters
  * 4. Sends push notifications to followers for original posts
  */
-export const onPostCreated = functions.firestore
-    .document('posts/{postId}')
+export const onPostCreated = functions
+    .runWith({ maxInstances: MAX_INSTANCES.EXPENSIVE })
+    .firestore.document('posts/{postId}')
     .onCreate(async (snap, context) => {
         const db = admin.firestore()
 

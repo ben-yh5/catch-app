@@ -240,11 +240,16 @@ export function useCatchFlow({
                     return
                 }
             } catch (aiError) {
-                // If AI fails (e.g. model missing), we log it but maybe let it slide in dev
-                // Or we can fail-safe. For now, let's just log.
+                // Fail open: don't block a catch on an ML infra problem, but
+                // surface it so degraded verification isn't silent.
                 console.warn(
                     '[CatchFlow] Visual verification skipped due to error:',
                     aiError
+                )
+                showToast(
+                    'info',
+                    'Visual Match Unavailable',
+                    'Verified location and angle only — visual check could not run.'
                 )
             }
 

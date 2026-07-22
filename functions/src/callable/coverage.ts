@@ -1,5 +1,7 @@
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
+import { requireAdmin } from '../lib/adminAuth'
+import { MAX_INSTANCES } from '../lib/constants'
 
 /**
  * One-time admin function to backfill geohash_cells and user_coverage
@@ -10,14 +12,13 @@ import * as functions from 'firebase-functions'
  * but will over-count if run multiple times without clearing geohash_cells first.
  */
 export const backfillCoverage = functions
-    .runWith({ timeoutSeconds: 540, memory: '512MB' })
+    .runWith({
+        timeoutSeconds: 540,
+        memory: '512MB',
+        maxInstances: MAX_INSTANCES.ADMIN,
+    })
     .https.onCall(async (_data, context) => {
-        if (!context.auth) {
-            throw new functions.https.HttpsError(
-                'unauthenticated',
-                'Must be authenticated'
-            )
-        }
+        requireAdmin(context)
 
         const db = admin.firestore()
         const BATCH_SIZE = 500

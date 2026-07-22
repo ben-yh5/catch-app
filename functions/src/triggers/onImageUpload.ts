@@ -4,6 +4,7 @@ import * as fs from 'fs-extra'
 import * as os from 'os'
 import * as path from 'path'
 import sharp = require('sharp')
+import { MAX_INSTANCES } from '../lib/constants'
 
 /**
  * Cloud Function: Automatic Image Resizing
@@ -16,7 +17,7 @@ import sharp = require('sharp')
  * Updates the Firestore document with the new URLs.
  */
 export const onImageUpload = functions
-    .runWith({ memory: '1GB' })
+    .runWith({ memory: '1GB', maxInstances: MAX_INSTANCES.DEFAULT })
     .storage.object()
     .onFinalize(async (object) => {
         const fileBucket = object.bucket

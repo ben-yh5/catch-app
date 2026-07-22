@@ -3,233 +3,237 @@ import * as functions from 'firebase-functions'
 import { distanceBetween } from 'geofire-common'
 import { TaskType } from '@google/generative-ai'
 import { getGenAI } from '../lib/gemini'
+import { requireAdmin } from '../lib/adminAuth'
+import { MAX_INSTANCES } from '../lib/constants'
 
 /**
  * Semantic search across posts using vector similarity.
  * Embeds the user's query and finds nearest matches in post_locations.
  */
-export const searchPosts = functions.https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError(
-            'unauthenticated',
-            'Must be logged in'
-        )
-    }
-    const { query, location } = data
-    if (!query || typeof query !== 'string' || query.trim().length === 0) {
-        throw new functions.https.HttpsError(
-            'invalid-argument',
-            'Query is required'
-        )
-    }
-    if (query.length > 200) {
-        throw new functions.https.HttpsError(
-            'invalid-argument',
-            'Query too long'
-        )
-    }
+export const searchPosts = functions
+    .runWith({ maxInstances: MAX_INSTANCES.EXPENSIVE })
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError(
+                'unauthenticated',
+                'Must be logged in'
+            )
+        }
+        const { query, location } = data
+        if (!query || typeof query !== 'string' || query.trim().length === 0) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Query is required'
+            )
+        }
+        if (query.length > 200) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Query too long'
+            )
+        }
 
-    const hasLocation =
-        location &&
-        typeof location.lat === 'number' &&
-        typeof location.lng === 'number'
-    const db = admin.firestore()
+        const hasLocation =
+            location &&
+            typeof location.lat === 'number' &&
+            typeof location.lng === 'number'
+        const db = admin.firestore()
 
-    try {
-        const rawQuery = query.trim()
-        const isShortQuery = rawQuery.split(/\s+/).length <= 4
+        try {
+            const rawQuery = query.trim()
+            const isShortQuery = rawQuery.split(/\s+/).length <= 4
 
-        // 1. Run query expansion and base embedding in parallel
-        // For short queries, expansion feeds a second embedding call.
-        // For long queries, we only need the single embedding.
-        const embModel = getGenAI().getGenerativeModel({
-            model: 'gemini-embedding-001',
-        })
-
-        let queryVector: number[]
-
-        if (isShortQuery) {
-            // Run expansion + base embedding concurrently
-            const flashModel = getGenAI().getGenerativeModel({
-                model: 'gemini-2.0-flash',
+            // 1. Run query expansion and base embedding in parallel
+            // For short queries, expansion feeds a second embedding call.
+            // For long queries, we only need the single embedding.
+            const embModel = getGenAI().getGenerativeModel({
+                model: 'gemini-embedding-001',
             })
-            const [expansionResult, baseEmbResult] = await Promise.all([
-                flashModel
-                    .generateContent(
-                        `You are a search query expander for a travel photo app. Given the short search query below, output a single comma-separated list of 5-8 related phrases that someone might use to describe travel photos matching this query. Include synonyms, related visual descriptions, and broader concepts. Output ONLY the comma-separated list, nothing else.\n\nQuery: "${rawQuery}"`
-                    )
-                    .catch((e: any) => {
-                        functions.logger.warn(
-                            '[searchPosts] Query expansion failed, using raw query',
-                            e
+
+            let queryVector: number[]
+
+            if (isShortQuery) {
+                // Run expansion + base embedding concurrently
+                const flashModel = getGenAI().getGenerativeModel({
+                    model: 'gemini-2.0-flash',
+                })
+                const [expansionResult, baseEmbResult] = await Promise.all([
+                    flashModel
+                        .generateContent(
+                            `You are a search query expander for a travel photo app. Given the short search query below, output a single comma-separated list of 5-8 related phrases that someone might use to describe travel photos matching this query. Include synonyms, related visual descriptions, and broader concepts. Output ONLY the comma-separated list, nothing else.\n\nQuery: "${rawQuery}"`
                         )
-                        return null
-                    }),
-                embModel.embedContent({
+                        .catch((e: any) => {
+                            functions.logger.warn(
+                                '[searchPosts] Query expansion failed, using raw query',
+                                e
+                            )
+                            return null
+                        }),
+                    embModel.embedContent({
+                        content: {
+                            role: 'user',
+                            parts: [{ text: rawQuery }],
+                        },
+                        taskType: TaskType.RETRIEVAL_QUERY,
+                        outputDimensionality: 768,
+                    } as any),
+                ])
+
+                // If expansion succeeded, embed the expanded text; otherwise use base embedding
+                const expanded = expansionResult?.response?.text()?.trim()
+                if (expanded && expanded.length > 0 && expanded.length < 500) {
+                    const searchText = `${rawQuery}, ${expanded}`
+                    functions.logger.info(
+                        `[searchPosts] Expanded query: "${rawQuery}" → "${searchText}"`
+                    )
+                    const expandedEmb = await embModel.embedContent({
+                        content: {
+                            role: 'user',
+                            parts: [{ text: searchText }],
+                        },
+                        taskType: TaskType.RETRIEVAL_QUERY,
+                        outputDimensionality: 768,
+                    } as any)
+                    queryVector = expandedEmb.embedding.values
+                } else {
+                    queryVector = baseEmbResult.embedding.values
+                }
+            } else {
+                // Long query — embed directly, no expansion needed
+                const embResult = await embModel.embedContent({
                     content: {
                         role: 'user',
                         parts: [{ text: rawQuery }],
                     },
                     taskType: TaskType.RETRIEVAL_QUERY,
                     outputDimensionality: 768,
-                } as any),
-            ])
-
-            // If expansion succeeded, embed the expanded text; otherwise use base embedding
-            const expanded = expansionResult?.response?.text()?.trim()
-            if (expanded && expanded.length > 0 && expanded.length < 500) {
-                const searchText = `${rawQuery}, ${expanded}`
-                functions.logger.info(
-                    `[searchPosts] Expanded query: "${rawQuery}" → "${searchText}"`
-                )
-                const expandedEmb = await embModel.embedContent({
-                    content: {
-                        role: 'user',
-                        parts: [{ text: searchText }],
-                    },
-                    taskType: TaskType.RETRIEVAL_QUERY,
-                    outputDimensionality: 768,
                 } as any)
-                queryVector = expandedEmb.embedding.values
-            } else {
-                queryVector = baseEmbResult.embedding.values
+                queryVector = embResult.embedding.values
             }
-        } else {
-            // Long query — embed directly, no expansion needed
-            const embResult = await embModel.embedContent({
-                content: {
-                    role: 'user',
-                    parts: [{ text: rawQuery }],
-                },
-                taskType: TaskType.RETRIEVAL_QUERY,
-                outputDimensionality: 768,
-            } as any)
-            queryVector = embResult.embedding.values
-        }
 
-        // 3. Vector similarity search via Firestore findNearest
-        const vectorQuery = db.collection('post_locations').findNearest({
-            vectorField: 'embedding',
-            queryVector,
-            limit: 50,
-            distanceMeasure: 'COSINE',
-            distanceResultField: 'vectorDistance',
-        })
-        const snapshot = await vectorQuery.get()
+            // 3. Vector similarity search via Firestore findNearest
+            const vectorQuery = db.collection('post_locations').findNearest({
+                vectorField: 'embedding',
+                queryVector,
+                limit: 50,
+                distanceMeasure: 'COSINE',
+                distanceResultField: 'vectorDistance',
+            })
+            const snapshot = await vectorQuery.get()
 
-        // 4. Compute geo distance + re-rank if user location available
-        let locationResults = snapshot.docs.map((doc) => {
-            const d = doc.data()
-            let distanceKm: number | null = null
+            // 4. Compute geo distance + re-rank if user location available
+            let locationResults = snapshot.docs.map((doc) => {
+                const d = doc.data()
+                let distanceKm: number | null = null
+                if (hasLocation) {
+                    distanceKm = distanceBetween(
+                        [location.lat, location.lng],
+                        [d.latitude, d.longitude]
+                    )
+                }
+                return { id: doc.id, ...d, distanceKm }
+            })
+
             if (hasLocation) {
-                distanceKm = distanceBetween(
-                    [location.lat, location.lng],
-                    [d.latitude, d.longitude]
-                )
+                // Re-rank: boost nearby results using log-scaled distance penalty
+                // 1km → 1.09x, 10km → 1.31x, 100km → 1.60x, 1000km → 1.90x
+                locationResults.sort((a: any, b: any) => {
+                    const aScore =
+                        (a.vectorDistance || 0) *
+                        (1 + Math.log10(1 + (a.distanceKm || 0)) * 0.3)
+                    const bScore =
+                        (b.vectorDistance || 0) *
+                        (1 + Math.log10(1 + (b.distanceKm || 0)) * 0.3)
+                    return aScore - bScore
+                })
             }
-            return { id: doc.id, ...d, distanceKm }
-        })
 
-        if (hasLocation) {
-            // Re-rank: boost nearby results using log-scaled distance penalty
-            // 1km → 1.09x, 10km → 1.31x, 100km → 1.60x, 1000km → 1.90x
-            locationResults.sort((a: any, b: any) => {
-                const aScore =
-                    (a.vectorDistance || 0) *
-                    (1 + Math.log10(1 + (a.distanceKm || 0)) * 0.3)
-                const bScore =
-                    (b.vectorDistance || 0) *
-                    (1 + Math.log10(1 + (b.distanceKm || 0)) * 0.3)
-                return aScore - bScore
-            })
-        }
-
-        // Log vectorDistance distribution for debugging relevance
-        const distances = locationResults.map((r: any) =>
-            (r.vectorDistance || 0).toFixed(3)
-        )
-        functions.logger.info(
-            `[searchPosts] vectorDistances for "${query}": [${distances.join(', ')}]`
-        )
-
-        // Filter by relevance: cosine distance > 0.50 means weak/unrelated match
-        // Empirical: closely matching posts ~0.2-0.3, loosely related ~0.4-0.5
-        const beforeCount = locationResults.length
-        locationResults = locationResults.filter(
-            (r: any) => (r.vectorDistance || 0) < 0.5
-        )
-        functions.logger.info(
-            `[searchPosts] Relevance filter: ${beforeCount} → ${locationResults.length} (cutoff 0.50)`
-        )
-
-        // Take top 50 after re-ranking
-        locationResults = locationResults.slice(0, 50)
-
-        if (locationResults.length === 0) {
-            return { posts: [] }
-        }
-
-        // 4. Batch fetch post documents for summaries
-        const postIds = locationResults.map((r: any) => r.postId)
-        const postMap: Record<string, any> = {}
-
-        for (let i = 0; i < postIds.length; i += 100) {
-            const batch = postIds.slice(i, i + 100)
-            const refs = batch.map((id: string) =>
-                db.collection('posts').doc(id)
+            // Log vectorDistance distribution for debugging relevance
+            const distances = locationResults.map((r: any) =>
+                (r.vectorDistance || 0).toFixed(3)
             )
-            const docs = await db.getAll(...refs)
-            for (const doc of docs) {
-                if (doc.exists) {
-                    postMap[doc.id] = doc.data()
+            functions.logger.info(
+                `[searchPosts] vectorDistances for "${query}": [${distances.join(', ')}]`
+            )
+
+            // Filter by relevance: cosine distance > 0.50 means weak/unrelated match
+            // Empirical: closely matching posts ~0.2-0.3, loosely related ~0.4-0.5
+            const beforeCount = locationResults.length
+            locationResults = locationResults.filter(
+                (r: any) => (r.vectorDistance || 0) < 0.5
+            )
+            functions.logger.info(
+                `[searchPosts] Relevance filter: ${beforeCount} → ${locationResults.length} (cutoff 0.50)`
+            )
+
+            // Take top 50 after re-ranking
+            locationResults = locationResults.slice(0, 50)
+
+            if (locationResults.length === 0) {
+                return { posts: [] }
+            }
+
+            // 4. Batch fetch post documents for summaries
+            const postIds = locationResults.map((r: any) => r.postId)
+            const postMap: Record<string, any> = {}
+
+            for (let i = 0; i < postIds.length; i += 100) {
+                const batch = postIds.slice(i, i + 100)
+                const refs = batch.map((id: string) =>
+                    db.collection('posts').doc(id)
+                )
+                const docs = await db.getAll(...refs)
+                for (const doc of docs) {
+                    if (doc.exists) {
+                        postMap[doc.id] = doc.data()
+                    }
                 }
             }
+
+            // 5. Return merged results
+            const posts = locationResults
+                .filter((r: any) => postMap[r.postId])
+                .map((r: any) => {
+                    const post = postMap[r.postId]
+                    return {
+                        postId: r.postId,
+                        authorId: post.authorId,
+                        authorUsername: post.authorUsername,
+                        caption: post.caption,
+                        photoURL: post.photoURL,
+                        thumbnailURL: post.thumbnailURL || null,
+                        mediumURL: post.mediumURL || null,
+                        catchCount: post.catchCount || 0,
+                        isPioneer: post.isPioneer || false,
+                        isOriginal: post.isOriginal,
+                        createdAt: post.createdAt,
+                        city: r.locationMeta?.city || null,
+                        country: r.locationMeta?.country || null,
+                        tags: r.visualMeta?.tags || [],
+                        scene: r.visualMeta?.scene || null,
+                        distanceKm:
+                            r.distanceKm !== null
+                                ? Math.round(r.distanceKm * 10) / 10
+                                : null,
+                        latitude: r.latitude,
+                        longitude: r.longitude,
+                        vectorDistance: r.vectorDistance || 0,
+                    }
+                })
+
+            functions.logger.info(
+                `[searchPosts] Query "${query}" returned ${posts.length} results`
+            )
+            return { posts }
+        } catch (error: any) {
+            const msg = error?.message || String(error)
+            functions.logger.error('Error in searchPosts:', msg, error)
+            throw new functions.https.HttpsError(
+                'internal',
+                `Search failed: ${msg}`
+            )
         }
-
-        // 5. Return merged results
-        const posts = locationResults
-            .filter((r: any) => postMap[r.postId])
-            .map((r: any) => {
-                const post = postMap[r.postId]
-                return {
-                    postId: r.postId,
-                    authorId: post.authorId,
-                    authorUsername: post.authorUsername,
-                    caption: post.caption,
-                    photoURL: post.photoURL,
-                    thumbnailURL: post.thumbnailURL || null,
-                    mediumURL: post.mediumURL || null,
-                    catchCount: post.catchCount || 0,
-                    isPioneer: post.isPioneer || false,
-                    isOriginal: post.isOriginal,
-                    createdAt: post.createdAt,
-                    city: r.locationMeta?.city || null,
-                    country: r.locationMeta?.country || null,
-                    tags: r.visualMeta?.tags || [],
-                    scene: r.visualMeta?.scene || null,
-                    distanceKm:
-                        r.distanceKm !== null
-                            ? Math.round(r.distanceKm * 10) / 10
-                            : null,
-                    latitude: r.latitude,
-                    longitude: r.longitude,
-                    vectorDistance: r.vectorDistance || 0,
-                }
-            })
-
-        functions.logger.info(
-            `[searchPosts] Query "${query}" returned ${posts.length} results`
-        )
-        return { posts }
-    } catch (error: any) {
-        const msg = error?.message || String(error)
-        functions.logger.error('Error in searchPosts:', msg, error)
-        throw new functions.https.HttpsError(
-            'internal',
-            `Search failed: ${msg}`
-        )
-    }
-})
+    })
 
 // ============================================================================
 // BACKFILL EMBEDDINGS
@@ -237,14 +241,13 @@ export const searchPosts = functions.https.onCall(async (data, context) => {
 // locationMeta, visualMeta, and vector embeddings for search.
 // ============================================================================
 export const backfillEmbeddings = functions
-    .runWith({ timeoutSeconds: 540, memory: '1GB' })
+    .runWith({
+        timeoutSeconds: 540,
+        memory: '1GB',
+        maxInstances: MAX_INSTANCES.ADMIN,
+    })
     .https.onCall(async (data, context) => {
-        if (!context.auth) {
-            throw new functions.https.HttpsError(
-                'unauthenticated',
-                'Must be authenticated'
-            )
-        }
+        requireAdmin(context)
 
         const force = data?.force === true // Re-generate embeddings even if they exist
         const embeddingsOnly = data?.embeddingsOnly === true // Skip geocoding/vision, only redo embeddings

@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { sendPushNotification } from '../lib/notifications'
+import { MAX_INSTANCES } from '../lib/constants'
 
 /**
  * Firestore Trigger: Handles new follower notifications
@@ -8,8 +9,9 @@ import { sendPushNotification } from '../lib/notifications'
  * Detects when a user gains new followers by comparing before/after states
  * of the followers array, then sends a push notification for each new follower
  */
-export const onUserFollowed = functions.firestore
-    .document('users/{userId}')
+export const onUserFollowed = functions
+    .runWith({ maxInstances: MAX_INSTANCES.DEFAULT })
+    .firestore.document('users/{userId}')
     .onUpdate(async (change, context) => {
         const userId = context.params.userId
         const beforeData = change.before.data()

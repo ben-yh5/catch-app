@@ -20,3 +20,17 @@ export const GEOHASH_QUERY_LIMIT = 200
 
 /** Maximum total results returned from getPostsInArea */
 export const MAX_AREA_RESULTS = 200
+
+/**
+ * Cloud Functions concurrency caps (`runWith({ maxInstances })`).
+ * A cost-control backstop independent of any app-level rate limiting —
+ * bounds how far a single function can scale under abuse or a traffic spike.
+ */
+export const MAX_INSTANCES = {
+    /** Typical callables/triggers */
+    DEFAULT: 20,
+    /** Functions that call paid external APIs per invocation (Gemini, Nominatim) */
+    EXPENSIVE: 5,
+    /** Rare, heavy, admin-only batch jobs */
+    ADMIN: 2,
+}
