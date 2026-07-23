@@ -158,19 +158,28 @@ export default function ThreadModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, post])
 
-    // Scroll to initial post when thread loads
+    // Scroll to initial post when thread first loads (once per open —
+    // later threadPosts changes like delete/catch manage their own scrolling)
+    const hasScrolledToInitial = useRef(false)
     useEffect(() => {
-        if (threadPosts.length > 0 && initialPostId) {
+        if (!visible) {
+            hasScrolledToInitial.current = false
+        }
+    }, [visible])
+    useEffect(() => {
+        if (threadPosts.length === 0 || hasScrolledToInitial.current) return
+        hasScrolledToInitial.current = true
+
+        if (initialPostId) {
             const index = threadPosts.findIndex((p) => p.id === initialPostId)
             if (index >= 0 && flatListRef.current) {
                 requestAnimationFrame(() => {
-                    const validIndex = index >= 0 ? index : 0
-                    if (validIndex < threadPosts.length) {
+                    if (index < threadPosts.length) {
                         flatListRef.current?.scrollToIndex({
-                            index: validIndex,
+                            index,
                             animated: false,
                         })
-                        setCurrentIndex(validIndex)
+                        setCurrentIndex(index)
                     }
                 })
             }
@@ -205,28 +214,38 @@ export default function ThreadModal({
         setLoadingThread(true)
         try {
             // Determine the root post ID
-            const rootId = post.rootPostId || post.id
+            let rootId = post.rootPostId || post.id
 
             // Fetch the root post
-            const rootDocRef = doc(db, 'posts', rootId)
-            const rootDoc = await getDoc(rootDocRef)
+            let rootDoc = await getDoc(doc(db, 'posts', rootId))
 
-            const posts: Post[] = []
+            if (!rootDoc.exists() && rootId !== post.id) {
+                // The root was deleted and the thread may have been re-rooted
+                // by the Cloud Function. Re-fetch the tapped post to pick up
+                // its new rootPostId (or its own promotion to root).
+                const selfDoc = await getDoc(doc(db, 'posts', post.id))
+                if (selfDoc.exists()) {
+                    const freshPost = selfDoc.data() as Post
+                    rootId = freshPost.rootPostId || post.id
+                    rootDoc =
+                        rootId === post.id
+                            ? selfDoc
+                            : await getDoc(doc(db, 'posts', rootId))
+                }
+            }
 
-            if (rootDoc.exists()) {
-                posts.push({
-                    id: rootDoc.id,
-                    ...rootDoc.data(),
-                } as Post)
-            } else {
-                // Root post was deleted, but we might have been passed a catch
-                // Just show the post we have
-                console.warn('Root post not found, showing single post')
-                setThreadPosts([post])
-                setCurrentIndex(0)
-                setLoadingThread(false)
+            if (!rootDoc.exists()) {
+                showToast('error', 'This shot is no longer available')
+                onClose()
                 return
             }
+
+            const posts: Post[] = [
+                {
+                    id: rootDoc.id,
+                    ...rootDoc.data(),
+                } as Post,
+            ]
 
             // Fetch all catches in this thread
             const catchesQuery = query(
@@ -242,14 +261,6 @@ export default function ThreadModal({
                     ...doc.data(),
                 } as Post)
             })
-
-            if (posts.length === 0) {
-                // No posts found in thread, close modal with error
-                showToast('error', 'This shot is no longer available')
-                onClose()
-                setLoadingThread(false)
-                return
-            }
 
             setThreadPosts(posts)
 
@@ -451,47 +462,76 @@ export default function ThreadModal({
         if (!confirmDelete) return
 
         try {
-            // Delete the post
-            await deleteDoc(doc(db, 'posts', currentPost.id))
+            const deletedPost = currentPost
 
-            // Update local state and catch count if needed
-            const isCatch = !currentPost.isOriginal && currentPost.rootPostId
-            const newThreadPosts = threadPosts.filter(
-                (p) => p.id !== currentPost.id
+            // Delete the post
+            await deleteDoc(doc(db, 'posts', deletedPost.id))
+
+            let newThreadPosts = threadPosts.filter(
+                (p) => p.id !== deletedPost.id
             )
 
-            if (isCatch && newThreadPosts.length > 0) {
-                // Update root post catch count
-                newThreadPosts[0] = {
+            if (newThreadPosts.length === 0) {
+                // No more posts, close modal
+                onPostDelete?.(deletedPost.id)
+                notifyPostEvent('delete', deletedPost.id, deletedPost.authorId)
+                onClose()
+                return
+            }
+
+            if (deletedPost.isOriginal) {
+                // Mirror the onPostDeleted Cloud Function: the oldest catch
+                // is promoted to new root and remaining catches repointed
+                const [promoted, ...rest] = newThreadPosts
+                const newRoot: Post = {
+                    ...promoted,
+                    isOriginal: true,
+                    parentPostId: null,
+                    rootPostId: null,
+                    catchCount: Math.max(
+                        0,
+                        (deletedPost.catchCount || 0) - 1
+                    ),
+                }
+                newThreadPosts = [
+                    newRoot,
+                    ...rest.map((p) => ({
+                        ...p,
+                        rootPostId: newRoot.id,
+                        parentPostId: newRoot.id,
+                    })),
+                ]
+                onPostUpdate?.(newRoot)
+            } else {
+                // Catch deleted — decrement root's catch count
+                const updatedRoot: Post = {
                     ...newThreadPosts[0],
                     catchCount: Math.max(
                         0,
                         (newThreadPosts[0].catchCount || 0) - 1
                     ),
                 }
-
-                // Update parent component too
-                onPostUpdate?.({
-                    ...newThreadPosts[0],
-                })
+                newThreadPosts = [updatedRoot, ...newThreadPosts.slice(1)]
+                onPostUpdate?.(updatedRoot)
             }
 
+            const newIndex = Math.min(currentIndex, newThreadPosts.length - 1)
             setThreadPosts(newThreadPosts)
+            setCurrentIndex(newIndex)
 
-            // Adjust current index if needed
-            if (newThreadPosts.length === 0) {
-                // No more posts, close modal
-                onPostDelete?.(currentPost.id)
-                notifyPostEvent('delete', currentPost.id, currentPost.authorId)
-                onClose()
-                return
-            } else if (currentIndex >= newThreadPosts.length) {
-                setCurrentIndex(newThreadPosts.length - 1)
-            }
+            // The paged FlatList keeps its old scroll offset when data
+            // shrinks, which can point past the new content and leave the
+            // gallery blank — snap it onto the surviving card
+            requestAnimationFrame(() => {
+                flatListRef.current?.scrollToIndex({
+                    index: newIndex,
+                    animated: false,
+                })
+            })
 
             showToast('success', 'Post deleted successfully')
-            onPostDelete?.(currentPost.id)
-            notifyPostEvent('delete', currentPost.id, currentPost.authorId)
+            onPostDelete?.(deletedPost.id)
+            notifyPostEvent('delete', deletedPost.id, deletedPost.authorId)
         } catch (error) {
             console.error('Error deleting post:', error)
             showToast('error', 'Failed to delete post. Please try again.')
