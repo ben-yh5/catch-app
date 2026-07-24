@@ -5,5 +5,6 @@ Catch is a travel passport mobile app built with React Native and Expo. Users di
 <p align="center">
   <img src="README-feed-view.jpg" width="45%" alt="Explore feed" />
   <img src="README-map-view.jpg" width="45%" alt="Map view" />
+  <img src="README-post-view.jpg" width="45%" alt="Post view" />
   <img src="README-profile-view.jpg" width="45%" alt="Profile view" />
 </p>
