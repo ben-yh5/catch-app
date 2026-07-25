@@ -17,6 +17,7 @@ export default {
         ios: {
             bundleIdentifier: `app.catchapp.mobile${suffix}`,
             supportsTablet: true,
+            usesAppleSignIn: true,
             googleServicesFile: './GoogleService-Info.plist', // Download from Firebase Console
         },
         android: {
@@ -44,6 +45,7 @@ export default {
         plugins: [
             'expo-router',
             'expo-dev-client',
+            'expo-apple-authentication',
             [
                 'expo-splash-screen',
                 {

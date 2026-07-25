@@ -2,25 +2,25 @@
  * AuthContext - Authentication state management
  *
  * Provides Firebase authentication functionality including:
- * - Email/password authentication
  * - Google Sign-In via OAuth
+ * - Sign in with Apple (iOS)
  * - User session management
- * - Automatic Firestore user document creation
  *
- * The root layout (_layout.tsx) uses this context to handle auth-based navigation
- * and redirect users to username setup when needed.
+ * New users (no Firestore doc yet) are routed to the username-setup screen by
+ * the root layout (_layout.tsx), which creates their user document via the
+ * setupUsername Cloud Function.
  */
 
 import { auth, db } from '@/services/firebase'
 import { registerForPushNotificationsAsync } from '@/utils/registerForPushNotificationsAsync'
 import { GoogleSignin } from '@react-native-google-signin/google-signin'
+import * as AppleAuthentication from 'expo-apple-authentication'
+import * as Crypto from 'expo-crypto'
 import {
-    createUserWithEmailAndPassword,
-    fetchSignInMethodsForEmail,
     GoogleAuthProvider,
+    OAuthProvider,
     onAuthStateChanged,
     signInWithCredential,
-    signInWithEmailAndPassword,
     signOut,
     User,
 } from 'firebase/auth'
@@ -31,7 +31,6 @@ import {
     limit,
     onSnapshot,
     query,
-    setDoc,
     updateDoc,
 } from 'firebase/firestore'
 import React, { createContext, useContext, useEffect, useState } from 'react'
@@ -40,9 +39,8 @@ import { Notification } from '@/types'
 interface AuthContextType {
     user: User | null
     loading: boolean
-    login: (email: string, password: string) => Promise<void>
-    signup: (email: string, password: string, username: string) => Promise<void>
     loginWithGoogle: () => Promise<void>
+    loginWithApple: () => Promise<void>
     logout: () => Promise<void>
     dataContributionEnabled: boolean
     toggleDataContribution: (enabled: boolean) => Promise<void>
@@ -288,55 +286,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     /**
-     * Sign in existing user with email and password
-     */
-    const login = async (email: string, password: string) => {
-        try {
-            await signInWithEmailAndPassword(auth, email, password)
-        } catch (error: any) {
-            throw new Error(error.message)
-        }
-    }
-
-    /**
-     * Create new user account with email, password, and username
-     * Automatically creates Firestore user document with default values
-     */
-    const signup = async (
-        email: string,
-        password: string,
-        username: string
-    ) => {
-        try {
-            const userCredential = await createUserWithEmailAndPassword(
-                auth,
-                email,
-                password
-            )
-            const user = userCredential.user
-
-            // Create user document in Firestore
-            await setDoc(doc(db, 'users', user.uid), {
-                username: username,
-                email: email,
-                totalCatches: 0,
-                totalPosts: 0,
-                contribution: 0,
-                followers: [],
-                following: [],
-                pushToken: null,
-                dataContributionEnabled: false,
-                createdAt: new Date(),
-            })
-        } catch (error: any) {
-            throw new Error(error.message)
-        }
-    }
-
-    /**
      * Sign in with Google OAuth
      * For new Google users, they'll be redirected to username setup by root layout
-     * Existing users can link their Google account to an email/password account
      */
     const loginWithGoogle = async () => {
         try {
@@ -347,7 +298,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             const signInResult = await GoogleSignin.signIn()
 
             const idToken = signInResult.data?.idToken
-            const googleEmail = signInResult.data?.user.email
 
             if (!idToken) {
                 throw new Error('No ID token found')
@@ -357,24 +307,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
             await signInWithCredential(auth, googleCredential)
 
-            // Check if this was an account linking scenario
-            if (googleEmail) {
-                await fetchSignInMethodsForEmail(auth, googleEmail)
-            }
-
             // Note: We don't create the user document here for new users
             // They will be redirected to the username-setup screen by the root layout
         } catch (error: any) {
             console.error('Google Sign-In Error:', error)
+            throw new Error(error.message)
+        }
+    }
 
-            if (
-                error.code === 'auth/account-exists-with-different-credential'
-            ) {
-                throw new Error(
-                    'An account already exists with this email. Try signing in with email and password instead.'
-                )
+    /**
+     * Sign in with Apple (iOS only)
+     *
+     * Uses a nonce to protect against replay attacks: a random nonce is
+     * SHA-256 hashed and passed to Apple, and the raw nonce is handed to
+     * Firebase so it can verify the hash inside the returned identity token.
+     * For new Apple users, they'll be redirected to username setup by root layout.
+     */
+    const loginWithApple = async () => {
+        try {
+            // Generate a random nonce and its SHA-256 hash for Apple
+            const rawNonce = Crypto.randomUUID()
+            const hashedNonce = await Crypto.digestStringAsync(
+                Crypto.CryptoDigestAlgorithm.SHA256,
+                rawNonce
+            )
+
+            const appleCredential = await AppleAuthentication.signInAsync({
+                requestedScopes: [
+                    AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+                    AppleAuthentication.AppleAuthenticationScope.EMAIL,
+                ],
+                nonce: hashedNonce,
+            })
+
+            const { identityToken } = appleCredential
+            if (!identityToken) {
+                throw new Error('No identity token found')
             }
 
+            const provider = new OAuthProvider('apple.com')
+            const firebaseCredential = provider.credential({
+                idToken: identityToken,
+                rawNonce,
+            })
+
+            await signInWithCredential(auth, firebaseCredential)
+
+            // Note: We don't create the user document here for new users
+            // They will be redirected to the username-setup screen by the root layout
+        } catch (error: any) {
+            // User canceled the Apple sign-in sheet — not an error worth surfacing
+            if (error.code === 'ERR_REQUEST_CANCELED') {
+                return
+            }
+            console.error('Apple Sign-In Error:', error)
             throw new Error(error.message)
         }
     }
@@ -432,9 +418,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             value={{
                 user,
                 loading,
-                login,
-                signup,
                 loginWithGoogle,
+                loginWithApple,
                 logout,
                 dataContributionEnabled,
                 toggleDataContribution,

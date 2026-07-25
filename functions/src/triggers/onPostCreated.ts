@@ -388,7 +388,7 @@ export const onPostCreated = functions
                         )
                     }
 
-                    // 3. Generate text embedding via OpenAI
+                    // 3. Generate text embedding via Gemini
                     try {
                         const embeddingParts = [
                             postData.caption,

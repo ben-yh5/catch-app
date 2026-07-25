@@ -1,45 +1,31 @@
 import UnifiedAuthLayout from '@/components/UnifiedAuthLayout'
 import AppButton from '@/components/ui/AppButton'
-import AppInput from '@/components/ui/AppInput'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
-import React, { useState } from 'react'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import * as AppleAuthentication from 'expo-apple-authentication'
+import React, { useEffect, useState } from 'react'
+import { Platform, StyleSheet } from 'react-native'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 
 export default function LoginScreen() {
-    const [email, setEmail] = useState('')
-    const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
-    const { login, loginWithGoogle } = useAuth()
+    const [appleAvailable, setAppleAvailable] = useState(false)
+    const { loginWithGoogle, loginWithApple } = useAuth()
     const { showToast } = useToast()
-    const router = useRouter()
 
-    const handleLogin = async () => {
-        if (!email || !password) {
-            showToast('warning', 'Please fill in all fields')
-            return
+    useEffect(() => {
+        if (Platform.OS === 'ios') {
+            AppleAuthentication.isAvailableAsync().then(setAppleAvailable)
         }
-
-        setLoading(true)
-        try {
-            await login(email, password)
-            // Navigation will be handled automatically by auth state change
-        } catch (error: any) {
-            showToast('error', 'Login Failed', error.message)
-        } finally {
-            setLoading(false)
-        }
-    }
+    }, [])
 
     const handleGoogleLogin = async () => {
         setLoading(true)
         try {
             await loginWithGoogle()
-            // Navigation will be handled automatically by auth state change
+            // Navigation is handled automatically by the auth state change
         } catch (error: any) {
             showToast('error', 'Google Sign-In Failed', error.message)
         } finally {
@@ -47,70 +33,21 @@ export default function LoginScreen() {
         }
     }
 
-    const goToSignup = () => {
-        router.push('/signup')
+    const handleAppleLogin = async () => {
+        setLoading(true)
+        try {
+            await loginWithApple()
+            // Navigation is handled automatically by the auth state change
+        } catch (error: any) {
+            showToast('error', 'Apple Sign-In Failed', error.message)
+        } finally {
+            setLoading(false)
+        }
     }
 
     return (
-        <UnifiedAuthLayout title="Catch" subtitle="Welcome back!">
+        <UnifiedAuthLayout title="Catch" subtitle="Welcome!">
             <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-                <AppInput
-                    placeholder="Email"
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    editable={!loading}
-                    leftIcon={
-                        <Ionicons
-                            name="mail-outline"
-                            size={20}
-                            color={colors.textTertiary}
-                        />
-                    }
-                    accessibilityLabel="Email"
-                    accessibilityHint="Enter your email address"
-                />
-
-                <AppInput
-                    placeholder="Password"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    editable={!loading}
-                    leftIcon={
-                        <Ionicons
-                            name="lock-closed-outline"
-                            size={20}
-                            color={colors.textTertiary}
-                        />
-                    }
-                    accessibilityLabel="Password"
-                    accessibilityHint="Enter your password"
-                />
-
-                <AppButton
-                    title="Log In"
-                    onPress={handleLogin}
-                    loading={loading}
-                    variant="primary"
-                    style={styles.marginTop}
-                    accessibilityLabel="Log In"
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: loading }}
-                />
-            </Animated.View>
-
-            <Animated.View
-                style={styles.dividerContainer}
-                entering={FadeInDown.delay(200).duration(500)}
-            >
-                <View style={styles.divider} />
-                <Text style={styles.dividerText}>OR</Text>
-                <View style={styles.divider} />
-            </Animated.View>
-
-            <Animated.View entering={FadeInDown.delay(300).duration(500)}>
                 <AppButton
                     title="Continue with Google"
                     onPress={handleGoogleLogin}
@@ -130,60 +67,36 @@ export default function LoginScreen() {
                 />
             </Animated.View>
 
-            <Animated.View
-                style={styles.signupContainer}
-                entering={FadeInDown.delay(400).duration(500)}
-            >
-                <Text style={styles.signupText}>
-                    Don&apos;t have an account?{' '}
-                </Text>
-                <TouchableOpacity
-                    onPress={goToSignup}
-                    disabled={loading}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Sign Up"
-                    accessibilityRole="link"
-                    accessibilityHint="Navigate to the sign up screen"
-                    accessibilityState={{ disabled: loading }}
+            {appleAvailable && (
+                <Animated.View
+                    style={styles.appleContainer}
+                    entering={FadeInDown.delay(200).duration(500)}
                 >
-                    <Text style={styles.signupLink}>Sign Up</Text>
-                </TouchableOpacity>
-            </Animated.View>
+                    <AppleAuthentication.AppleAuthenticationButton
+                        buttonType={
+                            AppleAuthentication.AppleAuthenticationButtonType
+                                .CONTINUE
+                        }
+                        buttonStyle={
+                            AppleAuthentication.AppleAuthenticationButtonStyle
+                                .WHITE_OUTLINE
+                        }
+                        cornerRadius={8}
+                        style={styles.appleButton}
+                        onPress={handleAppleLogin}
+                    />
+                </Animated.View>
+            )}
         </UnifiedAuthLayout>
     )
 }
 
 const styles = StyleSheet.create({
-    marginTop: {
-        marginTop: 10,
+    appleContainer: {
+        marginTop: 12,
     },
-    signupContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginTop: 24,
-    },
-    signupText: {
-        color: colors.textTertiary,
-        fontSize: 14,
-    },
-    signupLink: {
-        color: colors.primary,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    dividerContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginVertical: 24,
-    },
-    divider: {
-        flex: 1,
-        height: 1,
-        backgroundColor: colors.border,
-    },
-    dividerText: {
-        color: colors.textTertiary,
-        paddingHorizontal: 12,
-        fontSize: 14,
+    appleButton: {
+        width: '100%',
+        height: 50,
     },
 })
