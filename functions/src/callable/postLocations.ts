@@ -188,7 +188,10 @@ export const getPostLocations = functions
  * @returns Object with posts array and count
  */
 export const getPostsInArea = functions
-    .runWith({ maxInstances: MAX_INSTANCES.EXPENSIVE })
+    // DEFAULT, not EXPENSIVE: no external APIs here, and this is the hottest
+    // endpoint in the app (called on every map pan) — gen1 handles one request
+    // per instance, so a low cap makes panning queue behind cold starts
+    .runWith({ maxInstances: MAX_INSTANCES.DEFAULT })
     .https.onCall(async (data, context) => {
         // Authentication check
         if (!context.auth) {

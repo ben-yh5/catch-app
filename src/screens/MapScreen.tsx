@@ -80,6 +80,8 @@ export default function MapScreen() {
     const lastFetchRef = useRef<number>(0)
     const lastFetchBoundsRef = useRef<MapBounds | null>(null)
     const fetchTimeoutRef = useRef<any>(undefined)
+    const throttleRetryRef = useRef<any>(undefined)
+    const loadVisiblePostsRef = useRef<() => void>(() => {})
     const isMapReadyRef = useRef(false)
     const initialFetchDoneRef = useRef(false)
     const pendingCameraActionRef = useRef<(() => void) | null>(null)
@@ -516,9 +518,19 @@ export default function MapScreen() {
         const zoom = await mapRef.current.getZoom()
         if (zoom < 5) return
 
-        // Debounce if called too frequently (unless forced)
+        // Throttle to one fetch per second, but defer instead of dropping —
+        // otherwise a pan within 1s of the last fetch never loads its pins
         const now = Date.now()
-        if (now - lastFetchRef.current < 1000) return
+        const elapsed = now - lastFetchRef.current
+        if (elapsed < 1000) {
+            if (throttleRetryRef.current)
+                clearTimeout(throttleRetryRef.current)
+            throttleRetryRef.current = setTimeout(
+                () => loadVisiblePostsRef.current(),
+                1000 - elapsed
+            )
+            return
+        }
         lastFetchRef.current = now
 
         setLoadingPosts(true)
@@ -604,6 +616,21 @@ export default function MapScreen() {
         }
     }, [activeFilter, applySorting, cachePosts, isListMode])
 
+    // Keep a stable reference so the deferred throttle retry always calls
+    // the latest version of loadVisiblePosts
+    useEffect(() => {
+        loadVisiblePostsRef.current = loadVisiblePosts
+    }, [loadVisiblePosts])
+
+    // Clear pending fetch timers on unmount
+    useEffect(() => {
+        return () => {
+            if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
+            if (throttleRetryRef.current)
+                clearTimeout(throttleRetryRef.current)
+        }
+    }, [])
+
     // Coverage toggle
     const cycleCoverageMode = useCallback(() => {
         setCoverageMode((prev) => {
@@ -619,17 +646,19 @@ export default function MapScreen() {
             if (isSearchModeRef.current) return
             if (!isMapReadyRef.current) return
 
-            // Track zoom level for coverage precision switching
-            const zoom = state.properties?.zoom
-            if (zoom !== undefined) {
-                setCurrentZoom(zoom)
-            }
-
-            // Only fetch if idle (interaction ended)
+            // Only fetch if idle (interaction ended). No state updates while a
+            // gesture is active — camera events fire at frame rate during
+            // pan/pinch and re-rendering the screen per event causes jank.
             if (!state.gestures.isGestureActive) {
                 if (fetchTimeoutRef.current)
                     clearTimeout(fetchTimeoutRef.current)
                 fetchTimeoutRef.current = setTimeout(async () => {
+                    // Track zoom level for coverage precision switching
+                    const zoom = state.properties?.zoom
+                    if (zoom !== undefined) {
+                        setCurrentZoom(zoom)
+                    }
+
                     // Update bounds for coverage queries
                     if (mapRef.current) {
                         try {
