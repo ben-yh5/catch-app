@@ -3,7 +3,7 @@ import { usePostEvents } from '@/context/PostContext'
 import { functions } from '@/services/firebase'
 import { RecommendedPost } from '@/types'
 import { httpsCallable } from 'firebase/functions'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const PAGE_SIZE = 20
 
@@ -17,7 +17,7 @@ interface UseRecommendedFeedReturn {
 }
 
 export function useRecommendedFeed(): UseRecommendedFeedReturn {
-    const { user } = useAuth()
+    const { user, blockedUserIds } = useAuth()
     const [posts, setPosts] = useState<RecommendedPost[]>([])
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
@@ -103,5 +103,13 @@ export function useRecommendedFeed(): UseRecommendedFeedReturn {
         return Promise.resolve()
     }, [fetchFeed, hasMore, loadingMore, loading])
 
-    return { posts, loading, loadingMore, hasMore, refresh, loadMore }
+    // Hide blocked users' posts — filtered reactively so a new block takes
+    // effect immediately without a re-fetch
+    const filteredPosts = useMemo(() => {
+        if (blockedUserIds.length === 0) return posts
+        const blocked = new Set(blockedUserIds)
+        return posts.filter((p) => !blocked.has(p.authorId))
+    }, [posts, blockedUserIds])
+
+    return { posts: filteredPosts, loading, loadingMore, hasMore, refresh, loadMore }
 }

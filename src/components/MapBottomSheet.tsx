@@ -23,7 +23,7 @@ interface MapBottomSheetProps {
     isListMode?: boolean
 }
 
-export default function MapBottomSheet({
+function MapBottomSheet({
     posts,
     loading,
     onPostPress,
@@ -236,3 +236,5 @@ const styles = StyleSheet.create({
         color: colors.primary,
     },
 })
+
+export default React.memo(MapBottomSheet)

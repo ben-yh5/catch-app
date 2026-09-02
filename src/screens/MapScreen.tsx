@@ -22,6 +22,7 @@ import Mapbox, {
     CircleLayer,
     FillLayer,
     LocationPuck,
+    MapState,
     MapView,
     ShapeSource,
     SymbolLayer,
@@ -57,7 +58,7 @@ const MAP_COLORS = {
 }
 
 export default function MapScreen() {
-    const { user } = useAuth()
+    const { user, blockedUserIds } = useAuth()
     const { showToast } = useToast()
     const router = useRouter()
     const insets = useSafeAreaInsets()
@@ -79,13 +80,12 @@ export default function MapScreen() {
     const { cachePosts, caughtThreadIds } = usePost()
     const lastFetchRef = useRef<number>(0)
     const lastFetchBoundsRef = useRef<MapBounds | null>(null)
-    const fetchTimeoutRef = useRef<any>(undefined)
     const throttleRetryRef = useRef<any>(undefined)
     const loadVisiblePostsRef = useRef<() => void>(() => {})
+    const hasLoadedOnceRef = useRef(false)
     const isMapReadyRef = useRef(false)
     const initialFetchDoneRef = useRef(false)
     const pendingCameraActionRef = useRef<(() => void) | null>(null)
-    const FILTER_DEBOUNCE = 600 // reduced to 600ms for snappier feel
 
     // List Focus Mode State
     const { listId, postId, filter, panToUser, searchQuery } =
@@ -533,7 +533,10 @@ export default function MapScreen() {
         }
         lastFetchRef.current = now
 
-        setLoadingPosts(true)
+        // Only surface the spinner on the very first load — background
+        // refreshes after a pan shouldn't flip loading state (each toggle
+        // re-renders the whole screen, including the bottom sheet)
+        if (!hasLoadedOnceRef.current) setLoadingPosts(true)
 
         try {
             const visibleBounds = await mapRef.current.getVisibleBounds()
@@ -606,15 +609,26 @@ export default function MapScreen() {
             // Cache posts so ThreadModal can use them without re-fetching
             cachePosts(posts)
 
-            const sortedPosts = applySorting(posts, activeFilter)
-            setVisiblePosts(sortedPosts)
+            // Skip the state update (and the GeoJSON rebuild + native shape
+            // re-upload it triggers) when the viewport returned the same posts.
+            // Sorting happens in the sortedVisiblePosts memo.
+            setVisiblePosts((prev) => {
+                if (
+                    prev.length === posts.length &&
+                    prev.every((p, i) => p.id === posts[i].id)
+                ) {
+                    return prev
+                }
+                return posts
+            })
         } catch (error) {
             console.error('Error fetching posts in viewport:', error)
             // Don't alert on auto-fetch error to avoid annoyance
         } finally {
+            hasLoadedOnceRef.current = true
             setLoadingPosts(false)
         }
-    }, [activeFilter, applySorting, cachePosts, isListMode])
+    }, [cachePosts, isListMode])
 
     // Keep a stable reference so the deferred throttle retry always calls
     // the latest version of loadVisiblePosts
@@ -625,7 +639,6 @@ export default function MapScreen() {
     // Clear pending fetch timers on unmount
     useEffect(() => {
         return () => {
-            if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
             if (throttleRetryRef.current)
                 clearTimeout(throttleRetryRef.current)
         }
@@ -640,47 +653,31 @@ export default function MapScreen() {
         })
     }, [])
 
-    // Handle map movement - Auto Fetch with Debounce
-    const handleCameraChanged = useCallback(
-        async (state: any) => {
+    // Handle map movement. onMapIdle fires once when ALL movement ends
+    // (gesture + momentum/fling) — no per-frame bridge events during pans
+    // like onCameraChanged, and no debounce timer needed. The event carries
+    // zoom and bounds, so no async getZoom/getVisibleBounds round-trips.
+    const handleMapIdle = useCallback(
+        (state: MapState) => {
             if (isSearchModeRef.current) return
             if (!isMapReadyRef.current) return
 
-            // Only fetch if idle (interaction ended). No state updates while a
-            // gesture is active — camera events fire at frame rate during
-            // pan/pinch and re-rendering the screen per event causes jank.
-            if (!state.gestures.isGestureActive) {
-                if (fetchTimeoutRef.current)
-                    clearTimeout(fetchTimeoutRef.current)
-                fetchTimeoutRef.current = setTimeout(async () => {
-                    // Track zoom level for coverage precision switching
-                    const zoom = state.properties?.zoom
-                    if (zoom !== undefined) {
-                        setCurrentZoom(zoom)
-                    }
-
-                    // Update bounds for coverage queries
-                    if (mapRef.current) {
-                        try {
-                            const visibleBounds =
-                                await mapRef.current.getVisibleBounds()
-                            if (visibleBounds && visibleBounds.length === 2) {
-                                const ne = visibleBounds[0]
-                                const sw = visibleBounds[1]
-                                setCurrentBounds({
-                                    north: Math.max(ne[1], sw[1]),
-                                    south: Math.min(ne[1], sw[1]),
-                                    east: Math.max(ne[0], sw[0]),
-                                    west: Math.min(ne[0], sw[0]),
-                                })
-                            }
-                        } catch {
-                            // getVisibleBounds can fail during rapid map interactions
-                        }
-                    }
-                    loadVisiblePosts()
-                }, FILTER_DEBOUNCE)
+            // Track zoom level for coverage precision switching
+            const { zoom, bounds } = state.properties
+            if (zoom !== undefined) {
+                setCurrentZoom(zoom)
             }
+
+            // Update bounds for coverage queries
+            if (bounds) {
+                setCurrentBounds({
+                    north: Math.max(bounds.ne[1], bounds.sw[1]),
+                    south: Math.min(bounds.ne[1], bounds.sw[1]),
+                    east: Math.max(bounds.ne[0], bounds.sw[0]),
+                    west: Math.min(bounds.ne[0], bounds.sw[0]),
+                })
+            }
+            loadVisiblePosts()
         },
         [loadVisiblePosts]
     )
@@ -701,35 +698,59 @@ export default function MapScreen() {
         }
     }, [listId, loadVisiblePosts])
 
+    // Hide blocked users' posts everywhere on the map (pins + bottom sheet).
+    // Filtered reactively so a new block takes effect without a re-fetch.
+    const blockedSet = React.useMemo(
+        () => new Set(blockedUserIds),
+        [blockedUserIds]
+    )
+
     // Memoize sorted posts to avoid infinite render loop
     const sortedVisiblePosts = React.useMemo(() => {
-        return applySorting(visiblePosts, activeFilter)
-    }, [visiblePosts, activeFilter, applySorting])
+        const unblocked =
+            blockedSet.size === 0
+                ? visiblePosts
+                : visiblePosts.filter((p) => !blockedSet.has(p.authorId))
+        return applySorting(unblocked, activeFilter)
+    }, [visiblePosts, activeFilter, applySorting, blockedSet])
+
+    const filteredSearchResults = React.useMemo(() => {
+        if (blockedSet.size === 0) return searchPostResults
+        return searchPostResults.filter((p) => !blockedSet.has(p.authorId))
+    }, [searchPostResults, blockedSet])
 
     // Handle filter change
-    const handleFilterChange = (filter: FilterType) => {
+    const handleFilterChange = useCallback((filter: FilterType) => {
         setActiveFilter(filter)
-    }
+    }, [])
 
     // Handle jump to location from bottom sheet
-    const handleJumpToLocation = (latitude: number, longitude: number) => {
-        if (cameraRef.current) {
-            cameraRef.current.setCamera({
-                centerCoordinate: [longitude, latitude],
-                zoomLevel: 16,
-                animationDuration: 800,
-            })
-        }
-    }
+    const handleJumpToLocation = useCallback(
+        (latitude: number, longitude: number) => {
+            if (cameraRef.current) {
+                cameraRef.current.setCamera({
+                    centerCoordinate: [longitude, latitude],
+                    zoomLevel: 16,
+                    animationDuration: 800,
+                })
+            }
+        },
+        []
+    )
     // Handle post press from bottom sheet
-    const handlePostPress = (postId: string) => {
-        const posts = isSearchMode ? searchPostResults : sortedVisiblePosts
-        const post = posts.find((p) => p.id === postId)
-        if (post) {
-            setSelectedPost(post)
-            setShowThreadModal(true)
-        }
-    }
+    const handlePostPress = useCallback(
+        (postId: string) => {
+            const posts = isSearchMode
+                ? filteredSearchResults
+                : sortedVisiblePosts
+            const post = posts.find((p) => p.id === postId)
+            if (post) {
+                setSelectedPost(post)
+                setShowThreadModal(true)
+            }
+        },
+        [isSearchMode, filteredSearchResults, sortedVisiblePosts]
+    )
 
     // Convert posts to GeoJSON for Mapbox (memoized to avoid recalculating on every render)
     const geoJSONData = React.useMemo(() => {
@@ -758,16 +779,48 @@ export default function MapScreen() {
         }
     }, [sortedVisiblePosts, selectedPostId, user?.uid, caughtThreadIds])
 
-    const handleMarkerPress = (event: any) => {
-        const feature = event.features?.[0]
-        if (!feature) return
+    const handleMarkerPress = useCallback(
+        (event: any) => {
+            const feature = event.features?.[0]
+            if (!feature) return
 
-        const postId = feature.properties?.postId
-        if (!postId) return
+            const postId = feature.properties?.postId
+            if (!postId) return
 
-        setSelectedPostId(postId)
-        handlePostPress(postId)
-    }
+            setSelectedPostId(postId)
+            handlePostPress(postId)
+        },
+        [handlePostPress]
+    )
+
+    // Stable handler — an inline ShapeSource onPress is a new function each
+    // render, which re-sends the prop across the bridge
+    const handleShapeSourcePress = useCallback(
+        async (event: any) => {
+            const feature = event.features?.[0]
+            if (!feature) return
+
+            const isCluster = feature.properties?.cluster
+            if (isCluster) {
+                const expansionZoom =
+                    await shapeSourceRef.current?.getClusterExpansionZoom(
+                        feature
+                    )
+
+                if (expansionZoom && cameraRef.current) {
+                    cameraRef.current.setCamera({
+                        centerCoordinate: (feature.geometry as any)
+                            .coordinates,
+                        zoomLevel: expansionZoom,
+                        animationDuration: 500,
+                    })
+                }
+            } else {
+                handleMarkerPress(event)
+            }
+        },
+        [handleMarkerPress]
+    )
 
     const handleThreadModalClose = () => {
         setShowThreadModal(false)
@@ -840,26 +893,61 @@ export default function MapScreen() {
                     accessibilityLabel="Map showing photo locations"
                     logoEnabled={false}
                     scaleBarEnabled={false}
+                    // Gesture feel tuned toward Google Maps. Most values pin
+                    // Mapbox defaults explicitly so an SDK default change
+                    // can't silently alter the feel.
+                    gestureSettings={{
+                        // Compound pinch: zoom around fingers while panning
+                        // and rotating in one continuous gesture
+                        pinchPanEnabled: true,
+                        pinchZoomEnabled: true,
+                        simultaneousRotateAndPinchZoomEnabled: true,
+                        // Google's zoom vocabulary: double-tap +1 level,
+                        // two-finger tap -1, double-tap-and-drag to zoom
+                        doubleTapToZoomInEnabled: true,
+                        doubleTouchToZoomOutEnabled: true,
+                        quickZoomEnabled: true,
+                        zoomAnimationAmount: 1.0, // Android: exactly one level per tap
+                        rotateEnabled: true,
+                        pitchEnabled: true,
+                        panEnabled: true,
+                        // Momentum after pinch/rotate ends (Android-only
+                        // flags; iOS always decays)
+                        pinchZoomDecelerationEnabled: true,
+                        rotateDecelerationEnabled: true,
+                        // iOS pan-fling friction: 0.998 = UIScrollView
+                        // "normal" glide. Drop toward 0.99 (= .fast) if short
+                        // flicks travel too far. Android: >0 just enables
+                        // fling; friction isn't tunable via RN.
+                        panDecelerationFactor: 0.998,
+                    }}
+                    // FPS cap, not booster — 120 unlocks ProMotion on iOS
+                    // and is harmless above a display's refresh rate
+                    preferredFramesPerSecond={120}
                     compassEnabled={true}
+                    compassFadeWhenNorth={true}
                     compassViewPosition={1} // 1 = Top Right
                     // Compass at top relative to map, BELOW HUD.
                     // HUD ~110px. Increasing spacing per user request.
                     compassViewMargins={{ x: 16, y: insets.top + 180 }}
-                    onCameraChanged={handleCameraChanged}
+                    onMapIdle={handleMapIdle}
                     onDidFinishLoadingMap={handleMapReady}
                 >
+                    {/* defaultSettings applies once on mount only. Controlled
+                        zoomLevel/centerCoordinate props get re-sent to native
+                        on every parent re-render (new array identity), which
+                        can yank the camera back mid-pan. */}
                     <Camera
                         ref={cameraRef}
-                        zoomLevel={12}
-                        centerCoordinate={
-                            initialLocation
+                        defaultSettings={{
+                            zoomLevel: 12,
+                            centerCoordinate: initialLocation
                                 ? [
                                       initialLocation.coords.longitude,
                                       initialLocation.coords.latitude,
                                   ]
-                                : [-122.4324, 37.78825]
-                        }
-                        animationMode="none"
+                                : [-122.4324, 37.78825],
+                        }}
                     />
 
                     <LocationPuck
@@ -912,30 +1000,7 @@ export default function MapScreen() {
                             id="posts-source"
                             ref={shapeSourceRef}
                             shape={geoJSONData}
-                            onPress={async (event) => {
-                                const feature = event.features?.[0]
-                                if (!feature) return
-
-                                const isCluster = feature.properties?.cluster
-                                if (isCluster) {
-                                    const expansionZoom =
-                                        await shapeSourceRef.current?.getClusterExpansionZoom(
-                                            feature
-                                        )
-
-                                    if (expansionZoom && cameraRef.current) {
-                                        cameraRef.current.setCamera({
-                                            centerCoordinate: (
-                                                feature.geometry as any
-                                            ).coordinates,
-                                            zoomLevel: expansionZoom,
-                                            animationDuration: 500,
-                                        })
-                                    }
-                                } else {
-                                    handleMarkerPress(event)
-                                }
-                            }}
+                            onPress={handleShapeSourcePress}
                             cluster
                             clusterRadius={50}
                             clusterMaxZoomLevel={14}
@@ -1049,7 +1114,9 @@ export default function MapScreen() {
             {!locationLoading && (
                 <MapBottomSheet
                     posts={
-                        isSearchMode ? searchPostResults : sortedVisiblePosts
+                        isSearchMode
+                            ? filteredSearchResults
+                            : sortedVisiblePosts
                     }
                     loading={isSearchMode ? searchLoading : loadingPosts}
                     onPostPress={handlePostPress}
@@ -1062,7 +1129,7 @@ export default function MapScreen() {
                     }
                     subtitle={
                         isSearchMode
-                            ? `${searchPostResults.length} result${searchPostResults.length !== 1 ? 's' : ''}`
+                            ? `${filteredSearchResults.length} result${filteredSearchResults.length !== 1 ? 's' : ''}`
                             : undefined
                     }
                     onClose={isSearchMode ? handleSearchClear : handleListClose}

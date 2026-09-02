@@ -15,7 +15,7 @@ interface MapHUDProps {
     onFilterChange: (filter: FilterType) => void
 }
 
-export default function MapHUD({
+function MapHUD({
     onSearch,
     onSearchClear,
     searchLoading,
@@ -101,3 +101,5 @@ const styles = StyleSheet.create({
         paddingHorizontal: 4,
     },
 })
+
+export default React.memo(MapHUD)

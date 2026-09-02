@@ -24,6 +24,8 @@ interface ReportBottomSheetProps {
     onClose: () => void
     targetUserId: string
     targetUsername: string
+    /** When set, reports this post (via reportPost) instead of the user */
+    targetPostId?: string
 }
 
 const REPORT_REASONS = [
@@ -55,7 +57,9 @@ export default function ReportBottomSheet({
     onClose,
     targetUserId,
     targetUsername,
+    targetPostId,
 }: ReportBottomSheetProps) {
+    const isPostReport = Boolean(targetPostId)
     const { showToast } = useToast()
     const [step, setStep] = useState<'reason' | 'details'>('reason')
     const [selectedReason, setSelectedReason] = useState<string | null>(null)
@@ -90,12 +94,21 @@ export default function ReportBottomSheet({
 
         setSubmitting(true)
         try {
-            const reportUserFn = httpsCallable(functions, 'reportUser')
-            await reportUserFn({
-                targetUserId,
-                reason: selectedReason,
-                details: details.trim(),
-            })
+            if (isPostReport) {
+                const reportPostFn = httpsCallable(functions, 'reportPost')
+                await reportPostFn({
+                    targetPostId,
+                    reason: selectedReason,
+                    details: details.trim(),
+                })
+            } else {
+                const reportUserFn = httpsCallable(functions, 'reportUser')
+                await reportUserFn({
+                    targetUserId,
+                    reason: selectedReason,
+                    details: details.trim(),
+                })
+            }
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
             showToast(
                 'success',
@@ -114,7 +127,9 @@ export default function ReportBottomSheet({
                 showToast(
                     'warning',
                     'Already Reported',
-                    'You have already reported this user.'
+                    isPostReport
+                        ? 'You have already reported this post.'
+                        : 'You have already reported this user.'
                 )
             } else if (code === 'functions/resource-exhausted') {
                 showToast(
@@ -183,7 +198,9 @@ export default function ReportBottomSheet({
                             <View style={{ width: 32 }} />
                         )}
                         <Text style={styles.headerTitle}>
-                            Report @{targetUsername}
+                            {isPostReport
+                                ? `Report post by @${targetUsername}`
+                                : `Report @${targetUsername}`}
                         </Text>
                         <TouchableOpacity
                             onPress={onClose}
@@ -205,7 +222,8 @@ export default function ReportBottomSheet({
                             showsVerticalScrollIndicator={false}
                         >
                             <Text style={styles.sectionLabel}>
-                                Why are you reporting this user?
+                                Why are you reporting this{' '}
+                                {isPostReport ? 'post' : 'user'}?
                             </Text>
                             {REPORT_REASONS.map((reason) => (
                                 <TouchableOpacity

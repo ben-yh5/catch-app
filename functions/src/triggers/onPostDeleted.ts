@@ -1,36 +1,39 @@
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { decrementCoverageCells } from '../lib/coverage'
-import { CONTRIBUTION, MAX_INSTANCES } from '../lib/constants'
+import { MAX_INSTANCES } from '../lib/constants'
 
 /**
  * Firestore Trigger: Handles post deletion events
  *
  * Complex logic handles different deletion scenarios:
- * 1. Catch deleted: Decrements user's totalCatches and root post's catchCount
- * 2. Root with catches deleted: Promotes oldest catch to new root, updates all thread references
+ * 1. Catch deleted: Decrements user's totalCatches and root post's catchCount,
+ *    claws back the royalty from whoever actually received it
+ * 2. Root with catches deleted: Promotes oldest catch to new root, updates all
+ *    thread references
  * 3. Root without catches deleted: Simply cleans up location data
  *
- * Also removes the post from any lists containing it
+ * Also removes the post from any lists containing it.
+ *
+ * Structure: all balance-critical writes (contribution, counters, royalty
+ * clawback) run in a single transaction that also owns the processed_events
+ * dedup marker — all-or-nothing, applied exactly once. Cleanup steps (lists,
+ * thread promotion, location data, coverage) run afterwards, each in its own
+ * try/catch, so one failure — e.g. the author's user doc already being gone
+ * during account deletion — can't skip the remaining cleanup.
+ *
+ * Royalty clawback uses the royaltyRecipientId/royaltyAmount/royaltyRootPostId
+ * fields stamped on catches by onPostCreated. If the catch has been re-pointed
+ * to a promoted root (royaltyRootPostId !== rootPostId), the royalty was
+ * already settled when the old root was deleted (it was part of that root's
+ * contributionEarned), so no clawback happens — the promoted author never
+ * received it. Legacy catches without these fields skip clawback entirely.
  */
 export const onPostDeleted = functions
     .runWith({ maxInstances: MAX_INSTANCES.DEFAULT })
     .firestore.document('posts/{postId}')
     .onDelete(async (snap, context) => {
         const db = admin.firestore()
-
-        // Deduplicate: Firestore triggers have at-least-once delivery semantics
-        const eventRef = db.collection('processed_events').doc(context.eventId)
-        const existing = await eventRef.get()
-        if (existing.exists) {
-            functions.logger.info(
-                `[onPostDeleted] Duplicate event ${context.eventId}, skipping`
-            )
-            return
-        }
-        await eventRef.set({
-            processedAt: admin.firestore.FieldValue.serverTimestamp(),
-        })
 
         const postData = snap.data()
         const postId = snap.id
@@ -41,44 +44,118 @@ export const onPostDeleted = functions
             return
         }
 
+        const eventRef = db.collection('processed_events').doc(context.eventId)
+        const userRef = db.collection('users').doc(authorId)
+        const isCatch = Boolean(postData.parentPostId) && !postData.isOriginal
+        const rootPostId = isCatch ? postData.rootPostId : null
+
+        // --- Balance-critical writes: one transaction, exactly once ---
+        let alreadyProcessed = false
         try {
-            const userRef = db.collection('users').doc(authorId)
+            alreadyProcessed = await db.runTransaction(async (t) => {
+                // All reads first, then writes
+                const marker = await t.get(eventRef)
+                if (marker.exists) return true
 
-            // Subtract contributionEarned from author
-            const contributionEarned = postData.contributionEarned || 0
-            if (contributionEarned > 0) {
-                await userRef.update({
-                    contribution:
-                        admin.firestore.FieldValue.increment(
-                            -contributionEarned
-                        ),
+                const userDoc = await t.get(userRef)
+
+                const rootRef = rootPostId
+                    ? db.collection('posts').doc(rootPostId)
+                    : null
+                const rootDoc = rootRef ? await t.get(rootRef) : null
+
+                // Royalty clawback only applies when the root that paid it
+                // still exists and the catch was never re-pointed by a thread
+                // promotion (see header comment).
+                const royaltyAmount = postData.royaltyAmount ?? 0
+                const royaltyRecipientId = postData.royaltyRecipientId ?? null
+                const clawbackApplies =
+                    isCatch &&
+                    royaltyAmount > 0 &&
+                    royaltyRecipientId &&
+                    rootDoc?.exists &&
+                    postData.royaltyRootPostId === rootPostId
+
+                let recipientRef = null
+                let recipientExists = false
+                if (clawbackApplies) {
+                    recipientRef = db
+                        .collection('users')
+                        .doc(royaltyRecipientId)
+                    const recipientDoc = await t.get(recipientRef)
+                    recipientExists = recipientDoc.exists
+                }
+
+                // Author may already be gone (account deletion race) — skip
+                // author writes but continue with everything else.
+                if (userDoc.exists) {
+                    const authorUpdate: Record<string, any> = {}
+                    const contributionEarned = postData.contributionEarned || 0
+                    if (contributionEarned > 0) {
+                        authorUpdate.contribution =
+                            admin.firestore.FieldValue.increment(
+                                -contributionEarned
+                            )
+                    }
+                    if (isCatch) {
+                        authorUpdate.totalCatches =
+                            admin.firestore.FieldValue.increment(-1)
+                    }
+                    if (postData.isOriginal) {
+                        authorUpdate.totalPosts =
+                            admin.firestore.FieldValue.increment(-1)
+                    }
+                    if (Object.keys(authorUpdate).length > 0) {
+                        t.update(userRef, authorUpdate)
+                    }
+                }
+
+                if (isCatch && rootDoc?.exists && rootRef) {
+                    const rootUpdate: Record<string, any> = {
+                        catchCount: admin.firestore.FieldValue.increment(-1),
+                    }
+                    if (clawbackApplies) {
+                        rootUpdate.contributionEarned =
+                            admin.firestore.FieldValue.increment(-royaltyAmount)
+                    }
+                    t.update(rootRef, rootUpdate)
+                }
+
+                if (clawbackApplies && recipientExists && recipientRef) {
+                    t.update(recipientRef, {
+                        contribution:
+                            admin.firestore.FieldValue.increment(
+                                -royaltyAmount
+                            ),
+                    })
+                }
+
+                t.set(eventRef, {
+                    processedAt: admin.firestore.FieldValue.serverTimestamp(),
                 })
-                functions.logger.info(
-                    `Subtracted ${contributionEarned} contribution from user ${authorId}`
-                )
-            }
+                return false
+            })
+        } catch (error) {
+            functions.logger.error(
+                `[onPostDeleted] Balance transaction failed for post ${postId}:`,
+                error
+            )
+            // Fall through to cleanup — location/list cleanup is still better
+            // done than skipped, and the marker wasn't set so a redelivery
+            // can retry the balances.
+        }
 
-            // Decrement totalCatches if this was a catch
-            if (postData.parentPostId && !postData.isOriginal) {
-                await userRef.update({
-                    totalCatches: admin.firestore.FieldValue.increment(-1),
-                })
-                functions.logger.info(
-                    `Decremented totalCatches for user ${authorId}`
-                )
-            }
+        if (alreadyProcessed) {
+            functions.logger.info(
+                `[onPostDeleted] Duplicate event ${context.eventId}, skipping`
+            )
+            return
+        }
 
-            // Decrement totalPosts if this was an original post
-            if (postData.isOriginal) {
-                await userRef.update({
-                    totalPosts: admin.firestore.FieldValue.increment(-1),
-                })
-                functions.logger.info(
-                    `Decremented totalPosts for user ${authorId}`
-                )
-            }
+        // --- Cleanup: each step independent, failures don't cascade ---
 
-            // Remove post from any lists that contain it
+        // Remove post from any lists that contain it
+        try {
             const listsQuery = await db
                 .collection('lists')
                 .where('postIds', 'array-contains', postId)
@@ -96,13 +173,16 @@ export const onPostDeleted = functions
                     `Removed post ${postId} from ${listsQuery.size} list(s)`
                 )
             }
+        } catch (error) {
+            functions.logger.error(
+                `[onPostDeleted] List cleanup failed for post ${postId}:`,
+                error
+            )
+        }
 
-            // Handle root post deletion - promote oldest catch to new root
-            if (postData.isOriginal) {
-                functions.logger.info(
-                    `Root post ${postId} deleted, checking for thread promotion`
-                )
-
+        // Handle root post deletion - promote oldest catch to new root
+        if (postData.isOriginal) {
+            try {
                 const catchesQuery = await db
                     .collection('posts')
                     .where('rootPostId', '==', postId)
@@ -119,15 +199,31 @@ export const onPostDeleted = functions
 
                     const batch = db.batch()
 
-                    // Promote oldest catch to root
+                    // Promote oldest catch to root. catchCount is derived
+                    // from the surviving catches (the old root's counter may
+                    // be missing or stale). isPioneer is inherited from the
+                    // deleted root — it's a property of the location, and
+                    // future royalty math reads it. The promoted post keeps
+                    // its contributionEarned (the author did earn those catch
+                    // points); its royalty bookkeeping fields are cleared
+                    // since the original-post deletion path doesn't use them.
                     batch.update(newRootDoc.ref, {
                         isOriginal: true,
                         parentPostId: null,
                         rootPostId: null,
-                        catchCount: postData.catchCount - 1,
+                        catchCount: catchesQuery.docs.length - 1,
+                        isPioneer: postData.isPioneer ?? true,
+                        royaltyRecipientId:
+                            admin.firestore.FieldValue.delete(),
+                        royaltyAmount: admin.firestore.FieldValue.delete(),
+                        royaltyRootPostId:
+                            admin.firestore.FieldValue.delete(),
                     })
 
-                    // Update remaining catches to point to new root
+                    // Update remaining catches to point to new root. Their
+                    // royaltyRootPostId still names the deleted root, which
+                    // is exactly how later deletions know the royalty was
+                    // already settled and skip the clawback.
                     for (let i = 1; i < catchesQuery.docs.length; i++) {
                         const catchDoc = catchesQuery.docs[i]
                         batch.update(catchDoc.ref, {
@@ -136,109 +232,43 @@ export const onPostDeleted = functions
                         })
                     }
 
-                    // Delete old root's location data (new root keeps its own)
-                    const oldLocationQuery = await db
-                        .collection('post_locations')
-                        .where('postId', '==', postId)
-                        .limit(1)
-                        .get()
-
-                    if (!oldLocationQuery.empty) {
-                        const oldGeohash =
-                            oldLocationQuery.docs[0].data().geohash
-                        batch.delete(oldLocationQuery.docs[0].ref)
-                        // Decrement coverage cells after batch commit
-                        await batch.commit()
-                        if (oldGeohash) {
-                            await decrementCoverageCells(db, oldGeohash)
-                        }
-                    } else {
-                        await batch.commit()
-                    }
-
+                    await batch.commit()
                     functions.logger.info(
                         `Thread promotion complete. New root: ${newRootId}`
                     )
-                } else {
-                    // No catches in thread, just delete location data
-                    const locationQuery = await db
-                        .collection('post_locations')
-                        .where('postId', '==', postId)
-                        .limit(1)
-                        .get()
-
-                    if (!locationQuery.empty) {
-                        const geohash = locationQuery.docs[0].data().geohash
-                        await locationQuery.docs[0].ref.delete()
-                        if (geohash) {
-                            await decrementCoverageCells(db, geohash)
-                        }
-                        functions.logger.info(
-                            `Deleted location data for post ${postId}`
-                        )
-                    }
                 }
-            } else {
-                // Catch deleted - decrement root's catchCount and claw back royalty
-                const rootPostId = postData.rootPostId
-                if (rootPostId) {
-                    const rootRef = db.collection('posts').doc(rootPostId)
-                    const rootDoc = await rootRef.get()
-                    if (rootDoc.exists) {
-                        const rootData = rootDoc.data()!
-                        const isPioneer = rootData.isPioneer ?? true
-                        const royalty = isPioneer
-                            ? CONTRIBUTION.ROYALTY_PIONEER
-                            : CONTRIBUTION.ROYALTY_NEARBY
+            } catch (error) {
+                functions.logger.error(
+                    `[onPostDeleted] Thread promotion failed for post ${postId}:`,
+                    error
+                )
+            }
+        }
 
-                        await rootRef.update({
-                            catchCount:
-                                admin.firestore.FieldValue.increment(-1),
-                            contributionEarned:
-                                admin.firestore.FieldValue.increment(-royalty),
-                        })
-                        functions.logger.info(
-                            `Decremented catchCount and contributionEarned (${royalty}) for root post ${rootPostId}`
-                        )
+        // Delete the post's location data + decrement coverage
+        // (applies to catches, and to roots whether or not a promotion
+        // happened — the promoted root keeps its own location doc)
+        try {
+            const locationQuery = await db
+                .collection('post_locations')
+                .where('postId', '==', postId)
+                .limit(1)
+                .get()
 
-                        // Claw back royalty from original poster
-                        const rootAuthorId = rootData.authorId
-                        if (rootAuthorId && rootAuthorId !== authorId) {
-                            await db
-                                .collection('users')
-                                .doc(rootAuthorId)
-                                .update({
-                                    contribution:
-                                        admin.firestore.FieldValue.increment(
-                                            -royalty
-                                        ),
-                                })
-                            functions.logger.info(
-                                `Clawed back ${royalty} royalty from original poster ${rootAuthorId}`
-                            )
-                        }
-                    }
+            if (!locationQuery.empty) {
+                const geohash = locationQuery.docs[0].data().geohash
+                await locationQuery.docs[0].ref.delete()
+                if (geohash) {
+                    await decrementCoverageCells(db, geohash)
                 }
-
-                // Delete catch's location data
-                const locationQuery = await db
-                    .collection('post_locations')
-                    .where('postId', '==', postId)
-                    .limit(1)
-                    .get()
-
-                if (!locationQuery.empty) {
-                    const catchGeohash = locationQuery.docs[0].data().geohash
-                    await locationQuery.docs[0].ref.delete()
-                    if (catchGeohash) {
-                        await decrementCoverageCells(db, catchGeohash)
-                    }
-                    functions.logger.info(
-                        `Deleted location data for catch ${postId}`
-                    )
-                }
+                functions.logger.info(
+                    `Deleted location data for post ${postId}`
+                )
             }
         } catch (error) {
-            functions.logger.error('Error handling post deletion:', error)
+            functions.logger.error(
+                `[onPostDeleted] Location cleanup failed for post ${postId}:`,
+                error
+            )
         }
     })

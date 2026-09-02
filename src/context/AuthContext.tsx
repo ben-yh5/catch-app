@@ -11,7 +11,7 @@
  * setupUsername Cloud Function.
  */
 
-import { auth, db } from '@/services/firebase'
+import { auth, db, functions } from '@/services/firebase'
 import { registerForPushNotificationsAsync } from '@/utils/registerForPushNotificationsAsync'
 import { GoogleSignin } from '@react-native-google-signin/google-signin'
 import * as AppleAuthentication from 'expo-apple-authentication'
@@ -33,6 +33,7 @@ import {
     query,
     updateDoc,
 } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { Notification } from '@/types'
 
@@ -44,6 +45,11 @@ interface AuthContextType {
     logout: () => Promise<void>
     dataContributionEnabled: boolean
     toggleDataContribution: (enabled: boolean) => Promise<void>
+
+    // Blocking
+    blockedUserIds: string[]
+    blockUser: (targetUserId: string) => Promise<void>
+    unblockUser: (targetUserId: string) => Promise<void>
 
     // Contribution stats
     contribution: number
@@ -83,6 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [contribution, setContribution] = useState(0)
     const [totalPosts, setTotalPosts] = useState(0)
     const [totalCatches, setTotalCatches] = useState(0)
+    const [blockedUserIds, setBlockedUserIds] = useState<string[]>([])
 
     // Notification State
     const [notifications, setNotifications] = useState<Notification[]>([])
@@ -113,6 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                         setContribution(data.contribution || 0)
                         setTotalPosts(data.totalPosts || 0)
                         setTotalCatches(data.totalCatches || 0)
+                        setBlockedUserIds(data.blockedUsers || [])
 
                         // Load notification settings
                         if (data.notificationSettings) {
@@ -148,6 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 setContribution(0)
                 setTotalPosts(0)
                 setTotalCatches(0)
+                setBlockedUserIds([])
                 setNotifications([])
                 setUnreadCount(0)
                 setNotificationSettings({
@@ -413,6 +422,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }
 
+    /**
+     * Block / unblock — server-managed via Cloud Functions (blockedUsers is
+     * not client-writable). Local state updates immediately so feeds and
+     * profiles filter without a re-fetch.
+     */
+    const blockUser = async (targetUserId: string) => {
+        const blockUserFn = httpsCallable(functions, 'blockUser')
+        await blockUserFn({ targetUserId })
+        setBlockedUserIds((prev) =>
+            prev.includes(targetUserId) ? prev : [...prev, targetUserId]
+        )
+    }
+
+    const unblockUser = async (targetUserId: string) => {
+        const unblockUserFn = httpsCallable(functions, 'unblockUser')
+        await unblockUserFn({ targetUserId })
+        setBlockedUserIds((prev) => prev.filter((id) => id !== targetUserId))
+    }
+
     return (
         <AuthContext.Provider
             value={{
@@ -423,6 +451,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 logout,
                 dataContributionEnabled,
                 toggleDataContribution,
+                blockedUserIds,
+                blockUser,
+                unblockUser,
                 contribution,
                 totalPosts,
                 totalCatches,

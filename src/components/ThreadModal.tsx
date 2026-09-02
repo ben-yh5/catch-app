@@ -18,6 +18,7 @@
  * - Catches: isOriginal=false, rootPostId=<root_id>
  */
 
+import ReportBottomSheet from '@/components/ReportBottomSheet'
 import CatchBadge from '@/components/ui/CatchBadge'
 import CaughtBadge from '@/components/ui/CaughtBadge'
 import { useToast } from '@/components/ui/Toast'
@@ -96,6 +97,7 @@ export default function ThreadModal({
     const [isSaved, setIsSaved] = useState(false)
     const [showOptionsMenu, setShowOptionsMenu] = useState(false)
     const [showAddToListModal, setShowAddToListModal] = useState(false)
+    const [showReportSheet, setShowReportSheet] = useState(false)
 
     // Location state
     const [postLocation, setPostLocation] = useState<{
@@ -825,7 +827,7 @@ export default function ThreadModal({
                                                         </Text>
                                                     </TouchableOpacity>
                                                     {currentPost?.authorId ===
-                                                        user?.uid && (
+                                                    user?.uid ? (
                                                         <TouchableOpacity
                                                             style={[
                                                                 styles.optionsMenuItem,
@@ -844,6 +846,32 @@ export default function ThreadModal({
                                                                 ]}
                                                             >
                                                                 Delete
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    ) : (
+                                                        <TouchableOpacity
+                                                            style={[
+                                                                styles.optionsMenuItem,
+                                                                styles.optionsMenuItemLast,
+                                                            ]}
+                                                            onPress={() => {
+                                                                setShowOptionsMenu(
+                                                                    false
+                                                                )
+                                                                setShowReportSheet(
+                                                                    true
+                                                                )
+                                                            }}
+                                                            accessibilityRole="menuitem"
+                                                            accessibilityLabel="Report post"
+                                                        >
+                                                            <Text
+                                                                style={[
+                                                                    styles.optionsMenuText,
+                                                                    styles.optionsMenuTextDanger,
+                                                                ]}
+                                                            >
+                                                                Report
                                                             </Text>
                                                         </TouchableOpacity>
                                                     )}
@@ -1092,6 +1120,17 @@ export default function ThreadModal({
                     onSelectionChange={(selectedIds) => {
                         setIsSaved(selectedIds.size > 0)
                     }}
+                />
+            )}
+
+            {/* Report Post Sheet */}
+            {currentPost && (
+                <ReportBottomSheet
+                    visible={showReportSheet}
+                    onClose={() => setShowReportSheet(false)}
+                    targetUserId={currentPost.authorId}
+                    targetUsername={currentPost.authorUsername}
+                    targetPostId={currentPost.id}
                 />
             )}
         </Modal>

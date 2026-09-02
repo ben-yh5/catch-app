@@ -379,6 +379,267 @@ export const reportUser = functions
         }
     })
 
+/**
+ * HTTPS Callable Function: Reports a post for objectionable content
+ *
+ * Mirrors reportUser but targets a specific post. The report records both the
+ * post and its author so moderation can act on either. One report per
+ * reporter per post.
+ *
+ * @param data.targetPostId - The post ID to report
+ * @param data.reason - One of the valid report reasons
+ * @param data.details - Optional free-text details (max 500 chars)
+ * @returns Object with success status
+ */
+export const reportPost = functions
+    .runWith({ maxInstances: MAX_INSTANCES.DEFAULT })
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError(
+                'unauthenticated',
+                'Must be logged in to report a post'
+            )
+        }
+
+        const { targetPostId, reason, details } = data
+        const reporterId = context.auth.uid
+
+        if (!targetPostId || typeof targetPostId !== 'string') {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Target post ID is required'
+            )
+        }
+
+        const VALID_REASONS = [
+            'harassment',
+            'spam',
+            'impersonation',
+            'inappropriate_content',
+            'other',
+        ]
+        if (!reason || !VALID_REASONS.includes(reason)) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Invalid report reason'
+            )
+        }
+
+        const sanitizedDetails =
+            typeof details === 'string' ? details.trim().slice(0, 500) : ''
+
+        try {
+            const db = admin.firestore()
+
+            const postDoc = await db
+                .collection('posts')
+                .doc(targetPostId)
+                .get()
+            if (!postDoc.exists) {
+                throw new functions.https.HttpsError(
+                    'not-found',
+                    'Post not found'
+                )
+            }
+
+            const postAuthorId = postDoc.data()?.authorId
+            if (postAuthorId === reporterId) {
+                throw new functions.https.HttpsError(
+                    'invalid-argument',
+                    'Cannot report your own post'
+                )
+            }
+
+            const existingReport = await db
+                .collection('reports')
+                .where('reporterId', '==', reporterId)
+                .where('targetPostId', '==', targetPostId)
+                .where('targetType', '==', 'post')
+                .limit(1)
+                .get()
+
+            if (!existingReport.empty) {
+                throw new functions.https.HttpsError(
+                    'already-exists',
+                    'You have already reported this post'
+                )
+            }
+
+            await db.collection('reports').add({
+                reporterId,
+                targetPostId,
+                targetUserId: postAuthorId ?? null,
+                targetType: 'post',
+                reason,
+                details: sanitizedDetails,
+                status: 'pending',
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            })
+
+            functions.logger.info(
+                `[reportPost] User ${reporterId} reported post ${targetPostId} for ${reason}`
+            )
+            return { success: true }
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) {
+                throw error
+            }
+            functions.logger.error('Error reporting post:', error)
+            throw new functions.https.HttpsError(
+                'internal',
+                'Failed to submit report'
+            )
+        }
+    })
+
+/**
+ * HTTPS Callable Function: Blocks a user
+ *
+ * Adds the target to the caller's `blockedUsers` array and severs any
+ * follow relationship in both directions, all in one transaction.
+ * `blockedUsers` is only writable through this function (client-side rules
+ * block it), and blocking is one-sided: the target is not notified and
+ * their doc doesn't record who blocked them.
+ *
+ * @param data.targetUserId - The user ID to block
+ * @returns Object with success status
+ */
+export const blockUser = functions
+    .runWith({ maxInstances: MAX_INSTANCES.DEFAULT })
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError(
+                'unauthenticated',
+                'Must be logged in to block a user'
+            )
+        }
+
+        const { targetUserId } = data
+        const currentUserId = context.auth.uid
+
+        if (!targetUserId || typeof targetUserId !== 'string') {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Target user ID is required'
+            )
+        }
+
+        if (targetUserId === currentUserId) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Cannot block yourself'
+            )
+        }
+
+        const db = admin.firestore()
+
+        try {
+            await db.runTransaction(async (transaction) => {
+                const currentUserRef = db.collection('users').doc(currentUserId)
+                const targetUserRef = db.collection('users').doc(targetUserId)
+
+                const [currentUserDoc, targetUserDoc] = await Promise.all([
+                    transaction.get(currentUserRef),
+                    transaction.get(targetUserRef),
+                ])
+
+                if (!currentUserDoc.exists) {
+                    throw new functions.https.HttpsError(
+                        'not-found',
+                        'Your user account was not found'
+                    )
+                }
+                if (!targetUserDoc.exists) {
+                    throw new functions.https.HttpsError(
+                        'not-found',
+                        'Target user not found'
+                    )
+                }
+
+                transaction.update(currentUserRef, {
+                    blockedUsers:
+                        admin.firestore.FieldValue.arrayUnion(targetUserId),
+                    following:
+                        admin.firestore.FieldValue.arrayRemove(targetUserId),
+                    followers:
+                        admin.firestore.FieldValue.arrayRemove(targetUserId),
+                })
+                transaction.update(targetUserRef, {
+                    following:
+                        admin.firestore.FieldValue.arrayRemove(currentUserId),
+                    followers:
+                        admin.firestore.FieldValue.arrayRemove(currentUserId),
+                })
+            })
+
+            functions.logger.info(
+                `[blockUser] ${currentUserId} blocked ${targetUserId}`
+            )
+            return { success: true }
+        } catch (error: any) {
+            if (error instanceof functions.https.HttpsError) {
+                throw error
+            }
+            functions.logger.error('Error blocking user:', error)
+            throw new functions.https.HttpsError(
+                'internal',
+                'Failed to block user'
+            )
+        }
+    })
+
+/**
+ * HTTPS Callable Function: Unblocks a user
+ *
+ * Removes the target from the caller's `blockedUsers` array. Follow
+ * relationships are NOT restored — the user can re-follow manually.
+ *
+ * @param data.targetUserId - The user ID to unblock
+ * @returns Object with success status
+ */
+export const unblockUser = functions
+    .runWith({ maxInstances: MAX_INSTANCES.DEFAULT })
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError(
+                'unauthenticated',
+                'Must be logged in to unblock a user'
+            )
+        }
+
+        const { targetUserId } = data
+        const currentUserId = context.auth.uid
+
+        if (!targetUserId || typeof targetUserId !== 'string') {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Target user ID is required'
+            )
+        }
+
+        try {
+            await admin
+                .firestore()
+                .collection('users')
+                .doc(currentUserId)
+                .update({
+                    blockedUsers:
+                        admin.firestore.FieldValue.arrayRemove(targetUserId),
+                })
+
+            functions.logger.info(
+                `[unblockUser] ${currentUserId} unblocked ${targetUserId}`
+            )
+            return { success: true }
+        } catch (error: any) {
+            functions.logger.error('Error unblocking user:', error)
+            throw new functions.https.HttpsError(
+                'internal',
+                'Failed to unblock user'
+            )
+        }
+    })
+
 // ─── Account Deletion ───────────────────────────────────────────────────────
 
 /**

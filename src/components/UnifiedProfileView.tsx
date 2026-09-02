@@ -28,6 +28,7 @@ import { httpsCallable } from 'firebase/functions'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     Modal,
     RefreshControl,
@@ -52,7 +53,8 @@ export default function UnifiedProfileView({
     userId,
     isOwnProfile,
 }: ProfileViewProps) {
-    const { user, updateStats } = useAuth()
+    const { user, updateStats, blockedUserIds, blockUser, unblockUser } =
+        useAuth()
     const { showToast } = useToast()
     const { updateLastFetch, isStale } = usePost()
     const router = useRouter()
@@ -447,8 +449,60 @@ export default function UnifiedProfileView({
         } as any)
     }
 
+    const isBlocked = blockedUserIds.includes(userId)
+
+    const handleBlockToggle = () => {
+        if (isBlocked) {
+            Alert.alert('Unblock user', `Unblock @${username}?`, [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Unblock',
+                    onPress: async () => {
+                        try {
+                            await unblockUser(userId)
+                            showToast('success', `Unblocked @${username}`)
+                        } catch {
+                            showToast('error', 'Failed to unblock user')
+                        }
+                    },
+                },
+            ])
+        } else {
+            Alert.alert(
+                'Block user',
+                `Block @${username}? You won't see their posts, and any follow relationship is removed.`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Block',
+                        style: 'destructive',
+                        onPress: async () => {
+                            try {
+                                await blockUser(userId)
+                                showToast('success', `Blocked @${username}`)
+                            } catch {
+                                showToast('error', 'Failed to block user')
+                            }
+                        },
+                    },
+                ]
+            )
+        }
+    }
+
     const handleReport = () => {
-        setReportVisible(true)
+        Alert.alert(`@${username}`, undefined, [
+            {
+                text: 'Report user',
+                onPress: () => setReportVisible(true),
+            },
+            {
+                text: isBlocked ? 'Unblock user' : 'Block user',
+                style: isBlocked ? 'default' : 'destructive',
+                onPress: handleBlockToggle,
+            },
+            { text: 'Cancel', style: 'cancel' },
+        ])
     }
 
     const handleShowFollowList = async (type: 'followers' | 'following') => {
@@ -879,11 +933,12 @@ export default function UnifiedProfileView({
                         <TouchableOpacity
                             onPress={handleReport}
                             style={styles.settingsButton}
-                            accessibilityLabel="Report user"
+                            accessibilityLabel="User actions"
                             accessibilityRole="button"
+                            accessibilityHint="Report or block this user"
                         >
                             <Ionicons
-                                name="flag-outline"
+                                name="ellipsis-horizontal"
                                 size={24}
                                 color={colors.textPrimary}
                             />

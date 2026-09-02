@@ -49,6 +49,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **Linting** | `eslint`, `eslint-config-expo`, `@typescript-eslint/parser` |
 | **Build** | `expo-dev-client`, EAS Build |
 
+## Git Usage Rules
+
+- Git may only be used to **view** history (e.g. `git log`, `git show`, `git diff`, `git status`). 
+- **Never** run `git revert` (or otherwise rewrite/undo history).
+- **Never** push to or pull from GitHub (no `git push`, `git pull`, `git fetch`, or `gh` operations that modify the remote).
+
 ## Development Commands
 
 ```bash
@@ -170,6 +176,7 @@ Notification types: `new_post`, `follow`, `royalty`.
 - `username`, `email`, `createdAt`
 - `totalPosts`, `totalCatches`, `contribution` (number)
 - `followers`, `following` (arrays of user IDs)
+- `blockedUsers` (array of user IDs; server-only writes via `blockUser`/`unblockUser`)
 - `pushToken` (FCM/APNs token)
 
 ### users/{userId}/notifications/{notifId}
@@ -219,6 +226,9 @@ Notification types: `new_post`, `follow`, `royalty`.
 | `setupUsername` | HTTPS Callable | Atomically claims username + creates user doc (prevents TOCTOU race) |
 | `followUser` | HTTPS Callable | Atomically updates both users' following/followers arrays in a transaction |
 | `unfollowUser` | HTTPS Callable | Atomically removes from both users' following/followers arrays in a transaction |
+| `reportUser` / `reportPost` | HTTPS Callable | Content/user reports into `reports` collection; one report per reporter per target |
+| `blockUser` / `unblockUser` | HTTPS Callable | Manages caller's `blockedUsers` array; blocking also severs follows both ways. Client filters blocked authors from feeds/map |
+| `reconcileContributions` | HTTPS Callable | Admin-only: recomputes `contribution`/`totalPosts`/`totalCatches` from surviving posts' `contributionEarned`; `dryRun` (default) reports drift without fixing |
 | `onPostCreated` | Firestore Trigger | Contribution points, Pioneer/Nearby check, catchCount increment, notifications. Idempotent via `context.eventId` dedup |
 | `onPostDeleted` | Firestore Trigger | Thread promotion, counter decrements (catchCount), list cleanup. Idempotent via `context.eventId` dedup |
 | `onUserFollowed` | Firestore Trigger | Follow notifications (in-app + push) |
@@ -236,7 +246,8 @@ Notification types: `new_post`, `follow`, `royalty`.
 - **Path alias**: `@/` maps to `src/` (configured in tsconfig)
 - **`post_locations` geohash**: Used for spatial queries; new posts must include geohash via `geohashForLocation()` from `geofire-common`
 - **Server-only counters**: `catchCount`, `contribution`, `totalPosts`, `totalCatches` are only writable by Cloud Functions (admin SDK). Client-side Firestore rules block direct updates to these fields.
-- **Trigger idempotency**: `onPostCreated` and `onPostDeleted` deduplicate via `context.eventId` using a `processed_events` collection to handle Firestore's at-least-once delivery.
+- **Trigger idempotency + atomic balances**: `onPostCreated` and `onPostDeleted` run all balance-critical writes (contribution, counters, royalties, `contributionEarned`) in a single transaction that also owns the `processed_events/{eventId}` dedup marker — all-or-nothing and exactly-once. Best-effort work (notifications, enrichment, coverage, list/location cleanup) runs after the transaction, each step in its own try/catch.
+- **Royalty clawback tracking**: catches store `royaltyRecipientId`, `royaltyAmount`, and `royaltyRootPostId` at creation. Deletion claws back the royalty only if the paying root still exists and the catch was never re-pointed by thread promotion (`royaltyRootPostId === rootPostId`); otherwise the royalty was already settled when the old root was deleted.
 - **Username uniqueness**: `setupUsername` Cloud Function uses a `usernames/{lowercase}` collection as an atomic uniqueness index via Firestore transaction.
 - **Atomic follow/unfollow**: `followUser`/`unfollowUser` Cloud Functions update both users' arrays in a single transaction. No client-side writes to `followers` or `following`.
 - **Geospatial query limits**: `getPostsInArea` caps results at 200 per geohash sub-query and 500 total. Validates `radiusInMeters > 0`, coordinate ranges, and viewport bounds.
