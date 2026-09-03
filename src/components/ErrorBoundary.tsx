@@ -1,3 +1,4 @@
+import { router } from 'expo-router'
 import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 
@@ -7,12 +8,13 @@ interface Props {
 
 interface State {
     hasError: boolean
+    resetKey: number
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
-    state: State = { hasError: false }
+    state: State = { hasError: false, resetKey: 0 }
 
-    static getDerivedStateFromError(): State {
+    static getDerivedStateFromError(): Partial<State> {
         return { hasError: true }
     }
 
@@ -21,7 +23,19 @@ export default class ErrorBoundary extends Component<Props, State> {
     }
 
     handleReload = () => {
-        this.setState({ hasError: false })
+        // A real reset: remount the subtree AND navigate to the root route,
+        // so a deterministic crash in one screen doesn't just re-throw.
+        // (Just clearing hasError re-renders the same broken tree forever.)
+        this.setState(
+            (prev) => ({ hasError: false, resetKey: prev.resetKey + 1 }),
+            () => {
+                try {
+                    router.replace('/')
+                } catch (e) {
+                    console.error('ErrorBoundary: navigation reset failed', e)
+                }
+            }
+        )
     }
 
     render() {
@@ -46,7 +60,11 @@ export default class ErrorBoundary extends Component<Props, State> {
             )
         }
 
-        return this.props.children
+        return (
+            <React.Fragment key={this.state.resetKey}>
+                {this.props.children}
+            </React.Fragment>
+        )
     }
 }
 

@@ -1,3 +1,4 @@
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
@@ -7,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { doc, getDoc } from 'firebase/firestore'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
@@ -38,6 +39,7 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
     } = useAuth()
     const router = useRouter()
     const insets = useSafeAreaInsets()
+    const { showToast } = useToast()
     const [hydratedNotifications, setHydratedNotifications] = useState<
         Notification[]
     >([])
@@ -47,11 +49,20 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
     const [threadModalVisible, setThreadModalVisible] = useState(false)
 
     // Hydrate notifications with user/post data
+    // Mark-all-read happens on CLOSE, not open — so unread styling stays
+    // visible while the user is actually looking at what's new
+    const wasOpenRef = useRef(false)
     useEffect(() => {
-        if (visible && notifications.length > 0) {
-            hydrateNotifications()
-            markAllNotificationsAsRead()
+        if (visible) {
+            wasOpenRef.current = true
+            if (notifications.length > 0) {
+                hydrateNotifications()
+            }
         } else {
+            if (wasOpenRef.current) {
+                wasOpenRef.current = false
+                markAllNotificationsAsRead()
+            }
             setHydratedNotifications([])
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -59,53 +70,78 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
 
     const hydrateNotifications = async () => {
         setLoading(true)
-        // Legacy docs: map old 'royalty' notifications to 'caught', drop
-        // retired xp_* activity entries from the points era.
+        // Allowlist of renderable types: legacy 'royalty' maps to 'caught';
+        // anything unknown (incl. retired xp_* points-era entries) is dropped
+        // rather than rendered with wrong copy.
         const renderable = notifications
-            .filter((n) => !['xp_post', 'xp_catch'].includes(n.type as string))
+            .filter((n) =>
+                ['caught', 'royalty', 'follow', 'new_post'].includes(
+                    n.type as string
+                )
+            )
             .map((n) =>
                 (n.type as string) === 'royalty'
                     ? { ...n, type: 'caught' as const }
                     : n
             )
-        const hydrated = await Promise.all(
-            renderable.map(async (n): Promise<Notification> => {
-                const note = { ...n } as Notification
 
-                // Fetch "From User" details
-                if (note.fromUserId) {
-                    try {
-                        const userDoc = await getDoc(
-                            doc(db, 'users', note.fromUserId)
-                        )
-                        if (userDoc.exists()) {
-                            const data = userDoc.data()
-                            note.fromUsername = data.username || 'Someone'
-                            note.fromUserPhoto = data.profilePicture
+        // Hydrate each unique user/post ONCE instead of one fetch per
+        // notification (the same follower or post appears many times)
+        const userIds = [
+            ...new Set(
+                renderable
+                    .map((n) => n.fromUserId)
+                    .filter((id): id is string => Boolean(id))
+            ),
+        ]
+        const postIds = [
+            ...new Set(
+                renderable
+                    .map((n) => n.postId)
+                    .filter((id): id is string => Boolean(id))
+            ),
+        ]
+
+        const fetchDocs = async (collectionName: string, ids: string[]) =>
+            new Map(
+                await Promise.all(
+                    ids.map(async (id) => {
+                        try {
+                            const snap = await getDoc(
+                                doc(db, collectionName, id)
+                            )
+                            return [
+                                id,
+                                snap.exists() ? snap.data() : null,
+                            ] as const
+                        } catch (e) {
+                            console.warn(
+                                `Error hydrating ${collectionName}/${id}:`,
+                                e
+                            )
+                            return [id, null] as const
                         }
-                    } catch (e) {
-                        console.warn('Error fetching user for notification:', e)
-                        note.fromUsername = 'Unknown'
-                    }
-                }
+                    })
+                )
+            )
 
-                // Fetch Post Thumbnail if applicable
-                if (note.postId) {
-                    try {
-                        const postDoc = await getDoc(
-                            doc(db, 'posts', note.postId)
-                        )
-                        if (postDoc.exists()) {
-                            note.postThumbnail = postDoc.data().photoURL
-                        }
-                    } catch (e) {
-                        console.warn('Error fetching post for notification:', e)
-                    }
-                }
+        const [users, posts] = await Promise.all([
+            fetchDocs('users', userIds),
+            fetchDocs('posts', postIds),
+        ])
 
-                return note
-            })
-        )
+        const hydrated = renderable.map((n): Notification => {
+            const note = { ...n } as Notification
+            if (note.fromUserId) {
+                const userData = users.get(note.fromUserId)
+                note.fromUsername = userData?.username || 'Unknown'
+                note.fromUserPhoto = userData?.profilePicture
+            }
+            if (note.postId) {
+                note.postThumbnail = posts.get(note.postId)?.photoURL
+            }
+            return note
+        })
         setHydratedNotifications(hydrated)
         setLoading(false)
     }
@@ -143,9 +179,21 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
                         ...postDoc.data(),
                     } as Post)
                     setThreadModalVisible(true)
+                } else {
+                    // Deleted post — say so instead of a dead tap
+                    showToast(
+                        'info',
+                        'Shot unavailable',
+                        'This shot has been deleted.'
+                    )
                 }
             } catch (e) {
                 console.warn('Error fetching post:', e)
+                showToast(
+                    'error',
+                    "Couldn't open shot",
+                    'Check your connection and try again.'
+                )
             }
         }
     }
@@ -165,7 +213,10 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
             return `${hours}h`
         }
         const days = Math.floor(diff / 86400000)
-        return `${days}d`
+        if (days < 7) return `${days}d`
+        if (days < 30) return `${Math.floor(days / 7)}w`
+        if (days < 365) return `${Math.floor(days / 30)}mo`
+        return `${Math.floor(days / 365)}y`
     }
 
     const handleClearAll = () => {

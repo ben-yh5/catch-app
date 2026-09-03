@@ -72,11 +72,10 @@ export default function LocationSearchBar({
                     console.log('Searching Mapbox with URL:', url)
                     const response = await fetch(url)
                     const data = await response.json()
-                    if (data.features) {
-                        setResults(data.features)
-                    }
+                    setResults(data.features ?? [])
                 } catch (error) {
                     console.error('Error searching places:', error)
+                    setResults([])
                 } finally {
                     setLoading(false)
                 }
@@ -181,6 +180,16 @@ export default function LocationSearchBar({
                     />
                 </View>
             )}
+
+            {/* Empty result state — a blank dropdown is indistinguishable
+                from a broken search */}
+            {showResults && !loading && results.length === 0 && (
+                <View style={styles.resultsContainer}>
+                    <Text style={styles.noResultsText}>
+                        No places found for &ldquo;{query}&rdquo;
+                    </Text>
+                </View>
+            )}
         </View>
     )
 }
@@ -224,6 +233,12 @@ const styles = StyleSheet.create({
     },
     clearButton: {
         marginLeft: 8,
+    },
+    noResultsText: {
+        padding: 16,
+        fontSize: 14,
+        color: colors.textSecondary,
+        textAlign: 'center',
     },
     resultsContainer: {
         marginTop: 8,

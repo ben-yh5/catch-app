@@ -30,7 +30,8 @@ import {
     where,
     documentId,
 } from 'firebase/firestore'
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { ref } from 'firebase/storage'
+import { uploadImageWithProgress } from '@/utils/uploadImage'
 import { geohashForLocation } from 'geofire-common'
 import React, { useRef, useState } from 'react'
 import {
@@ -78,6 +79,7 @@ export default function PostScreen() {
     const [location, setLocation] = useState<LocationData | null>(null)
     const [loadingLocation, setLoadingLocation] = useState(false)
     const [uploading, setUploading] = useState(false)
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null)
     const [similarPost, setSimilarPost] = useState<Post | null>(null)
     const [catchTarget, setCatchTarget] = useState<Post | null>(null)
     const [revealData, setRevealData] = useState<{
@@ -424,8 +426,13 @@ export default function PostScreen() {
             const blob = await response.blob()
             const filename = `posts/${user.uid}/catch_${Date.now()}.jpg`
             const storageRef = ref(storage, filename)
-            await uploadBytes(storageRef, blob)
-            const photoURL = await getDownloadURL(storageRef)
+            setUploadProgress(0)
+            const photoURL = await uploadImageWithProgress(
+                storageRef,
+                blob,
+                setUploadProgress
+            )
+            setUploadProgress(null)
 
             // 3. Create catch post
             const postData = {
@@ -495,6 +502,7 @@ export default function PostScreen() {
         } catch (error: any) {
             console.error('Error in catch confirm:', error)
             setUploading(false)
+            setUploadProgress(null)
             showToast(
                 'error',
                 'Catch failed',
@@ -562,11 +570,14 @@ export default function PostScreen() {
             const filename = `posts/${user.uid}/${timestamp}.jpg`
             const storageRef = ref(storage, filename)
 
-            // Upload image to Firebase Storage
-            await uploadBytes(storageRef, blob)
-
-            // Get download URL
-            const photoURL = await getDownloadURL(storageRef)
+            // Upload image to Firebase Storage (with progress)
+            setUploadProgress(0)
+            const photoURL = await uploadImageWithProgress(
+                storageRef,
+                blob,
+                setUploadProgress
+            )
+            setUploadProgress(null)
 
             // Create post document in Firestore
             const postData = {
@@ -647,6 +658,7 @@ export default function PostScreen() {
         } catch (error: any) {
             console.error('Error posting:', error)
             setUploading(false)
+            setUploadProgress(null)
             showToast('error', 'Post Failed', error.message || 'Unknown error')
         }
     }
@@ -701,6 +713,7 @@ export default function PostScreen() {
                 originalPhotoUrl={catchTarget.photoURL}
                 issues={previewIssues}
                 onRetake={handleRetake}
+                uploadProgress={uploadProgress}
             />
         )
     }
@@ -722,6 +735,7 @@ export default function PostScreen() {
                 onNotAMatch={handleNotAMatch}
                 issues={previewIssues}
                 onRetake={handleRetake}
+                uploadProgress={uploadProgress}
             />
         )
     }

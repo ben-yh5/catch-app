@@ -13,7 +13,8 @@ import { verifyViewSimilarity } from '@/utils/visualMatcher'
 import { useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
 import { addDoc, collection, doc, getDoc } from 'firebase/firestore'
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { ref } from 'firebase/storage'
+import { uploadImageWithProgress } from '@/utils/uploadImage'
 import { geohashForLocation } from 'geofire-common'
 import { useState } from 'react'
 import { Alert, Linking } from 'react-native'
@@ -64,6 +65,7 @@ export function useCatchFlow({
         longitude: number
     } | null>(null)
     const [uploading, setUploading] = useState(false)
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null)
     const [fetchingLocation, setFetchingLocation] = useState(false)
 
     // Set after a successful catch to drive the CatchRevealModal (the
@@ -390,8 +392,13 @@ export function useCatchFlow({
             const blob = await response.blob()
             const filename = `posts/${user.uid}/catch_${Date.now()}.jpg`
             const storageRef = ref(storage, filename)
-            await uploadBytes(storageRef, blob)
-            const photoURL = await getDownloadURL(storageRef)
+            setUploadProgress(0)
+            const photoURL = await uploadImageWithProgress(
+                storageRef,
+                blob,
+                setUploadProgress
+            )
+            setUploadProgress(null)
 
             const postData = {
                 authorId: user.uid,
@@ -492,6 +499,7 @@ export function useCatchFlow({
         } catch (error: any) {
             console.error('Error in catch confirm:', error)
             setUploading(false)
+            setUploadProgress(null)
             setStatusMessage('')
             showToast(
                 'error',
@@ -507,6 +515,7 @@ export function useCatchFlow({
         catchImageUri,
         fetchingLocation,
         uploading,
+        uploadProgress,
         statusMessage,
         issues,
         heading,

@@ -712,12 +712,25 @@ export default function UnifiedProfileView({
                                     <View style={styles.statRow}>
                                         <TouchableOpacity
                                             style={styles.statItem}
+                                            // Activity feed is the viewer's
+                                            // own — only offer it on your own
+                                            // profile, never on someone
+                                            // else's stat
+                                            disabled={!isOwnProfile}
                                             onPress={() =>
                                                 setShowActivityFeed(true)
                                             }
                                             accessibilityLabel={`${totalCatches} Catches`}
-                                            accessibilityRole="button"
-                                            accessibilityHint="View activity feed"
+                                            accessibilityRole={
+                                                isOwnProfile
+                                                    ? 'button'
+                                                    : 'text'
+                                            }
+                                            accessibilityHint={
+                                                isOwnProfile
+                                                    ? 'View activity feed'
+                                                    : undefined
+                                            }
                                         >
                                             <Text style={styles.statNumber}>
                                                 {totalCatches}

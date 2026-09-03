@@ -130,25 +130,21 @@ export default function ListsScreen() {
     }
 
     const renderListItem = ({ item }: { item: List }) => {
-        const isPrivate = !item.isPublic
-
         return (
             <TouchableOpacity
                 style={styles.listItem}
                 onPress={() =>
-                    router.push(`/(tabs)/map?listId=${item.id}` as any)
+                    // List detail is the canonical home (edit/delete/map all
+                    // live there). All lists are public — no lock affordance.
+                    router.push(`/list-detail?listId=${item.id}` as any)
                 }
                 accessibilityLabel={`${item.name}, ${item.postIds.length} ${item.postIds.length === 1 ? 'shot' : 'shots'}${activeTab === 'community' ? `, by @${item.creatorUsername}` : ''}`}
                 accessibilityRole="button"
-                accessibilityHint="Open this list on the map"
+                accessibilityHint="Open this list"
             >
                 <View style={styles.listContent}>
                     <View style={styles.listHeader}>
-                        <Ionicons
-                            name={isPrivate ? 'lock-closed' : 'list'}
-                            size={24}
-                            color="#007AFF"
-                        />
+                        <Ionicons name="list" size={24} color="#007AFF" />
                         <View style={styles.listInfo}>
                             <Text style={styles.listName}>{item.name}</Text>
                             {item.description ? (

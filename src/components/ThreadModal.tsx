@@ -52,6 +52,7 @@ import {
     FlatList, // Renamed to avoid conflict with expo-linking
     Modal,
     Platform,
+    Share,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -116,6 +117,7 @@ export default function ThreadModal({
         catchImageUri,
         fetchingLocation,
         uploading,
+        uploadProgress,
         statusMessage,
         issues,
         handleCatchPress,
@@ -437,7 +439,18 @@ export default function ThreadModal({
 
     const handleShare = async () => {
         setShowOptionsMenu(false)
-        showToast('info', 'Share functionality coming soon!')
+        if (!currentPost) return
+        try {
+            const caption = currentPost.caption
+                ? `"${currentPost.caption}" — `
+                : ''
+            await Share.share({
+                message: `${caption}a shot by @${currentPost.authorUsername} on Catch\n${currentPost.photoURL}`,
+            })
+        } catch (error) {
+            console.error('Error sharing post:', error)
+            showToast('error', "Couldn't share", 'Please try again.')
+        }
     }
 
     const handleDeletePost = async () => {
@@ -667,6 +680,7 @@ export default function ThreadModal({
                     loadingLocation={fetchingLocation}
                     issues={issues}
                     onRetake={handleRetake}
+                    uploadProgress={uploadProgress}
                 />
             </Modal>
         )
@@ -707,8 +721,11 @@ export default function ThreadModal({
                                             accessibilityLabel="Close"
                                             accessibilityRole="button"
                                         >
+                                            {/* 'close', not 'arrow-back' —
+                                                this dismisses a modal, it
+                                                doesn't navigate back */}
                                             <Ionicons
-                                                name="arrow-back"
+                                                name="close"
                                                 size={24}
                                                 color={colors.textPrimary}
                                             />
@@ -790,11 +807,42 @@ export default function ThreadModal({
                                             </TouchableOpacity>
 
                                             {showOptionsMenu && (
-                                                <View
-                                                    style={
-                                                        styles.optionsMenuInCard
+                                                <Modal
+                                                    transparent
+                                                    visible
+                                                    animationType="fade"
+                                                    onRequestClose={() =>
+                                                        setShowOptionsMenu(
+                                                            false
+                                                        )
                                                     }
                                                 >
+                                                    {/* Scrim: tapping
+                                                        anywhere outside the
+                                                        menu dismisses it */}
+                                                    <TouchableOpacity
+                                                        style={
+                                                            styles.optionsMenuScrim
+                                                        }
+                                                        activeOpacity={1}
+                                                        onPress={() =>
+                                                            setShowOptionsMenu(
+                                                                false
+                                                            )
+                                                        }
+                                                        accessibilityLabel="Dismiss menu"
+                                                    />
+                                                    <View
+                                                        style={[
+                                                            styles.optionsMenuInCard,
+                                                            styles.optionsMenuFloating,
+                                                            {
+                                                                top:
+                                                                    insets.top +
+                                                                    64,
+                                                            },
+                                                        ]}
+                                                    >
                                                     <TouchableOpacity
                                                         style={
                                                             styles.optionsMenuItem
@@ -883,7 +931,8 @@ export default function ThreadModal({
                                                             </Text>
                                                         </TouchableOpacity>
                                                     )}
-                                                </View>
+                                                    </View>
+                                                </Modal>
                                             )}
                                         </View>
                                     </View>
@@ -1214,6 +1263,13 @@ const styles = StyleSheet.create({
     },
     headerIconButton: {
         padding: 4,
+    },
+    optionsMenuScrim: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    },
+    optionsMenuFloating: {
+        right: 24,
     },
     optionsMenuInCard: {
         position: 'absolute',

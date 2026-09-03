@@ -13,7 +13,10 @@
 
 import { auth, db, functions } from '@/services/firebase'
 import { registerForPushNotificationsAsync } from '@/utils/registerForPushNotificationsAsync'
-import { GoogleSignin } from '@react-native-google-signin/google-signin'
+import {
+    GoogleSignin,
+    statusCodes,
+} from '@react-native-google-signin/google-signin'
 import * as AppleAuthentication from 'expo-apple-authentication'
 import * as Crypto from 'expo-crypto'
 import {
@@ -306,10 +309,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
             const signInResult = await GoogleSignin.signIn()
 
+            // User dismissed the Google sheet — not an error, don't toast
+            if (signInResult.type === 'cancelled') {
+                return
+            }
+
             const idToken = signInResult.data?.idToken
 
             if (!idToken) {
-                throw new Error('No ID token found')
+                throw new Error('missing-id-token')
             }
 
             const googleCredential = GoogleAuthProvider.credential(idToken)
@@ -319,8 +327,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             // Note: We don't create the user document here for new users
             // They will be redirected to the username-setup screen by the root layout
         } catch (error: any) {
+            // Cancel/in-progress are user actions, not failures
+            if (
+                error.code === statusCodes.SIGN_IN_CANCELLED ||
+                error.code === statusCodes.IN_PROGRESS
+            ) {
+                return
+            }
             console.error('Google Sign-In Error:', error)
-            throw new Error(error.message)
+            // Never surface raw SDK strings ("No ID token found") to users
+            if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+                throw new Error(
+                    'Google Play Services is unavailable or out of date on this device.'
+                )
+            }
+            throw new Error(
+                "Couldn't sign in with Google. Check your connection and try again."
+            )
         }
     }
 
@@ -370,7 +393,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 return
             }
             console.error('Apple Sign-In Error:', error)
-            throw new Error(error.message)
+            // Never surface raw SDK strings to users
+            throw new Error(
+                "Couldn't sign in with Apple. Check your connection and try again."
+            )
         }
     }
 

@@ -26,6 +26,7 @@ import {
     removePostFromList,
 } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
     collection,
@@ -68,6 +69,7 @@ export default function ListSelectionBottomSheet({
 }: ListSelectionBottomSheetProps) {
     const { user } = useAuth()
     const { showToast } = useToast()
+    const router = useRouter()
     const [lists, setLists] = useState<List[]>([])
     const [selectedListIds, setSelectedListIds] = useState<Set<string>>(
         new Set()
@@ -198,21 +200,16 @@ export default function ListSelectionBottomSheet({
             const sortedLists = myList ? [myList, ...otherLists] : otherLists
             setLists(sortedLists)
 
-            // If we're in "real" mode (postId exists), fetch current state from DB
+            // If we're in "real" mode (postId exists), fetch current state
+            // from DB. Selection is read-only here — saving happens only when
+            // the user actually taps a list (opening the sheet must not write
+            // anything).
             if (postId) {
                 const listsWithPost = await getListsContainingPost(
                     user.uid,
                     postId
                 )
                 setSelectedListIds(new Set(listsWithPost))
-
-                // Auto-select "My List" if post is not in any list (legacy behavior for existing posts)
-                if (listsWithPost.length === 0 && sortedLists.length > 0) {
-                    const defaultList = myList || sortedLists[0]
-                    if (defaultList) {
-                        await handleToggleList(defaultList.id, false)
-                    }
-                }
             }
         } catch (error) {
             console.error('Error fetching lists:', error)
@@ -279,7 +276,7 @@ export default function ListSelectionBottomSheet({
                     <View style={styles.listItemInfo}>
                         <View style={styles.listItemHeader}>
                             <Ionicons
-                                name={!item.isPublic ? 'lock-closed' : 'list'}
+                                name="list"
                                 size={16}
                                 color={colors.textSecondary}
                                 style={{ marginRight: 6 }}
@@ -360,6 +357,28 @@ export default function ListSelectionBottomSheet({
                             keyExtractor={(item) => item.id}
                             contentContainerStyle={styles.listContainer}
                             showsVerticalScrollIndicator={false}
+                            ListHeaderComponent={
+                                <TouchableOpacity
+                                    style={styles.createListButton}
+                                    onPress={() => {
+                                        onClose()
+                                        router.push('/create-list')
+                                    }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Create new list"
+                                >
+                                    <View style={styles.createListIcon}>
+                                        <Ionicons
+                                            name="add"
+                                            size={20}
+                                            color={colors.primary}
+                                        />
+                                    </View>
+                                    <Text style={styles.createListText}>
+                                        Create New List
+                                    </Text>
+                                </TouchableOpacity>
+                            }
                         />
                     )}
                 </Animated.View>
@@ -415,6 +434,30 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         backgroundColor: colors.cardElevated,
         borderRadius: 12,
+    },
+    createListButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        marginBottom: 8,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: colors.primary,
+    },
+    createListIcon: {
+        width: 24,
+        height: 24,
+        borderRadius: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    createListText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.primary,
     },
     listItemLeft: {
         flexDirection: 'row',

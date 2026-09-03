@@ -39,8 +39,8 @@ export default function ExploreSearchBar({
     const handleSubmit = () => {
         const trimmed = query.trim()
         if (trimmed.length >= 2) {
+            // Keep the query visible — clearing it made the search look lost
             onSubmit(trimmed)
-            setQuery('')
         }
     }
 

@@ -16,10 +16,13 @@ import { colors } from '@/theme/colors'
 import { Post } from '@/types'
 import React, { useState } from 'react'
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
+    Text,
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -42,6 +45,13 @@ interface UnifiedPreviewScreenProps {
     onNotAMatch?: () => void
     issues?: CatchIssue[]
     onRetake?: () => void
+    /**
+     * Upload progress 0–1 while the image is transferring, null otherwise.
+     * While `loading` is true a full-screen overlay blocks ALL navigation
+     * (including the tab bar) so an in-flight upload can't be orphaned by
+     * tapping away.
+     */
+    uploadProgress?: number | null
 }
 
 export default function UnifiedPreviewScreen({
@@ -59,6 +69,7 @@ export default function UnifiedPreviewScreen({
     onNotAMatch,
     issues = [],
     onRetake,
+    uploadProgress = null,
 }: UnifiedPreviewScreenProps) {
     const [caption, setCaption] = useState('')
     const [showListSelection, setShowListSelection] = useState(false)
@@ -178,6 +189,46 @@ export default function UnifiedPreviewScreen({
                 initialSelectedIds={selectedListIds}
                 onSelectionChange={setSelectedListIds}
             />
+
+            {/* Full-screen upload blocker: an RN Modal covers the tab bar,
+                so tapping away mid-upload can't orphan the post */}
+            <Modal visible={loading} transparent animationType="fade">
+                <View style={styles.uploadOverlay}>
+                    <View style={styles.uploadCard}>
+                        {uploadProgress !== null ? (
+                            <>
+                                <View style={styles.progressTrack}>
+                                    <View
+                                        style={[
+                                            styles.progressFill,
+                                            {
+                                                width: `${Math.round(uploadProgress * 100)}%`,
+                                            },
+                                        ]}
+                                    />
+                                </View>
+                                <Text style={styles.uploadText}>
+                                    Uploading… {Math.round(uploadProgress * 100)}
+                                    %
+                                </Text>
+                            </>
+                        ) : (
+                            <>
+                                <ActivityIndicator
+                                    size="large"
+                                    color={colors.primary}
+                                />
+                                <Text style={styles.uploadText}>
+                                    {loadingText}
+                                </Text>
+                            </>
+                        )}
+                        <Text style={styles.uploadHint}>
+                            Keep the app open until this finishes
+                        </Text>
+                    </View>
+                </View>
+            </Modal>
         </KeyboardAvoidingView>
     )
 }
@@ -198,5 +249,41 @@ const styles = StyleSheet.create({
     },
     nudgeGap: {
         marginTop: 10,
+    },
+    uploadOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.75)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    uploadCard: {
+        width: '80%',
+        maxWidth: 320,
+        backgroundColor: colors.cardElevated,
+        borderRadius: 16,
+        padding: 24,
+        alignItems: 'center',
+        gap: 12,
+    },
+    progressTrack: {
+        width: '100%',
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: colors.border,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        borderRadius: 3,
+        backgroundColor: colors.primary,
+    },
+    uploadText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: colors.textPrimary,
+    },
+    uploadHint: {
+        fontSize: 12,
+        color: colors.textTertiary,
     },
 })
