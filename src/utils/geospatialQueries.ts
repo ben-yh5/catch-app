@@ -40,6 +40,15 @@ const cache = new Map<
     { data: EnrichedPostLocation[]; timestamp: number }
 >()
 
+/**
+ * Drop all cached viewport results. Called after a post is created or
+ * deleted so the map reflects the change on its next fetch instead of
+ * serving up-to-5-minute-old data.
+ */
+export function invalidateAreaCache(): void {
+    cache.clear()
+}
+
 function getCacheKey(bounds: MapBounds, options?: AreaQueryOptions): string {
     // Round to 3 decimal places (~100m precision) for cache key
     const base = `v2:${bounds.north.toFixed(3)},${bounds.south.toFixed(3)},${bounds.east.toFixed(3)},${bounds.west.toFixed(3)}`

@@ -5,13 +5,14 @@ import ThreadModal from '@/components/ThreadModal'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
-import { usePost } from '@/context/PostContext'
+import { usePost, usePostEvents } from '@/context/PostContext'
 import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post, SearchPost } from '@/types'
 import {
     getPostsInViewport as fetchViewportPosts,
     getPostLocations,
+    invalidateAreaCache,
     MapBounds,
 } from '@/utils/geospatialQueries'
 import { isLostPlace } from '@/utils/postClassification'
@@ -76,6 +77,7 @@ export default function MapScreen() {
     // State
     const [visiblePosts, setVisiblePosts] = useState<Post[]>([])
     const [loadingPosts, setLoadingPosts] = useState(false)
+    const [zoomedTooFarOut, setZoomedTooFarOut] = useState(false)
     const [activeFilter, setActiveFilter] = useState<FilterType>('trending')
     const [userLocation, setUserLocation] =
         useState<Location.LocationObject | null>(null)
@@ -530,9 +532,16 @@ export default function MapScreen() {
     const loadVisiblePosts = useCallback(async () => {
         if (!mapRef.current || isListMode || isSearchModeRef.current) return
 
-        // Skip fetch at very low zoom — viewport too large for meaningful pin display
+        // Skip fetch at very low zoom — viewport too large for meaningful
+        // pin display. Track it so the bottom sheet can say "zoom in"
+        // instead of the misleading default "No shots in this area".
         const zoom = await mapRef.current.getZoom()
-        if (zoom < 5) return
+        if (zoom < 5) {
+            setZoomedTooFarOut(true)
+            setLoadingPosts(false)
+            return
+        }
+        setZoomedTooFarOut(false)
 
         // Throttle to one fetch per second, but defer instead of dropping —
         // otherwise a pan within 1s of the last fetch never loads its pins
@@ -648,6 +657,17 @@ export default function MapScreen() {
             setLoadingPosts(false)
         }
     }, [cachePosts, isListMode])
+
+    // Refresh the map when a post is created or deleted anywhere in the
+    // app — otherwise the 5-minute area cache plus the same-bounds skip
+    // means your own new post doesn't appear until you pan away and back.
+    usePostEvents((event) => {
+        if (event.action !== 'create' && event.action !== 'delete') return
+        invalidateAreaCache()
+        lastFetchRef.current = 0
+        lastFetchBoundsRef.current = null
+        loadVisiblePostsRef.current?.()
+    }, [])
 
     // Retry after a failed viewport fetch — reset the throttle/bounds cache
     // so the retry actually refetches instead of being skipped
@@ -880,7 +900,13 @@ export default function MapScreen() {
         setSearchPostResults([])
         setActiveSearchQuery('')
         router.setParams({ searchQuery: '' })
-        // Resume normal map behavior
+        // Resume normal map behavior. Reset the throttle/bounds cache first
+        // (like handleViewportRetry) — the search overwrote visiblePosts, so
+        // if the camera didn't move, an unreset reload would be skipped as
+        // "same viewport" and leave the sheet stuck on the search results
+        // (an empty search = "No shots in this area" over a full map).
+        lastFetchRef.current = 0
+        lastFetchBoundsRef.current = null
         loadVisiblePosts()
     }, [loadVisiblePosts, router])
 
@@ -1225,12 +1251,16 @@ export default function MapScreen() {
                     emptyTitle={
                         isSearchMode
                             ? `No shots match "${activeSearchQuery}"`
-                            : undefined
+                            : zoomedTooFarOut
+                              ? 'Zoomed out too far'
+                              : undefined
                     }
                     emptySubtitle={
                         isSearchMode
                             ? 'Try different words, like "sunset viewpoint" or "street art"'
-                            : undefined
+                            : zoomedTooFarOut
+                              ? 'Zoom in to load the shots in an area'
+                              : undefined
                     }
                     onClose={isSearchMode ? handleSearchClear : handleListClose}
                     isListMode={isListMode || isSearchMode}

@@ -1,4 +1,5 @@
 import ActivityFeed from '@/components/NotificationInbox'
+import PassportView from '@/components/PassportView'
 import ReportBottomSheet from '@/components/ReportBottomSheet'
 import ThreadModal from '@/components/ThreadModal'
 import AppButton from '@/components/ui/AppButton'
@@ -82,7 +83,9 @@ export default function UnifiedProfileView({
         useState<QueryDocumentSnapshot<DocumentData> | null>(null)
     const [lastCatchDoc, setLastCatchDoc] =
         useState<QueryDocumentSnapshot<DocumentData> | null>(null)
-    const [activeTab, setActiveTab] = useState<'posts' | 'catches'>('posts')
+    const [activeTab, setActiveTab] = useState<
+        'posts' | 'catches' | 'passport'
+    >('posts')
     const [refreshing, setRefreshing] = useState(false)
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
@@ -703,8 +706,10 @@ export default function UnifiedProfileView({
         }
     }
 
-    // Combine and sort posts based on what's toggled on
+    // Combine and sort posts based on what's toggled on. The passport tab
+    // renders no post grid — PassportView takes over via ListEmptyComponent.
     const displayedPosts = React.useMemo(() => {
+        if (activeTab === 'passport') return []
         return activeTab === 'posts' ? posts : catches
     }, [activeTab, posts, catches])
 
@@ -922,12 +927,48 @@ export default function UnifiedProfileView({
                                             />
                                         )}
                                     </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.tab,
+                                            activeTab === 'passport' &&
+                                                styles.tabActive,
+                                        ]}
+                                        onPress={() => {
+                                            setActiveTab('passport')
+                                        }}
+                                        accessibilityLabel="Passport"
+                                        accessibilityRole="button"
+                                        accessibilityState={{
+                                            selected: activeTab === 'passport',
+                                        }}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.tabText,
+                                                activeTab === 'passport' &&
+                                                    styles.tabTextActive,
+                                            ]}
+                                        >
+                                            Passport
+                                        </Text>
+                                        {activeTab === 'passport' && (
+                                            <View
+                                                style={styles.activeIndicator}
+                                            />
+                                        )}
+                                    </TouchableOpacity>
                                 </View>
                             </View>
                         )
                     }
                     ListEmptyComponent={
-                        loading ? (
+                        activeTab === 'passport' ? (
+                            <PassportView
+                                userId={userId}
+                                isOwnProfile={isOwnProfile}
+                            />
+                        ) : loading ? (
                             <View>
                                 <CompactPostCardSkeleton />
                                 <CompactPostCardSkeleton />

@@ -132,6 +132,7 @@ There is deliberately **no scoring economy** — no points, XP, royalties, or ca
 - **Nudge over penalty**: `NudgeCard` suggests catching an existing nearby thread instead of posting a duplicate — behavior is steered by UX, not point differentials.
 - **Catch reveal**: After a successful catch, `CatchRevealModal` shows the then/now pair (original photo + new catch) — this payoff screen is the success feedback (no toast). Wired into both catch paths (`useCatchFlow` → ThreadModal, and PostScreen's nudge path).
 - **Catch permits**: `validateCatch` is a gate, not advice — success issues a 10-minute permit that security rules require for the catch write and `onPostCreated` consumes in its transaction. See `catch_permits` schema entry.
+- **Passport**: third profile tab (Posts / Catches / Passport, `PassportView` component) on both own and other profiles, plus a standalone `/passport` route for deep links. Stat tiles (countries/cities/pioneers/catches) plus the list of cities the user has posted or caught in from `user_coverage.cities`, ordered by activity, with per-city pioneer counts. Own passport reads `user_coverage` directly; other users' go through the `getPassport` callable (cities only — never the geohash cell arrays) which honors the owner's `passportPublic` setting (default public; Settings toggle). Collection and attribution only — no levels or completion rewards. See `PASSPORT_SCREEN.md`.
 
 ### Location Security
 
@@ -179,6 +180,7 @@ Notification types: `new_post`, `follow`, `caught`.
 - `followers`, `following` (arrays of user IDs)
 - `blockedUsers` (array of user IDs; server-only writes via `blockUser`/`unblockUser`)
 - `pushToken` (FCM/APNs token)
+- `passportPublic` (boolean, default public — only explicit `false` hides the passport from other users)
 
 ### users/{userId}/notifications/{notifId}
 - `type`: `'new_post' | 'follow' | 'caught'`
@@ -214,6 +216,10 @@ Notification types: `new_post`, `follow`, `caught`.
 - `uid`, `rootPostId`, `expiresAt`, `createdAt`
 - Issued by `validateCatch` on success (10 min TTL). Security rules require a live permit to create a catch post; `onPostCreated` consumes it (first catch wins) and rejects+deletes permitless catches (stamped `rejectedNoPermit` so `onPostDeleted` skips counter decrements)
 
+### user_coverage/{userId} (server-only writes, owner-only reads)
+- `cells5`, `cells6`: geohash arrays (map coverage overlay)
+- `cities`: map keyed `{country}|{city}` → `{ country, city, posted, caught, pioneers, lastActivity }` — passport stamps. Written best-effort by `onPostCreated` (originals stamp their geocoded city; catches inherit the root's `locationMeta`), rebuilt by `backfillCoverage`. Permanent: post deletion does not decrement stamps.
+
 ### training_pairs/{pairId} (opt-in ML training data, written by client when `dataContributionEnabled`)
 - `pairId`, `userId`, `originalId`, `catchId`, `label` (`POSITIVE` | `HARD_NEGATIVE`)
 - `originalStoragePath`, `catchStoragePath` — images live under the `training_data/` Storage prefix
@@ -241,6 +247,7 @@ Notification types: `new_post`, `follow`, `caught`.
 | `searchPosts` | HTTPS Callable | Semantic vector search: query expansion → embedding → Firestore `findNearest()` → geo re-ranking |
 | `backfillEmbeddings` | HTTPS Callable | Admin-only: retroactively enriches existing posts with geocoding, vision tags, and embeddings |
 | `backfillCoverage` | HTTPS Callable | Admin-only: rebuilds `geohash_cells`/`user_coverage` from existing `post_locations` |
+| `getPassport` | HTTPS Callable | Returns a user's passport city stamps (cities map only — never `cells5`/`cells6`); respects `passportPublic` |
 | `onImageUpload` | Storage Trigger | Auto-generates thumbnail and medium image variants |
 
 ## Key Patterns
@@ -268,7 +275,7 @@ Notification types: `new_post`, `follow`, `caught`.
 ## Firestore Security Rules
 
 Rules enforce authorization, not just authentication:
-- **Users**: Reads require authentication (`allow read: if request.auth != null`). Self-update restricted to allowlisted fields (`username`, `pushToken`, `notificationSettings`, `dataContributionEnabled`, `bio`). Server-computed fields (`contribution`, `totalPosts`, `totalCatches`, `followers`, `following`) only writable by Cloud Functions (admin SDK).
+- **Users**: Reads require authentication (`allow read: if request.auth != null`). Self-update restricted to allowlisted fields (`username`, `pushToken`, `notificationSettings`, `dataContributionEnabled`, `passportPublic`, `bio`). Server-computed fields (`contribution`, `totalPosts`, `totalCatches`, `followers`, `following`) only writable by Cloud Functions (admin SDK).
 - **Followers/Following**: Managed exclusively by `followUser`/`unfollowUser` Cloud Functions. No client-side writes.
 - **Posts**: `create` requires `authorId == auth.uid`. Originals must have null `parentPostId`/`rootPostId` (no thread pollution); catches require a live `catch_permits/{uid}_{rootPostId}` doc (issued by `validateCatch`), so forged catches are blocked at the rules layer. No client-side updates allowed (`catchCount` managed by Cloud Functions). Only author can delete.
 - **Notifications**: Proper subcollection rules under `match /notifications/{notifId}` with owner-only access. Updates restricted to `read` field only.

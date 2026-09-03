@@ -2,8 +2,8 @@ import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { distanceBetween, geohashQueryBounds } from 'geofire-common'
 import { TaskType } from '@google/generative-ai'
-import { getGenAI } from '../lib/gemini'
-import { updateCoverageCells } from '../lib/coverage'
+import { GEMINI_FLASH_MODEL, getGenAI } from '../lib/gemini'
+import { recordPassportCity, updateCoverageCells } from '../lib/coverage'
 import { NEARBY_THRESHOLD_METERS, MAX_INSTANCES } from '../lib/constants'
 import { sendPushNotification } from '../lib/notifications'
 
@@ -230,6 +230,35 @@ export const onPostCreated = functions
                         e
                     )
                 }
+
+                // Passport city stamp for the catch. Catches aren't geocoded
+                // themselves — they happen within the catch radius of the
+                // root, so the root's locationMeta is the city of record. If
+                // the root hasn't been enriched (or enrichment failed), skip;
+                // backfillCoverage repairs the gap.
+                try {
+                    if (rootPostId) {
+                        const rootLocationQuery = await db
+                            .collection('post_locations')
+                            .where('postId', '==', rootPostId)
+                            .limit(1)
+                            .get()
+                        const rootMeta =
+                            rootLocationQuery.docs[0]?.data()?.locationMeta
+                        if (rootMeta?.country && rootMeta?.city) {
+                            await recordPassportCity(db, authorId, {
+                                country: rootMeta.country,
+                                city: rootMeta.city,
+                                caught: 1,
+                            })
+                        }
+                    }
+                } catch (e) {
+                    functions.logger.warn(
+                        `[onPostCreated] Passport city update failed for catch ${postId}`,
+                        e
+                    )
+                }
             }
 
             // Handle ORIGINAL posts
@@ -407,7 +436,7 @@ export const onPostCreated = functions
                             const imageBase64 = imageBuffer.toString('base64')
 
                             const model = getGenAI().getGenerativeModel({
-                                model: 'gemini-2.0-flash',
+                                model: GEMINI_FLASH_MODEL,
                             })
                             const result = await Promise.race([
                                 model.generateContent([
@@ -524,6 +553,26 @@ export const onPostCreated = functions
                     } catch (e) {
                         functions.logger.warn(
                             `[onPostCreated] Coverage cell update failed for post ${postId}`,
+                            e
+                        )
+                    }
+
+                    // Passport city stamp for the original, from the geocode
+                    // above. Skipped when Nominatim failed or returned no
+                    // city — backfillCoverage repairs the gap.
+                    try {
+                        const meta = enrichmentUpdate.locationMeta
+                        if (meta?.country && meta?.city) {
+                            await recordPassportCity(db, authorId, {
+                                country: meta.country,
+                                city: meta.city,
+                                posted: 1,
+                                pioneers: isPioneer ? 1 : 0,
+                            })
+                        }
+                    } catch (e) {
+                        functions.logger.warn(
+                            `[onPostCreated] Passport city update failed for post ${postId}`,
                             e
                         )
                     }

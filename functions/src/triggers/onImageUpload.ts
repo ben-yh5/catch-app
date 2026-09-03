@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import * as fs from 'fs-extra'
@@ -87,12 +88,22 @@ export const onImageUpload = functions
                 .resize(600, 600, { fit: 'cover' })
                 .toFile(mediumPath)
 
-            // 4. Upload resized images
+            // 4. Upload resized images, attaching Firebase download tokens
+            // so we can build permanent tokenized URLs — the same URL shape
+            // the client SDK's getDownloadURL produces for photoURL. (The
+            // previous far-future getSignedUrl approach required the
+            // iam.serviceAccounts.signBlob permission, which the runtime
+            // service account doesn't hold, and signed URLs also break if
+            // the signing key is ever rotated.)
+            const thumbToken = randomUUID()
+            const mediumToken = randomUUID()
+
             await bucket.upload(thumbPath, {
                 destination: thumbStoragePath,
                 metadata: {
                     contentType: contentType,
                     cacheControl: 'public, max-age=31536000', // Cache for 1 year
+                    metadata: { firebaseStorageDownloadTokens: thumbToken },
                 },
             })
 
@@ -101,6 +112,7 @@ export const onImageUpload = functions
                 metadata: {
                     contentType: contentType,
                     cacheControl: 'public, max-age=31536000',
+                    metadata: { firebaseStorageDownloadTokens: mediumToken },
                 },
             })
 
@@ -190,33 +202,13 @@ export const onImageUpload = functions
             }
 
             if (matchDoc) {
-                // Construct the public URLs for the new files
-                // We need to get the download URL.
-                // `getSignedUrl` is one way, but standard Firebase access is via `getDownloadURL` (public w/ token).
-                // For public read access (if rules allow), we can just construct the URL.
-                // Our rules allow read if authenticated.
-
-                // To be consistent with how the client gets URLs (with tokens), we should ask the bucket.
-                const thumbFile = bucket.file(thumbStoragePath)
-                const mediumFile = bucket.file(mediumStoragePath)
-
-                // We need to make the file public or get a token.
-                // Since we want these to be permanently accessible, let's look at how we can get a persistent URL.
-                // `file.getSignedUrl` with far future expiration is a common pattern for backend generation.
-
-                const [thumbUrl] = await thumbFile.getSignedUrl({
-                    action: 'read',
-                    expires: '03-01-2500',
-                })
-
-                const [mediumUrl] = await mediumFile.getSignedUrl({
-                    action: 'read',
-                    expires: '03-01-2500',
-                })
+                // Tokenized download URLs from the tokens attached at upload
+                const downloadURL = (storagePath: string, token: string) =>
+                    `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`
 
                 await matchDoc.ref.update({
-                    thumbnailURL: thumbUrl,
-                    mediumURL: mediumUrl,
+                    thumbnailURL: downloadURL(thumbStoragePath, thumbToken),
+                    mediumURL: downloadURL(mediumStoragePath, mediumToken),
                 })
 
                 functions.logger.log(

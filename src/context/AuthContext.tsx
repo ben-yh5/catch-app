@@ -49,6 +49,8 @@ interface AuthContextType {
     deleteAccount: () => Promise<void>
     dataContributionEnabled: boolean
     toggleDataContribution: (enabled: boolean) => Promise<void>
+    passportPublic: boolean
+    togglePassportPublic: (enabled: boolean) => Promise<void>
 
     // Blocking
     blockedUserIds: string[]
@@ -85,6 +87,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [loading, setLoading] = useState(true)
     const [dataContributionEnabled, setDataContributionEnabled] =
         useState(false)
+    // Default public — only an explicit false makes a passport private
+    const [passportPublic, setPassportPublic] = useState(true)
     const [totalPosts, setTotalPosts] = useState(0)
     const [totalCatches, setTotalCatches] = useState(0)
     const [blockedUserIds, setBlockedUserIds] = useState<string[]>([])
@@ -120,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                         setDataContributionEnabled(
                             data.dataContributionEnabled || false
                         )
+                        setPassportPublic(data.passportPublic !== false)
                         setTotalPosts(data.totalPosts || 0)
                         setTotalCatches(data.totalCatches || 0)
                         setBlockedUserIds(data.blockedUsers || [])
@@ -155,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 }
             } else {
                 setDataContributionEnabled(false)
+                setPassportPublic(true)
                 setTotalPosts(0)
                 setTotalCatches(0)
                 setBlockedUserIds([])
@@ -459,6 +465,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     /**
+     * Update passport visibility setting
+     */
+    const togglePassportPublic = async (enabled: boolean) => {
+        if (!user) return
+
+        try {
+            await updateDoc(doc(db, 'users', user.uid), {
+                passportPublic: enabled,
+            })
+            setPassportPublic(enabled)
+        } catch (error: any) {
+            console.error('Error updating passport visibility', error)
+            throw new Error(error.message)
+        }
+    }
+
+    /**
      * Block / unblock — server-managed via Cloud Functions (blockedUsers is
      * not client-writable). Local state updates immediately so feeds and
      * profiles filter without a re-fetch.
@@ -487,6 +510,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 logout,
                 deleteAccount,
                 dataContributionEnabled,
+                passportPublic,
+                togglePassportPublic,
                 toggleDataContribution,
                 blockedUserIds,
                 blockUser,

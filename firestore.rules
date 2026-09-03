@@ -16,7 +16,7 @@ service cloud.firestore {
       // Server-computed fields (totalPosts, totalCatches, followers, following) are only writable by Cloud Functions
       allow update: if request.auth != null && request.auth.uid == userId &&
                        request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['username', 'pushToken', 'notificationSettings', 'dataContributionEnabled', 'bio']);
+                         .hasOnly(['username', 'pushToken', 'notificationSettings', 'dataContributionEnabled', 'passportPublic', 'bio']);
 
       // Follow/unfollow operations are handled atomically by followUser/unfollowUser Cloud Functions
       // No client-side updates to followers or following arrays

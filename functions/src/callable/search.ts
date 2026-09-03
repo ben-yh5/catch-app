@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { distanceBetween } from 'geofire-common'
 import { TaskType } from '@google/generative-ai'
-import { getGenAI } from '../lib/gemini'
+import { GEMINI_FLASH_MODEL, getGenAI } from '../lib/gemini'
 import { requireAdmin } from '../lib/adminAuth'
 import { MAX_INSTANCES } from '../lib/constants'
 
@@ -55,7 +55,7 @@ export const searchPosts = functions
             if (isShortQuery) {
                 // Run expansion + base embedding concurrently
                 const flashModel = getGenAI().getGenerativeModel({
-                    model: 'gemini-2.0-flash',
+                    model: GEMINI_FLASH_MODEL,
                 })
                 const [expansionResult, baseEmbResult] = await Promise.all([
                     flashModel
@@ -345,7 +345,7 @@ export const backfillEmbeddings = functions
                             const imageBase64 = imageBuffer.toString('base64')
 
                             const model = getGenAI().getGenerativeModel({
-                                model: 'gemini-2.0-flash',
+                                model: GEMINI_FLASH_MODEL,
                             })
                             const result = await Promise.race([
                                 model.generateContent([

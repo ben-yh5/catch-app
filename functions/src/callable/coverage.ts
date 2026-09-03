@@ -2,10 +2,11 @@ import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { requireAdmin } from '../lib/adminAuth'
 import { MAX_INSTANCES } from '../lib/constants'
+import { passportCityKey } from '../lib/coverage'
 
 /**
  * One-time admin function to backfill geohash_cells and user_coverage
- * from existing post_locations data.
+ * (cells + passport cities) from existing post_locations data.
  *
  * Run once after deploying the coverage feature to populate historical data.
  * Uses FieldValue.increment() and arrayUnion() so it's safe to re-run,
@@ -56,6 +57,23 @@ export const backfillCoverage = functions
         let totalProcessed = 0
         let totalErrors = 0
 
+        // Accumulated across all batches for the passport-cities rebuild in
+        // Phase 3. Entries are tiny (a few strings per post), so holding the
+        // full set in memory is fine at current scale.
+        const postMeta = new Map<
+            string,
+            {
+                authorId: string
+                isOriginal: boolean
+                isPioneer: boolean
+                rootPostId: string | null
+            }
+        >()
+        const cityByPostId = new Map<
+            string,
+            { country: string; city: string }
+        >()
+
         while (true) {
             let q: admin.firestore.Query = db
                 .collection('post_locations')
@@ -84,7 +102,14 @@ export const backfillCoverage = functions
                 const postSnaps = await db.getAll(...postRefs)
                 postSnaps.forEach((snap) => {
                     if (snap.exists) {
-                        authorMap.set(snap.id, snap.data()!.authorId)
+                        const data = snap.data()!
+                        authorMap.set(snap.id, data.authorId)
+                        postMeta.set(snap.id, {
+                            authorId: data.authorId,
+                            isOriginal: data.isOriginal === true,
+                            isPioneer: data.isPioneer === true,
+                            rootPostId: data.rootPostId ?? null,
+                        })
                     }
                 })
             }
@@ -104,6 +129,17 @@ export const backfillCoverage = functions
                 const geohash = data.geohash
                 const postId = data.postId
                 const authorId = authorMap.get(postId)
+
+                if (
+                    postId &&
+                    data.locationMeta?.country &&
+                    data.locationMeta?.city
+                ) {
+                    cityByPostId.set(postId, {
+                        country: data.locationMeta.country,
+                        city: data.locationMeta.city,
+                    })
+                }
 
                 if (!geohash || !authorId) continue
 
@@ -195,7 +231,89 @@ export const backfillCoverage = functions
             )
         }
 
-        const summary = { totalProcessed, totalErrors }
+        // --- Phase 3: Rebuild passport cities on user_coverage ---
+        // Originals stamp their own city; catches inherit the root's city
+        // (catches aren't geocoded — they happen within the catch radius of
+        // the root). Posts whose city is unknown (enrichment never ran, or
+        // root deleted) are skipped and logged.
+        functions.logger.info(
+            '[backfillCoverage] Phase 3: Rebuilding passport cities'
+        )
+
+        type CityStats = {
+            country: string
+            city: string
+            posted: number
+            caught: number
+            pioneers: number
+        }
+        const userCities = new Map<string, Map<string, CityStats>>()
+        let cityUnknown = 0
+
+        for (const [postId, meta] of postMeta) {
+            const citySourceId = meta.isOriginal ? postId : meta.rootPostId
+            const cityInfo = citySourceId
+                ? cityByPostId.get(citySourceId)
+                : undefined
+            if (!cityInfo) {
+                cityUnknown++
+                continue
+            }
+
+            const key = passportCityKey(cityInfo.country, cityInfo.city)
+            if (!userCities.has(meta.authorId)) {
+                userCities.set(meta.authorId, new Map())
+            }
+            const cities = userCities.get(meta.authorId)!
+            if (!cities.has(key)) {
+                cities.set(key, {
+                    country: cityInfo.country,
+                    city: cityInfo.city,
+                    posted: 0,
+                    caught: 0,
+                    pioneers: 0,
+                })
+            }
+            const stats = cities.get(key)!
+            if (meta.isOriginal) {
+                stats.posted++
+                if (meta.isPioneer) stats.pioneers++
+            } else {
+                stats.caught++
+            }
+        }
+
+        let cityUsersWritten = 0
+        for (const [userId, cities] of userCities) {
+            try {
+                const citiesField: Record<string, unknown> = {}
+                for (const [key, stats] of cities) {
+                    citiesField[key] = {
+                        ...stats,
+                        lastActivity:
+                            admin.firestore.FieldValue.serverTimestamp(),
+                    }
+                }
+                await db
+                    .collection('user_coverage')
+                    .doc(userId)
+                    .set({ cities: citiesField }, { merge: true })
+                cityUsersWritten++
+            } catch (e) {
+                totalErrors++
+                functions.logger.error(
+                    `[backfillCoverage] Passport cities write failed for user ${userId}:`,
+                    e
+                )
+            }
+        }
+
+        const summary = {
+            totalProcessed,
+            totalErrors,
+            cityUsersWritten,
+            cityUnknown,
+        }
         functions.logger.info(`[backfillCoverage] Complete:`, summary)
         return summary
     })

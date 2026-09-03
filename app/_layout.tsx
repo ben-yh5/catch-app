@@ -94,7 +94,8 @@ function RootLayoutNav() {
             segments[0] === 'user-profile' ||
             segments[0] === 'create-list' ||
             segments[0] === 'list-detail' ||
-            segments[0] === 'blocked-users'
+            segments[0] === 'blocked-users' ||
+            segments[0] === 'passport'
         const inUsernameSetup = segments[0] === 'username-setup'
 
         if (!user && (inAuthGroup || inProtectedRoute || inUsernameSetup)) {
@@ -144,6 +145,10 @@ function RootLayoutNav() {
                 />
                 <Stack.Screen
                     name="blocked-users"
+                    options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                    name="passport"
                     options={{ headerShown: false }}
                 />
             </Stack>

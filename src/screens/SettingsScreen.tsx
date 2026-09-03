@@ -25,6 +25,8 @@ export default function SettingsScreen() {
         deleteAccount,
         dataContributionEnabled,
         toggleDataContribution,
+        passportPublic,
+        togglePassportPublic,
         notificationSettings,
         toggleNotificationSetting,
     } = useAuth()
@@ -50,6 +52,16 @@ export default function SettingsScreen() {
 
     const handleToggleDataContribution = (enabled: boolean) => {
         toggleDataContribution(enabled).catch(() =>
+            showToast(
+                'error',
+                "Couldn't save setting",
+                'Check your connection and try again.'
+            )
+        )
+    }
+
+    const handleTogglePassportPublic = (enabled: boolean) => {
+        togglePassportPublic(enabled).catch(() =>
             showToast(
                 'error',
                 "Couldn't save setting",
@@ -170,6 +182,33 @@ export default function SettingsScreen() {
                             accessibilityRole="switch"
                             accessibilityState={{
                                 checked: dataContributionEnabled,
+                            }}
+                        />
+                    </View>
+
+                    <View style={[styles.settingItem, { marginTop: 12 }]}>
+                        <View style={styles.settingTextContainer}>
+                            <Text style={styles.settingLabel}>
+                                Public Passport
+                            </Text>
+                            <Text style={styles.settingDescription}>
+                                Let other players see the city stamps in your
+                                passport. Your exact locations are never
+                                shared.
+                            </Text>
+                        </View>
+                        <Switch
+                            value={passportPublic}
+                            onValueChange={handleTogglePassportPublic}
+                            trackColor={{
+                                false: colors.border,
+                                true: colors.primary,
+                            }}
+                            thumbColor={colors.inverseTextPrimary}
+                            accessibilityLabel="Public Passport"
+                            accessibilityRole="switch"
+                            accessibilityState={{
+                                checked: passportPublic,
                             }}
                         />
                     </View>
