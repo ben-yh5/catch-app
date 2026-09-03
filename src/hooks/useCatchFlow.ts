@@ -281,6 +281,26 @@ export function useCatchFlow({
             const HEADING_THRESHOLD = 75
             const PITCH_THRESHOLD = 75
 
+            // Fail fast: if the original recorded an orientation but the
+            // device produced none, the angle check can't run — say so
+            // instead of silently passing a weaker validation.
+            if (validation.heading !== undefined && capturedHeading === null) {
+                found.push({
+                    title: 'Compass unavailable',
+                    message:
+                        "This shot requires matching the original's direction, but your device didn't report a compass heading. Retake the photo, holding your phone level.",
+                    requiresRetake: true,
+                })
+            }
+            if (validation.pitch !== undefined && capturedPitch === null) {
+                found.push({
+                    title: 'Tilt sensor unavailable',
+                    message:
+                        "This shot requires matching the original's angle, but your device didn't report a tilt reading. Retake the photo, holding your phone steady.",
+                    requiresRetake: true,
+                })
+            }
+
             if (validation.heading !== undefined && capturedHeading !== null) {
                 let headingDiff = Math.abs(validation.heading - capturedHeading)
                 if (headingDiff > 180) headingDiff = 360 - headingDiff
@@ -405,13 +425,24 @@ export function useCatchFlow({
 
             // catchCount is now incremented server-side by onPostCreated Cloud Function
 
-            // Add to lists
+            // Add to lists. Scoped so a list failure can't propagate to the
+            // outer catch and masquerade as "Catch failed" — the catch post
+            // already exists at this point.
             if (listIds && listIds.size > 0) {
-                await Promise.all(
-                    Array.from(listIds).map((id) =>
-                        addPostToList(id, docRef.id)
+                try {
+                    await Promise.all(
+                        Array.from(listIds).map((id) =>
+                            addPostToList(id, docRef.id)
+                        )
                     )
-                )
+                } catch (listError) {
+                    console.error('Error adding to lists:', listError)
+                    showToast(
+                        'warning',
+                        'Caught, but not saved to lists',
+                        "Your catch was posted, but couldn't be added to the selected lists."
+                    )
+                }
             }
 
             // Data contribution. Requires the original's real coordinates —

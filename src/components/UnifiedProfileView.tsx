@@ -202,6 +202,13 @@ export default function UnifiedProfileView({
             }
         } catch (error) {
             console.error('Error fetching user data:', error)
+            // Fail loud: without this, a failed load renders as an empty
+            // profile — indistinguishable from a user with zero posts
+            showToast(
+                'error',
+                "Couldn't load profile",
+                'Check your connection and pull down to retry.'
+            )
         } finally {
             setLoading(false)
         }

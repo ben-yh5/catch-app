@@ -151,13 +151,15 @@ export const onPostDeleted = functions
                     // from the surviving catches (the old root's counter may
                     // be missing or stale). isPioneer is inherited from the
                     // deleted root — it's a property of the location, not the
-                    // author.
+                    // author. If the deleted root never had the field, default
+                    // to false: missing data must not fabricate the more
+                    // privileged classification.
                     batch.update(newRootDoc.ref, {
                         isOriginal: true,
                         parentPostId: null,
                         rootPostId: null,
                         catchCount: catchesQuery.docs.length - 1,
-                        isPioneer: postData.isPioneer ?? true,
+                        isPioneer: postData.isPioneer ?? false,
                     })
 
                     // Update remaining catches to point to new root

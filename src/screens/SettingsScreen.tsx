@@ -31,6 +31,31 @@ export default function SettingsScreen() {
     const insets = useSafeAreaInsets()
     const [deleting, setDeleting] = useState(false)
 
+    // Toggles revert optimistic state and rethrow on save failure — surface
+    // it so a snapped-back switch doesn't read as a flaky UI
+    const handleToggleNotification = (
+        type: 'notifyOnCatch' | 'notifyOnFollow',
+        enabled: boolean
+    ) => {
+        toggleNotificationSetting(type, enabled).catch(() =>
+            showToast(
+                'error',
+                "Couldn't save setting",
+                'Check your connection and try again.'
+            )
+        )
+    }
+
+    const handleToggleDataContribution = (enabled: boolean) => {
+        toggleDataContribution(enabled).catch(() =>
+            showToast(
+                'error',
+                "Couldn't save setting",
+                'Check your connection and try again.'
+            )
+        )
+    }
+
     const handleDeleteAccount = () => {
         Alert.alert(
             'Delete Account',
@@ -133,7 +158,7 @@ export default function SettingsScreen() {
                         </View>
                         <Switch
                             value={dataContributionEnabled}
-                            onValueChange={toggleDataContribution}
+                            onValueChange={handleToggleDataContribution}
                             trackColor={{
                                 false: colors.border,
                                 true: colors.primary,
@@ -168,7 +193,7 @@ export default function SettingsScreen() {
                         <Switch
                             value={notificationSettings.notifyOnCatch}
                             onValueChange={(val) =>
-                                toggleNotificationSetting('notifyOnCatch', val)
+                                handleToggleNotification('notifyOnCatch', val)
                             }
                             trackColor={{
                                 false: colors.border,
@@ -195,7 +220,7 @@ export default function SettingsScreen() {
                         <Switch
                             value={notificationSettings.notifyOnFollow}
                             onValueChange={(val) =>
-                                toggleNotificationSetting('notifyOnFollow', val)
+                                handleToggleNotification('notifyOnFollow', val)
                             }
                             trackColor={{
                                 false: colors.border,

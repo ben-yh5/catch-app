@@ -59,6 +59,60 @@ describe('validateCatch', () => {
         ).rejects.toMatchObject({ code: 'invalid-argument' })
     })
 
+    it('rejects non-numeric coordinates instead of coercing', async () => {
+        await expect(
+            run(
+                { postId: 'p1', userLat: '40.7', userLng: '-74.0' },
+                makeContext('user1')
+            )
+        ).rejects.toMatchObject({ code: 'invalid-argument' })
+    })
+
+    it('rejects NaN coordinates', async () => {
+        await expect(
+            run(
+                { postId: 'p1', userLat: NaN, userLng: 0 },
+                makeContext('user1')
+            )
+        ).rejects.toMatchObject({ code: 'invalid-argument' })
+    })
+
+    it('rejects out-of-range coordinates', async () => {
+        await expect(
+            run(
+                { postId: 'p1', userLat: 91, userLng: 0 },
+                makeContext('user1')
+            )
+        ).rejects.toMatchObject({ code: 'invalid-argument' })
+    })
+
+    it('accepts zero coordinates (equator/prime meridian)', async () => {
+        mockDocGet.mockResolvedValue({
+            exists: true,
+            data: () => ({
+                hasLocation: true,
+                authorId: 'otherUser',
+                rootPostId: null,
+            }),
+        })
+
+        let callCount = 0
+        mockGet.mockImplementation(() => {
+            callCount++
+            if (callCount === 1) return Promise.resolve({ empty: true })
+            return Promise.resolve({
+                empty: false,
+                docs: [{ data: () => ({ latitude: 0, longitude: 0 }) }],
+            })
+        })
+
+        const result = await run(
+            { postId: 'p1', userLat: 0, userLng: 0 },
+            makeContext('user1')
+        )
+        expect(result.isValid).toBe(true)
+    })
+
     it('rejects when post not found', async () => {
         mockDocGet.mockResolvedValue({ exists: false })
 

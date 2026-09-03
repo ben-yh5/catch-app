@@ -15,9 +15,18 @@ import { MAX_INSTANCES } from '../lib/constants'
  * 2. Medium (600x600) - suffixed with '_medium'
  *
  * Updates the Firestore document with the new URLs.
+ *
+ * Fail-fast: errors (including "post doc not found yet" — usually a race
+ * where the image finishes uploading before the client creates the post doc)
+ * are rethrown so the invocation fails and the platform retries
+ * (failurePolicy). Regenerating variants on retry is idempotent.
  */
 export const onImageUpload = functions
-    .runWith({ memory: '1GB', maxInstances: MAX_INSTANCES.DEFAULT })
+    .runWith({
+        memory: '1GB',
+        maxInstances: MAX_INSTANCES.DEFAULT,
+        failurePolicy: true,
+    })
     .storage.object()
     .onFinalize(async (object) => {
         const fileBucket = object.bucket
@@ -214,12 +223,18 @@ export const onImageUpload = functions
                     `Updated post ${matchDoc.id} with new URLs`
                 )
             } else {
-                functions.logger.warn(
-                    `Could not find post for image ${fileName}`
+                // Usually a create race (image upload completes before the
+                // post doc exists). Throw so the retry finds it — otherwise
+                // the post is permanently left without thumbnail/medium URLs.
+                throw new Error(
+                    `Could not find post for image ${fileName} — retrying`
                 )
             }
         } catch (err) {
+            // Fail fast: rethrow so the invocation fails and retries instead
+            // of leaving the post permanently without resized variants.
             functions.logger.error('Error resizing image', err)
+            throw err
         } finally {
             // Cleanup temp files
             await fs.remove(workingDir)

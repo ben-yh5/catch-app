@@ -12,6 +12,7 @@
  * - ThreadModal: Catching existing posts (shows original photo as reference)
  */
 
+import { useToast } from '@/components/ui/Toast'
 import { CATCH_RADIUS_METERS } from '@/utils/catchValidation'
 import { Ionicons } from '@expo/vector-icons'
 import { CameraType, CameraView } from 'expo-camera'
@@ -57,6 +58,7 @@ export default function UnifiedCameraView({
     const [liveDistance, setLiveDistance] = useState<number | null>(null)
     const cameraRef = useRef<CameraView>(null)
     const insets = useSafeAreaInsets()
+    const { showToast } = useToast()
 
     // Live distance to the target while framing the shot
     useEffect(() => {
@@ -115,7 +117,14 @@ export default function UnifiedCameraView({
                 onPhotoTaken(photo.uri)
             }
         } catch (error) {
+            // Fail loud: a silent failure here makes the shutter button feel
+            // dead — the user keeps tapping with no idea anything went wrong
             console.error('Error taking photo:', error)
+            showToast(
+                'error',
+                'Could not capture photo',
+                'Something went wrong with the camera — please try again.'
+            )
         }
     }
 

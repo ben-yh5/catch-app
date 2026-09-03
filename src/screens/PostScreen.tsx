@@ -457,13 +457,23 @@ export default function PostScreen() {
                 createdAt: new Date(),
             })
 
-            // 5. Add to lists
+            // 5. Add to lists — the catch itself succeeded, so a list
+            // failure must be reported as exactly that, not swallowed
             if (listIds && listIds.size > 0) {
-                await Promise.all(
-                    Array.from(listIds).map((id) =>
-                        addPostToList(id, docRef.id)
+                try {
+                    await Promise.all(
+                        Array.from(listIds).map((id) =>
+                            addPostToList(id, docRef.id)
+                        )
                     )
-                ).catch((e) => console.error('Error adding to lists:', e))
+                } catch (e) {
+                    console.error('Error adding to lists:', e)
+                    showToast(
+                        'warning',
+                        'Caught, but not saved to lists',
+                        "Your catch was posted, but couldn't be added to the selected lists."
+                    )
+                }
             }
 
             // The reveal modal (then/now) is the success feedback — no toast.
@@ -597,7 +607,8 @@ export default function PostScreen() {
                 createdAt: new Date(),
             })
 
-            // Add to selected lists
+            // Add to selected lists — the post itself succeeded, so a list
+            // failure must be reported as exactly that, not swallowed
             if (listIds && listIds.size > 0) {
                 try {
                     await Promise.all(
@@ -607,6 +618,11 @@ export default function PostScreen() {
                     )
                 } catch (listError) {
                     console.error('Error adding to lists:', listError)
+                    showToast(
+                        'warning',
+                        'Posted, but not saved to lists',
+                        "Your shot was posted, but couldn't be added to the selected lists."
+                    )
                 }
             }
 

@@ -36,10 +36,30 @@ export const validateCatch = functions
 
         const { postId, userLat, userLng } = data
 
-        if (!postId || userLat === undefined || userLng === undefined) {
+        // Fail fast on malformed input: a string/NaN coordinate would flow
+        // into the distance math as NaN and come back as a plausible-looking
+        // isValid=false instead of an error.
+        if (!postId || typeof postId !== 'string') {
             throw new functions.https.HttpsError(
                 'invalid-argument',
-                'Missing required fields: postId, userLat, userLng'
+                'postId must be a non-empty string'
+            )
+        }
+        if (
+            typeof userLat !== 'number' ||
+            typeof userLng !== 'number' ||
+            Number.isNaN(userLat) ||
+            Number.isNaN(userLng)
+        ) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'userLat and userLng must be numbers'
+            )
+        }
+        if (userLat < -90 || userLat > 90 || userLng < -180 || userLng > 180) {
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Coordinates out of valid range'
             )
         }
 

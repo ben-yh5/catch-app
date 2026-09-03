@@ -220,8 +220,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             })
         } catch (error) {
             console.error('Error updating notification settings:', error)
-            // Revert on error
+            // Revert on error and rethrow — the caller must tell the user
+            // why the toggle snapped back
             setNotificationSettings(notificationSettings)
+            throw new Error('Failed to save notification settings')
         }
     }
 
