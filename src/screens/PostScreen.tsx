@@ -406,9 +406,19 @@ export default function PostScreen() {
 
             // 2. Upload image
             const userDoc = await getDoc(doc(db, 'users', user.uid))
-            const username = userDoc.exists()
+            // Fail fast: never persist a placeholder author on a post
+            const username: string | undefined = userDoc.exists()
                 ? userDoc.data().username
-                : 'Anonymous'
+                : undefined
+            if (!username) {
+                setUploading(false)
+                showToast(
+                    'error',
+                    'Profile not ready',
+                    'Your account has no username yet — finish profile setup and try again.'
+                )
+                return
+            }
 
             const response = await fetch(capturedImage)
             const blob = await response.blob()
@@ -517,11 +527,21 @@ export default function PostScreen() {
         setUploading(true)
 
         try {
-            // Get user's username from Firestore
+            // Get user's username from Firestore.
+            // Fail fast: never persist a placeholder author on a post
             const userDoc = await getDoc(doc(db, 'users', user.uid))
-            const username = userDoc.exists()
+            const username: string | undefined = userDoc.exists()
                 ? userDoc.data().username
-                : 'Anonymous'
+                : undefined
+            if (!username) {
+                setUploading(false)
+                showToast(
+                    'error',
+                    'Profile not ready',
+                    'Your account has no username yet — finish profile setup and try again.'
+                )
+                return
+            }
 
             // Convert image URI to blob
             const response = await fetch(capturedImage)

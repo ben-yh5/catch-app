@@ -206,8 +206,15 @@ export const getPostsInArea = functions
         try {
             let postLocations: any[] = []
 
-            // OPTION A: Query by radius (circular area)
-            if (data.centerLat && data.centerLng && data.radiusInMeters) {
+            // OPTION A: Query by radius (circular area).
+            // typeof checks, not truthiness — a query centered exactly on the
+            // equator (lat 0) or prime meridian (lng 0) is legitimate, and a
+            // string coordinate must be rejected, not coerced.
+            if (
+                typeof data.centerLat === 'number' &&
+                typeof data.centerLng === 'number' &&
+                typeof data.radiusInMeters === 'number'
+            ) {
                 const center: [number, number] = [
                     data.centerLat,
                     data.centerLng,

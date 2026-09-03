@@ -15,6 +15,22 @@ const firebaseConfig = {
     measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
+// Fail fast: initializeApp accepts undefined fields silently and the failure
+// would otherwise surface as a cryptic auth/invalid-api-key at first use.
+for (const key of [
+    'apiKey',
+    'authDomain',
+    'projectId',
+    'storageBucket',
+    'appId',
+]) {
+    if (!firebaseConfig[key]) {
+        throw new Error(
+            `Missing Firebase config "${key}" — check EXPO_PUBLIC_FIREBASE_* in your .env`
+        )
+    }
+}
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig)
 

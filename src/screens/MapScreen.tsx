@@ -43,8 +43,15 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-// Set Mapbox access token
-Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '')
+// Set Mapbox access token. Fail fast: an empty token doesn't error here —
+// it surfaces later as a silently blank map (tile requests 401).
+const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN
+if (!MAPBOX_ACCESS_TOKEN) {
+    throw new Error(
+        'EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN is not set — the map cannot load. Check your .env.'
+    )
+}
+Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
 // Map marker colors (using theme colors)
 const MAP_COLORS = {

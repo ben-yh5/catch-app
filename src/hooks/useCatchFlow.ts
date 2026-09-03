@@ -351,9 +351,20 @@ export function useCatchFlow({
             // Upload & Create Post
             setStatusMessage('Uploading catch...')
             const userDoc = await getDoc(doc(db, 'users', user.uid))
-            const username = userDoc.exists()
+            // Fail fast: never persist a placeholder author on a post
+            const username: string | undefined = userDoc.exists()
                 ? userDoc.data().username
-                : 'Anonymous'
+                : undefined
+            if (!username) {
+                setUploading(false)
+                setStatusMessage('')
+                showToast(
+                    'error',
+                    'Profile not ready',
+                    'Your account has no username yet — finish profile setup and try again.'
+                )
+                return
+            }
 
             const response = await fetch(catchImageUri)
             const blob = await response.blob()
@@ -403,13 +414,19 @@ export function useCatchFlow({
                 )
             }
 
-            // Data contribution
-            if (dataContributionEnabled && capturedHeading !== null) {
+            // Data contribution. Requires the original's real coordinates —
+            // skip entirely rather than upload fabricated 0,0 into the
+            // training set.
+            if (
+                dataContributionEnabled &&
+                capturedHeading !== null &&
+                postLocation
+            ) {
                 const originalMeta: ImageMetadata = {
-                    latitude: postLocation?.latitude || 0,
-                    longitude: postLocation?.longitude || 0,
-                    heading: postLocation?.heading,
-                    pitch: postLocation?.pitch,
+                    latitude: postLocation.latitude,
+                    longitude: postLocation.longitude,
+                    heading: postLocation.heading,
+                    pitch: postLocation.pitch,
                     date: rootPost.createdAt?.toDate
                         ? rootPost.createdAt.toDate()
                         : new Date(),

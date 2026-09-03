@@ -157,11 +157,17 @@ export default function ListSelectionBottomSheet({
 
         setLoading(true)
         try {
-            // Get or create the default "My List"
+            // Get or create the default "My List". Fail fast if the profile
+            // has no username — never persist a placeholder list owner.
             const userDoc = await getDoc(doc(db, 'users', user.uid))
-            const username = userDoc.exists()
+            const username: string | undefined = userDoc.exists()
                 ? userDoc.data().username
-                : 'Unknown'
+                : undefined
+            if (!username) {
+                throw new Error(
+                    `User ${user.uid} has no username — cannot create saved list`
+                )
+            }
             await getOrCreateSavedList(user.uid, username)
 
             // Fetch all user's lists

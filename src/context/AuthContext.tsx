@@ -94,10 +94,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     })
 
     useEffect(() => {
-        // Configure Google Sign-In
-        GoogleSignin.configure({
-            webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-        })
+        // Configure Google Sign-In. Fail fast: an unset client ID otherwise
+        // only surfaces as DEVELOPER_ERROR when the user taps Sign In.
+        const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
+        if (!webClientId) {
+            throw new Error(
+                'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not set — Google Sign-In cannot work. Check your .env.'
+            )
+        }
+        GoogleSignin.configure({ webClientId })
 
         // Listen for auth state changes
         const unsubscribe = onAuthStateChanged(auth, async (user) => {

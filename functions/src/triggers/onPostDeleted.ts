@@ -22,7 +22,7 @@ import { MAX_INSTANCES } from '../lib/constants'
  * remaining cleanup.
  */
 export const onPostDeleted = functions
-    .runWith({ maxInstances: MAX_INSTANCES.DEFAULT })
+    .runWith({ maxInstances: MAX_INSTANCES.DEFAULT, failurePolicy: true })
     .firestore.document('posts/{postId}')
     .onDelete(async (snap, context) => {
         const db = admin.firestore()
@@ -46,9 +46,12 @@ export const onPostDeleted = functions
         const wasRejected = Boolean(postData.rejectedNoPermit)
 
         // --- Counter writes: one transaction, exactly once ---
-        let alreadyProcessed = false
-        try {
-            alreadyProcessed = await db.runTransaction(async (t) => {
+        // Fail fast: no try/catch here. If the transaction fails, the
+        // invocation fails and the platform retries (failurePolicy: true) —
+        // the processed_events marker makes the retry exactly-once safe, and
+        // the cleanup below is idempotent so re-running it is harmless.
+        const alreadyProcessed = await db.runTransaction(
+            async (t): Promise<boolean> => {
                 // All reads first, then writes
                 const marker = await t.get(eventRef)
                 if (marker.exists) return true
@@ -87,16 +90,8 @@ export const onPostDeleted = functions
                     processedAt: admin.firestore.FieldValue.serverTimestamp(),
                 })
                 return false
-            })
-        } catch (error) {
-            functions.logger.error(
-                `[onPostDeleted] Counter transaction failed for post ${postId}:`,
-                error
-            )
-            // Fall through to cleanup — location/list cleanup is still better
-            // done than skipped, and the marker wasn't set so a redelivery
-            // can retry the counters.
-        }
+            }
+        )
 
         if (alreadyProcessed) {
             functions.logger.info(

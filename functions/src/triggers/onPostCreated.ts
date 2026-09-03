@@ -20,10 +20,14 @@ import { sendPushNotification } from '../lib/notifications'
  * All counter writes happen in a single transaction that also owns the
  * processed_events dedup marker — all-or-nothing, applied exactly once even
  * on duplicate delivery. Best-effort work (notifications, coverage, AI
- * enrichment) runs after the transaction.
+ * enrichment) runs after the transaction and has its own try/catch blocks.
+ *
+ * Fail-fast: any error outside those best-effort blocks (notably the counters
+ * transaction) is rethrown so the invocation fails and the platform retries
+ * (failurePolicy). The dedup marker makes retries exactly-once safe.
  */
 export const onPostCreated = functions
-    .runWith({ maxInstances: MAX_INSTANCES.EXPENSIVE })
+    .runWith({ maxInstances: MAX_INSTANCES.EXPENSIVE, failurePolicy: true })
     .firestore.document('posts/{postId}')
     .onCreate(async (snap, context) => {
         const db = admin.firestore()
@@ -525,59 +529,73 @@ export const onPostCreated = functions
                     }
                 }
 
-                // Send notifications to followers
-                const authorDoc = await userRef.get()
-                if (authorDoc.exists) {
-                    const authorData = authorDoc.data()
-                    const authorUsername = authorData?.username || 'Someone'
-                    const followers = authorData?.followers || []
+                // Send notifications to followers (best-effort: a failed
+                // fetch here must not fail the invocation after counters
+                // have already committed)
+                try {
+                    const authorDoc = await userRef.get()
+                    if (authorDoc.exists) {
+                        const authorData = authorDoc.data()
+                        const authorUsername = authorData?.username || 'Someone'
+                        const followers = authorData?.followers || []
 
-                    for (const followerId of followers) {
-                        try {
-                            // Create in-app notification
-                            await db
-                                .collection('users')
-                                .doc(followerId)
-                                .collection('notifications')
-                                .add({
-                                    type: 'new_post',
-                                    fromUserId: authorId,
-                                    postId: postId,
-                                    createdAt:
-                                        admin.firestore.FieldValue.serverTimestamp(),
-                                    read: false,
-                                })
+                        for (const followerId of followers) {
+                            try {
+                                // Create in-app notification
+                                await db
+                                    .collection('users')
+                                    .doc(followerId)
+                                    .collection('notifications')
+                                    .add({
+                                        type: 'new_post',
+                                        fromUserId: authorId,
+                                        postId: postId,
+                                        createdAt:
+                                            admin.firestore.FieldValue.serverTimestamp(),
+                                        read: false,
+                                    })
 
-                            const followerDoc = await db
-                                .collection('users')
-                                .doc(followerId)
-                                .get()
-                            if (!followerDoc.exists) continue
+                                const followerDoc = await db
+                                    .collection('users')
+                                    .doc(followerId)
+                                    .get()
+                                if (!followerDoc.exists) continue
 
-                            const followerData = followerDoc.data()
-                            const pushToken = followerData?.pushToken
-                            if (!pushToken) continue
+                                const followerData = followerDoc.data()
+                                const pushToken = followerData?.pushToken
+                                if (!pushToken) continue
 
-                            await sendPushNotification(
-                                pushToken,
-                                'New Post',
-                                `@${authorUsername} just made a new post!`,
-                                {
-                                    userId: authorId,
-                                    postId: postId,
-                                    type: 'new_post',
-                                }
-                            )
-                        } catch (error) {
-                            functions.logger.error(
-                                `Error sending notification to follower ${followerId}:`,
-                                error
-                            )
+                                await sendPushNotification(
+                                    pushToken,
+                                    'New Post',
+                                    `@${authorUsername} just made a new post!`,
+                                    {
+                                        userId: authorId,
+                                        postId: postId,
+                                        type: 'new_post',
+                                    }
+                                )
+                            } catch (error) {
+                                functions.logger.error(
+                                    `Error sending notification to follower ${followerId}:`,
+                                    error
+                                )
+                            }
                         }
                     }
+                } catch (error) {
+                    functions.logger.error(
+                        `[onPostCreated] Follower notifications failed for post ${postId}:`,
+                        error
+                    )
                 }
             }
         } catch (error) {
+            // Fail fast: counters and attribution must not drift silently.
+            // Rethrowing fails the invocation so the platform retries
+            // (failurePolicy: true); the processed_events marker makes the
+            // retry exactly-once safe.
             functions.logger.error('Error in onPostCreated trigger:', error)
+            throw error
         }
     })

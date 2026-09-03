@@ -676,6 +676,13 @@ export const deleteAccount = functions
             `[deleteAccount] Starting account deletion for user ${userId}`
         )
 
+        // Data-deletion steps are individually caught so one failure doesn't
+        // skip the rest, but every failure is recorded — the irreversible
+        // steps (user doc + Auth account) only run if ALL data steps
+        // succeeded. Otherwise we throw so the still-authenticated client can
+        // retry; completed steps are idempotent.
+        const failedSteps: string[] = []
+
         // Read user doc first to get username for cleanup later
         let username: string | null = null
         try {
@@ -688,6 +695,8 @@ export const deleteAccount = functions
                 '[deleteAccount] Error reading user doc:',
                 error
             )
+            // Without the username we can't free the usernames/{name} index
+            failedSteps.push('read-user-doc')
         }
 
         // 1. Delete all user's posts (onPostDeleted handles thread promotion, location cleanup, list removal)
@@ -708,6 +717,7 @@ export const deleteAccount = functions
                 '[deleteAccount] Error deleting posts:',
                 error
             )
+            failedSteps.push('posts')
         }
 
         // 2. Remove from other users' followers arrays
@@ -743,6 +753,7 @@ export const deleteAccount = functions
                 '[deleteAccount] Error cleaning followers:',
                 error
             )
+            failedSteps.push('followers')
         }
 
         // 3. Remove from other users' following arrays
@@ -778,6 +789,7 @@ export const deleteAccount = functions
                 '[deleteAccount] Error cleaning following:',
                 error
             )
+            failedSteps.push('following')
         }
 
         // 4. Delete user's lists
@@ -810,6 +822,7 @@ export const deleteAccount = functions
                 '[deleteAccount] Error deleting lists:',
                 error
             )
+            failedSteps.push('lists')
         }
 
         // 5. Delete notifications subcollection
@@ -843,6 +856,7 @@ export const deleteAccount = functions
                 '[deleteAccount] Error deleting notifications:',
                 error
             )
+            failedSteps.push('notifications')
         }
 
         // 6. Delete user_recommendations, username index
@@ -853,6 +867,7 @@ export const deleteAccount = functions
                 '[deleteAccount] Error deleting recommendations:',
                 error
             )
+            failedSteps.push('recommendations')
         }
 
         if (username) {
@@ -866,6 +881,7 @@ export const deleteAccount = functions
                     '[deleteAccount] Error deleting username index:',
                     error
                 )
+                failedSteps.push('username-index')
             }
         }
 
@@ -899,6 +915,7 @@ export const deleteAccount = functions
                 '[deleteAccount] Error deleting training pairs:',
                 error
             )
+            failedSteps.push('training-pairs')
         }
 
         // 8. Delete Storage files
@@ -912,31 +929,31 @@ export const deleteAccount = functions
                 '[deleteAccount] Error deleting storage files:',
                 error
             )
+            failedSteps.push('storage')
+        }
+
+        // Fail fast before the point of no return: deleting the user doc and
+        // Auth account with data steps failed would orphan that data forever
+        // (the user could never re-authenticate to retry). Throw instead —
+        // the client stays signed in and can retry; completed steps are
+        // idempotent.
+        if (failedSteps.length > 0) {
+            functions.logger.error(
+                `[deleteAccount] Aborting before irreversible steps — failed: ${failedSteps.join(', ')}`
+            )
+            throw new functions.https.HttpsError(
+                'internal',
+                `Account data cleanup failed (${failedSteps.join(', ')}). Nothing irreversible was done — please try again.`
+            )
         }
 
         // 9. Delete user document
-        try {
-            await db.collection('users').doc(userId).delete()
-            functions.logger.info(`[deleteAccount] Deleted user document`)
-        } catch (error) {
-            functions.logger.error(
-                '[deleteAccount] Error deleting user doc:',
-                error
-            )
-        }
+        await db.collection('users').doc(userId).delete()
+        functions.logger.info(`[deleteAccount] Deleted user document`)
 
         // 10. Delete Firebase Auth account (must be last)
-        try {
-            await admin.auth().deleteUser(userId)
-            functions.logger.info(
-                `[deleteAccount] Deleted Firebase Auth account`
-            )
-        } catch (error) {
-            functions.logger.error(
-                '[deleteAccount] Error deleting auth account:',
-                error
-            )
-        }
+        await admin.auth().deleteUser(userId)
+        functions.logger.info(`[deleteAccount] Deleted Firebase Auth account`)
 
         functions.logger.info(
             `[deleteAccount] Account deletion complete for user ${userId}`
