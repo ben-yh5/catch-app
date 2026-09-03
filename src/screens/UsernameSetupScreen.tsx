@@ -3,7 +3,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
 import { validateUsernameFormat } from '@/utils/usernameValidation'
-import { useRouter } from 'expo-router'
+import { registerForPushNotificationsAsync } from '@/utils/registerForPushNotificationsAsync'
 import React, { useState } from 'react'
 import {
     ActivityIndicator,
@@ -13,16 +13,33 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
+import { doc, updateDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { functions } from '@/services/firebase'
+import { db, functions } from '@/services/firebase'
 
 export default function UsernameSetupScreen() {
     const [username, setUsername] = useState('')
     const [loading, setLoading] = useState(false)
+    const [signingOut, setSigningOut] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const { user } = useAuth()
+    const { user, logout } = useAuth()
     const { showToast } = useToast()
-    const router = useRouter()
+
+    /**
+     * Escape hatch: auth state persists across app restarts, so a signed-in
+     * user without a user doc always lands back here — without this they
+     * could never return to the login screen or switch accounts.
+     */
+    const handleSignOut = async () => {
+        setSigningOut(true)
+        try {
+            await logout()
+            // Root layout redirects to /login on the auth state change
+        } catch (error: any) {
+            setSigningOut(false)
+            showToast('error', 'Sign Out Failed', error.message)
+        }
+    }
 
     const handleSubmit = async () => {
         if (!user) return
@@ -43,8 +60,25 @@ export default function UsernameSetupScreen() {
             const setupUsernameFn = httpsCallable(functions, 'setupUsername')
             await setupUsernameFn({ username })
 
-            // Navigate directly to tabs
-            router.replace('/(tabs)')
+            // The user doc now exists, so save the push token — AuthContext
+            // only registers it when the doc already exists at sign-in time,
+            // which is never the case for a brand-new account. Fire and
+            // forget: pushToken is a self-updatable field per security rules.
+            const uid = user.uid
+            registerForPushNotificationsAsync().then((token) => {
+                if (token) {
+                    updateDoc(doc(db, 'users', uid), {
+                        pushToken: token,
+                    }).catch((err) =>
+                        console.error('Error saving push token:', err)
+                    )
+                }
+            })
+
+            // Don't navigate here — the root layout redirects to tabs once
+            // its user-doc snapshot arrives. Navigating now races that
+            // listener and bounces back to this screen (where a retry would
+            // fail with "already-exists"). Keep the spinner until redirect.
         } catch (error: any) {
             const message = error?.message || 'Something went wrong'
             if (
@@ -106,6 +140,27 @@ export default function UsernameSetupScreen() {
                     <Text style={styles.buttonText}>Continue</Text>
                 )}
             </TouchableOpacity>
+
+            <TouchableOpacity
+                style={styles.signOutButton}
+                onPress={handleSignOut}
+                disabled={loading || signingOut}
+                accessibilityLabel="Use a different account"
+                accessibilityRole="button"
+                accessibilityHint="Signs out and returns to the login screen"
+                accessibilityState={{ disabled: loading || signingOut }}
+            >
+                {signingOut ? (
+                    <ActivityIndicator
+                        color={colors.textTertiary}
+                        size="small"
+                    />
+                ) : (
+                    <Text style={styles.signOutText}>
+                        Use a different account
+                    </Text>
+                )}
+            </TouchableOpacity>
         </UnifiedAuthLayout>
     )
 }
@@ -154,5 +209,15 @@ const styles = StyleSheet.create({
         color: colors.textPrimary,
         fontSize: 16,
         fontWeight: '600',
+    },
+    signOutButton: {
+        alignItems: 'center',
+        paddingVertical: 12,
+        marginTop: 16,
+    },
+    signOutText: {
+        color: colors.textTertiary,
+        fontSize: 14,
+        textDecorationLine: 'underline',
     },
 })

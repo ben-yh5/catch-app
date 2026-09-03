@@ -43,6 +43,7 @@ interface AuthContextType {
     loginWithGoogle: () => Promise<void>
     loginWithApple: () => Promise<void>
     logout: () => Promise<void>
+    deleteAccount: () => Promise<void>
     dataContributionEnabled: boolean
     toggleDataContribution: (enabled: boolean) => Promise<void>
 
@@ -392,6 +393,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     }
 
+    /**
+     * Delete the account via the deleteAccount Cloud Function, then sign out
+     * locally. The server deletes the Firebase Auth user, but this session's
+     * ID token stays valid until its next refresh (up to ~1 hour), so
+     * onAuthStateChanged won't fire on its own — meanwhile the user-doc
+     * listener sees the doc disappear and the root layout would bounce to
+     * username-setup. Signing out immediately routes to /login instead.
+     */
+    const deleteAccount = async () => {
+        const deleteAccountFn = httpsCallable(functions, 'deleteAccount')
+        await deleteAccountFn({})
+        // Local sign-out failures are ignored: the account is already gone
+        // server-side, and surfacing an error here would misread as the
+        // deletion having failed.
+        await signOut(auth).catch((err) =>
+            console.error('Error signing out after account deletion:', err)
+        )
+        await GoogleSignin.signOut().catch(() => {})
+    }
+
     const updateStats = (stats: {
         totalPosts: number
         totalCatches: number
@@ -444,6 +465,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 loginWithGoogle,
                 loginWithApple,
                 logout,
+                deleteAccount,
                 dataContributionEnabled,
                 toggleDataContribution,
                 blockedUserIds,

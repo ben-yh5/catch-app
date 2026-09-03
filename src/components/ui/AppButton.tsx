@@ -10,7 +10,13 @@ import {
     ViewStyle,
 } from 'react-native'
 
-type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger'
+type ButtonVariant =
+    | 'primary'
+    | 'secondary'
+    | 'outline'
+    | 'ghost'
+    | 'danger'
+    | 'white'
 type ButtonSize = 'sm' | 'md' | 'lg'
 
 interface AppButtonProps extends TouchableOpacityProps {
@@ -56,6 +62,8 @@ export default function AppButton({
                 return colors.secondary
             case 'danger':
                 return colors.danger
+            case 'white':
+                return colors.white
             case 'outline':
             case 'ghost':
                 return 'transparent'
@@ -71,6 +79,8 @@ export default function AppButton({
             case 'secondary':
             case 'danger':
                 return '#FFFFFF'
+            case 'white':
+                return colors.inverseTextPrimary
             case 'outline':
             case 'ghost':
                 return colors.primary

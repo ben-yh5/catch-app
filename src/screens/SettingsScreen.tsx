@@ -1,15 +1,13 @@
 import { useToast } from '@/components/ui/Toast'
+import { PRIVACY_POLICY_URL, openLegalUrl } from '@/constants/legal'
 import { useAuth } from '@/context/AuthContext'
-import { functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
-import { httpsCallable } from 'firebase/functions'
 import React, { useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
-    Linking,
     ScrollView,
     StyleSheet,
     Switch,
@@ -19,11 +17,10 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-const PRIVACY_POLICY_URL = '#'
-
 export default function SettingsScreen() {
     const {
         logout,
+        deleteAccount,
         dataContributionEnabled,
         toggleDataContribution,
         notificationSettings,
@@ -55,13 +52,10 @@ export default function SettingsScreen() {
                                     onPress: async () => {
                                         setDeleting(true)
                                         try {
-                                            const deleteAccountFn =
-                                                httpsCallable(
-                                                    functions,
-                                                    'deleteAccount'
-                                                )
-                                            await deleteAccountFn({})
-                                            // Auth state change will redirect to login
+                                            // Deletes server-side data then
+                                            // signs out locally, which routes
+                                            // back to /login
+                                            await deleteAccount()
                                         } catch (error: any) {
                                             setDeleting(false)
                                             showToast(
@@ -227,7 +221,7 @@ export default function SettingsScreen() {
                     </Text>
                     <TouchableOpacity
                         style={styles.settingItem}
-                        onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+                        onPress={() => openLegalUrl(PRIVACY_POLICY_URL)}
                         accessibilityLabel="Privacy Policy"
                         accessibilityRole="link"
                         accessibilityHint="Opens the privacy policy in your browser"
