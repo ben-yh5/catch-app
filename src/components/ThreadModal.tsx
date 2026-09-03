@@ -28,6 +28,7 @@ import { usePost } from '@/context/PostContext'
 import { useCatchFlow } from '@/hooks/useCatchFlow'
 import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
+import { formatPostDate } from '@/utils/dateUtils'
 import { Post } from '@/types'
 import { isPostSaved } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
@@ -558,15 +559,10 @@ export default function ThreadModal({
         }
     }
 
-    const formatDate = (timestamp: any) => {
-        if (!timestamp) return 'Unknown date'
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-        return date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-        })
-    }
+    // Shared formatter — a duplicate local version had drifted (different
+    // null behavior from dateUtils)
+    const formatDate = (timestamp: any) =>
+        formatPostDate(timestamp) || 'Unknown date'
 
     const onViewableItemsChanged = useRef(
         ({ viewableItems }: { viewableItems: ViewToken[] }) => {

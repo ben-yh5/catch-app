@@ -41,6 +41,9 @@ export {
     deleteAccount,
 } from './callable/account'
 
+// ─── Callable Functions: Notifications ──────────────────────────────────────
+export { markAllNotificationsRead } from './callable/notifications'
+
 // ─── Callable Functions: Admin Reconciliation ───────────────────────────────
 export { reconcileCounters } from './callable/reconcile'
 

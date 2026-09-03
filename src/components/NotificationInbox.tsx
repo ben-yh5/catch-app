@@ -222,7 +222,7 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
     const handleClearAll = () => {
         Alert.alert(
             'Clear All Activity',
-            'Are you sure you want to delete all activity history?',
+            'All activity history will be permanently deleted. This cannot be undone.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {

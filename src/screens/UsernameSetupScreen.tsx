@@ -178,13 +178,13 @@ const styles = StyleSheet.create({
         color: colors.textPrimary,
     },
     inputError: {
-        borderColor: '#ff4444',
+        borderColor: colors.danger,
     },
     errorContainer: {
         marginBottom: 10,
     },
     errorText: {
-        color: '#ff4444',
+        color: colors.danger,
         fontSize: 14,
     },
     hintContainer: {

@@ -1,13 +1,11 @@
 import {
     DarkTheme,
-    DefaultTheme,
     ThemeProvider,
 } from '@react-navigation/native'
 import * as Notifications from 'expo-notifications'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useRef, useState } from 'react'
-import { useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import 'react-native-reanimated'
 
@@ -33,7 +31,6 @@ export const unstable_settings = {
 }
 
 function RootLayoutNav() {
-    const colorScheme = useColorScheme()
     const { user, loading } = useAuth()
     const segments = useSegments()
     const router = useRouter()
@@ -96,7 +93,8 @@ function RootLayoutNav() {
             segments[0] === 'settings' ||
             segments[0] === 'user-profile' ||
             segments[0] === 'create-list' ||
-            segments[0] === 'list-detail'
+            segments[0] === 'list-detail' ||
+            segments[0] === 'blocked-users'
         const inUsernameSetup = segments[0] === 'username-setup'
 
         if (!user && (inAuthGroup || inProtectedRoute || inUsernameSetup)) {
@@ -117,9 +115,10 @@ function RootLayoutNav() {
     }, [user, loading, segments, hasUserDoc, router])
 
     return (
-        <ThemeProvider
-            value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}
-        >
+        // The app's screens are designed dark-only — always hand navigation
+        // the dark theme so its chrome (headers, sheets) can't render light
+        // over dark screens when the device is in light mode.
+        <ThemeProvider value={DarkTheme}>
             <Stack>
                 <Stack.Screen name="login" options={{ headerShown: false }} />
                 <Stack.Screen
@@ -143,8 +142,12 @@ function RootLayoutNav() {
                     name="list-detail"
                     options={{ headerShown: false }}
                 />
+                <Stack.Screen
+                    name="blocked-users"
+                    options={{ headerShown: false }}
+                />
             </Stack>
-            <StatusBar style="auto" />
+            <StatusBar style="light" />
         </ThemeProvider>
     )
 }

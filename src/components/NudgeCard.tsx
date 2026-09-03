@@ -7,6 +7,7 @@
  */
 
 import { colors } from '@/theme/colors'
+import { smallTargetHitSlop } from '@/theme/tokens'
 import { Post } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
@@ -32,6 +33,7 @@ export default function NudgeCard({
                 style={styles.dismissButton}
                 onPress={onDismiss}
                 accessibilityLabel="Dismiss suggestion"
+                hitSlop={smallTargetHitSlop}
                 accessibilityRole="button"
             >
                 <Ionicons name="close" size={16} color={colors.textTertiary} />

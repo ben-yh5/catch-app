@@ -46,6 +46,17 @@ jest.mock('../../utils/imageProcessing', () => ({
 
 jest.mock('../../utils/imageValidation', () => ({
     checkBlur: jest.fn(() => Promise.resolve(true)),
+    checkBrightness: jest.fn(() => Promise.resolve(true)),
+}))
+
+jest.mock('../../components/ui/Toast', () => ({
+    useToast: () => ({ showToast: jest.fn() }),
+}))
+
+// Uses useSafeAreaInsets; irrelevant to these tests (only shows post-catch)
+jest.mock('../../components/CatchRevealModal', () => ({
+    __esModule: true,
+    default: () => null,
 }))
 
 jest.mock('../../services/firebase', () => ({

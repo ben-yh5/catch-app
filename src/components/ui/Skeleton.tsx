@@ -3,6 +3,7 @@ import React, { useEffect } from 'react'
 import { Dimensions, StyleSheet, View, ViewStyle } from 'react-native'
 import Animated, {
     useAnimatedStyle,
+    useReducedMotion,
     useSharedValue,
     withRepeat,
     withTiming,
@@ -27,15 +28,22 @@ export function Skeleton({
     style,
 }: SkeletonProps) {
     const opacity = useSharedValue(0.5)
+    const reducedMotion = useReducedMotion()
 
     useEffect(() => {
+        // Respect the OS reduce-motion setting: a static placeholder instead
+        // of an infinite shimmer
+        if (reducedMotion) {
+            opacity.value = 0.7
+            return
+        }
         opacity.value = withRepeat(
             withTiming(1, { duration: SHIMMER_DURATION }),
             -1,
             true
         )
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [reducedMotion])
 
     const animatedStyle = useAnimatedStyle(() => ({
         opacity: opacity.value,

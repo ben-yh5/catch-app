@@ -233,6 +233,7 @@ Notification types: `new_post`, `follow`, `caught`.
 | `unfollowUser` | HTTPS Callable | Atomically removes from both users' following/followers arrays in a transaction |
 | `reportUser` / `reportPost` | HTTPS Callable | Content/user reports into `reports` collection; one report per reporter per target |
 | `blockUser` / `unblockUser` | HTTPS Callable | Manages caller's `blockedUsers` array; blocking also severs follows both ways. Client filters blocked authors from feeds/map |
+| `markAllNotificationsRead` | HTTPS Callable | Bulk-marks all of the caller's notifications as read (batched server-side over the whole subcollection) |
 | `reconcileCounters` | HTTPS Callable | Admin-only: recomputes `totalPosts`/`totalCatches` from surviving posts; `dryRun` (default) reports drift without fixing |
 | `onPostCreated` | Firestore Trigger | Pioneer attribution, counter/catchCount increments, caught + follower notifications. Idempotent via `context.eventId` dedup |
 | `onPostDeleted` | Firestore Trigger | Thread promotion, counter decrements (catchCount), list cleanup. Idempotent via `context.eventId` dedup |
@@ -282,4 +283,4 @@ Rules enforce authorization, not just authentication:
 
 ## TODOs
 
-- **Notification performance**: `markAllNotificationsAsRead()` in `AuthContext.tsx` currently uses a client-side batch update. For better efficiency, implement a Cloud Function that does a bulk update: `UPDATE notifications SET read=true WHERE userId=X AND read=false`.
+See `TODO.md` for the prioritized work list.

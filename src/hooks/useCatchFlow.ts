@@ -11,12 +11,13 @@ import { checkBlur, checkBrightness } from '@/utils/imageValidation'
 import { addPostToList } from '@/utils/listUtils'
 import { verifyViewSimilarity } from '@/utils/visualMatcher'
 import { useCameraPermissions } from 'expo-camera'
+import * as Haptics from 'expo-haptics'
 import * as Location from 'expo-location'
 import { addDoc, collection, doc, getDoc } from 'firebase/firestore'
 import { ref } from 'firebase/storage'
 import { uploadImageWithProgress } from '@/utils/uploadImage'
 import { geohashForLocation } from 'geofire-common'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Alert, Linking } from 'react-native'
 
 interface UseCatchFlowProps {
@@ -66,6 +67,7 @@ export function useCatchFlow({
     } | null>(null)
     const [uploading, setUploading] = useState(false)
     const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+    const catchPressGuard = useRef(false)
     const [fetchingLocation, setFetchingLocation] = useState(false)
 
     // Set after a successful catch to drive the CatchRevealModal (the
@@ -94,6 +96,18 @@ export function useCatchFlow({
     } = useDeviceSensors()
 
     const handleCatchPress = async () => {
+        // Double-tap guard: the permission await leaves a window where a
+        // second tap re-enters before catchMode flips
+        if (catchPressGuard.current || catchMode) return
+        catchPressGuard.current = true
+        try {
+            await startCatch()
+        } finally {
+            catchPressGuard.current = false
+        }
+    }
+
+    const startCatch = async () => {
         if (!cameraPermission?.granted) {
             const { granted } = await requestCameraPermission()
             if (!granted) {
@@ -327,6 +341,9 @@ export function useCatchFlow({
             }
 
             if (found.length > 0) {
+                Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Warning
+                ).catch(() => {})
                 setUploading(false)
                 setStatusMessage('')
                 setIssues(found)
@@ -489,6 +506,9 @@ export function useCatchFlow({
             }
 
             // The reveal modal (then/now) is the success feedback — no toast
+            Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success
+            ).catch(() => {})
             setRevealData({
                 originalPost: rootPost,
                 catchPhotoUri: catchImageUri,

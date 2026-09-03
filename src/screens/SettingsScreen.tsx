@@ -1,4 +1,5 @@
 import { useToast } from '@/components/ui/Toast'
+import Constants from 'expo-constants'
 import { PRIVACY_POLICY_URL, openLegalUrl } from '@/constants/legal'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
@@ -19,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export default function SettingsScreen() {
     const {
+        user,
         logout,
         deleteAccount,
         dataContributionEnabled,
@@ -105,7 +107,7 @@ export default function SettingsScreen() {
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Logout',
-                style: 'destructive',
+                style: 'default',
                 onPress: async () => {
                     try {
                         await logout()
@@ -272,6 +274,39 @@ export default function SettingsScreen() {
                     >
                         Account
                     </Text>
+                    {user?.email ? (
+                        <View style={styles.settingItem}>
+                            <View style={styles.settingTextContainer}>
+                                <Text style={styles.settingLabel}>
+                                    Signed in as
+                                </Text>
+                                <Text style={styles.settingDescription}>
+                                    {user.email}
+                                </Text>
+                            </View>
+                        </View>
+                    ) : null}
+                    <TouchableOpacity
+                        style={styles.settingItem}
+                        onPress={() => router.push('/blocked-users' as any)}
+                        accessibilityLabel="Blocked Users"
+                        accessibilityRole="button"
+                        accessibilityHint="View and unblock blocked users"
+                    >
+                        <View style={styles.settingTextContainer}>
+                            <Text style={styles.settingLabel}>
+                                Blocked Users
+                            </Text>
+                            <Text style={styles.settingDescription}>
+                                See and unblock people you&apos;ve blocked
+                            </Text>
+                        </View>
+                        <Ionicons
+                            name="chevron-forward"
+                            size={20}
+                            color={colors.textTertiary}
+                        />
+                    </TouchableOpacity>
                     <TouchableOpacity
                         style={[
                             styles.settingItem,
@@ -322,12 +357,22 @@ export default function SettingsScreen() {
                     />
                     <Text style={styles.logoutButtonText}>Logout</Text>
                 </TouchableOpacity>
+
+                <Text style={styles.versionText}>
+                    Catch v{Constants.expoConfig?.version || '?'}
+                </Text>
             </ScrollView>
         </View>
     )
 }
 
 const styles = StyleSheet.create({
+    versionText: {
+        textAlign: 'center',
+        fontSize: 12,
+        color: colors.textTertiary,
+        paddingVertical: 24,
+    },
     container: {
         flex: 1,
         backgroundColor: colors.background,

@@ -6,6 +6,7 @@ import ViewToggle from '@/components/ViewToggle'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
+import { smallTargetHitSlop } from '@/theme/tokens'
 import { List, Post } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -121,7 +122,7 @@ export default function ListDetailScreen() {
 
         Alert.alert(
             'Delete List',
-            `Are you sure you want to delete "${list.name}"?`,
+            `"${list.name}" and its saved shots will be permanently deleted. This cannot be undone.`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -194,6 +195,7 @@ export default function ListDetailScreen() {
                         style={styles.removeButton}
                         onPress={() => handleRemovePost(item.id)}
                         accessibilityLabel="Remove post from list"
+                        hitSlop={smallTargetHitSlop}
                         accessibilityRole="button"
                     >
                         <Ionicons

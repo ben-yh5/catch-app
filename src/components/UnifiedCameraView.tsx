@@ -15,6 +15,7 @@
 import { useToast } from '@/components/ui/Toast'
 import { CATCH_RADIUS_METERS } from '@/utils/catchValidation'
 import { Ionicons } from '@expo/vector-icons'
+import * as Haptics from 'expo-haptics'
 import { CameraType, CameraView } from 'expo-camera'
 import { Image } from 'expo-image'
 import * as Location from 'expo-location'
@@ -104,6 +105,7 @@ export default function UnifiedCameraView({
     const handleTakePhoto = async () => {
         if (!isCameraReady || !cameraRef.current) return
 
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
         try {
             // Take the full picture
             const photo = await cameraRef.current.takePictureAsync({

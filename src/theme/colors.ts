@@ -48,6 +48,11 @@ export const colors = {
     white: '#ffffff',
     error: '#FF3B30',
 
+    // Status (toasts, banners)
+    success: '#30D158', // Green - success feedback
+    warning: '#FF9F0A', // Amber - warnings
+    info: '#007AFF', // Blue - informational
+
     // Icon states
     iconInactive: '#98989f',
     iconActive: '#007AFF', // Same as primary for consistency

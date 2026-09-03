@@ -1,4 +1,5 @@
 import { useToast } from '@/components/ui/Toast'
+import { useAuth } from '@/context/AuthContext'
 import { functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
@@ -6,6 +7,7 @@ import * as Haptics from 'expo-haptics'
 import { httpsCallable } from 'firebase/functions'
 import React, { useEffect, useState } from 'react'
 import {
+    Alert,
     ActivityIndicator,
     Animated,
     KeyboardAvoidingView,
@@ -61,6 +63,7 @@ export default function ReportBottomSheet({
 }: ReportBottomSheetProps) {
     const isPostReport = Boolean(targetPostId)
     const { showToast } = useToast()
+    const { blockUser, blockedUserIds } = useAuth()
     const [step, setStep] = useState<'reason' | 'details'>('reason')
     const [selectedReason, setSelectedReason] = useState<string | null>(null)
     const [details, setDetails] = useState('')
@@ -116,6 +119,32 @@ export default function ReportBottomSheet({
                 'Thank you for helping keep Catch safe.'
             )
             onClose()
+            // Follow-through: reporting usually means the user doesn't want
+            // to see this person again — offer the block right here
+            if (targetUserId && !blockedUserIds.includes(targetUserId)) {
+                Alert.alert(
+                    `Also block @${targetUsername}?`,
+                    "You won't see their shots, and any follow relationship is removed.",
+                    [
+                        { text: 'Not Now', style: 'cancel' },
+                        {
+                            text: 'Block',
+                            style: 'destructive',
+                            onPress: async () => {
+                                try {
+                                    await blockUser(targetUserId)
+                                    showToast(
+                                        'success',
+                                        `Blocked @${targetUsername}`
+                                    )
+                                } catch {
+                                    showToast('error', 'Failed to block user')
+                                }
+                            },
+                        },
+                    ]
+                )
+            }
         } catch (error: any) {
             console.error(
                 '[ReportBottomSheet] Error:',

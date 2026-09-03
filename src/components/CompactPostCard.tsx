@@ -48,6 +48,7 @@ export default function CompactPostCard({
                     style={styles.image}
                     contentFit="cover"
                     cachePolicy="memory-disk"
+                    transition={200}
                     priority="normal"
                     accessibilityLabel="Shot photo"
                 />

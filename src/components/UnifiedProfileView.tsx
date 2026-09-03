@@ -9,6 +9,7 @@ import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
+import { Image } from 'expo-image'
 import { useIsFocused } from '@react-navigation/native'
 import { useNavigation, useRouter } from 'expo-router'
 import {
@@ -63,11 +64,14 @@ export default function UnifiedProfileView({
     const insets = useSafeAreaInsets()
     const [username, setUsername] = useState<string>('')
     const [totalCatches, setTotalCatches] = useState<number>(0)
+    const [profilePicture, setProfilePicture] = useState<string | null>(null)
+    const [joinedText, setJoinedText] = useState<string>('')
     const [, setTotalPosts] = useState<number>(0)
     const [followerCount, setFollowerCount] = useState<number>(0)
     const [followingCount, setFollowingCount] = useState<number>(0)
     const [isFollowing, setIsFollowing] = useState<boolean>(false)
     const followActionPending = useRef(false)
+    const followListPending = useRef<Set<string>>(new Set())
     const [posts, setPosts] = useState<Post[]>([])
     const [catches, setCatches] = useState<Post[]>([])
     const [loading, setLoading] = useState(true)
@@ -114,6 +118,17 @@ export default function UnifiedProfileView({
             if (userDoc.exists()) {
                 const userData = userDoc.data()
                 setUsername(userData.username || 'Unknown')
+                setProfilePicture(userData.profilePicture || null)
+                if (userData.createdAt?.toDate) {
+                    setJoinedText(
+                        userData.createdAt
+                            .toDate()
+                            .toLocaleDateString(undefined, {
+                                month: 'long',
+                                year: 'numeric',
+                            })
+                    )
+                }
                 setTotalCatches(userData.totalCatches || 0)
                 setTotalPosts(userData.totalPosts || 0)
                 const followers = (userData.followers || []).filter(
@@ -488,6 +503,11 @@ export default function UnifiedProfileView({
                             try {
                                 await blockUser(userId)
                                 showToast('success', `Blocked @${username}`)
+                                // Don't leave the user staring at the
+                                // profile they just blocked
+                                if (!isOwnProfile) {
+                                    router.back()
+                                }
                             } catch {
                                 showToast('error', 'Failed to block user')
                             }
@@ -548,31 +568,26 @@ export default function UnifiedProfileView({
                 isFollowing: boolean
             }[] = []
 
-            for (const uid of userIds) {
-                const userDocRef = doc(db, 'users', uid)
-                const userSnapshot = await getDoc(userDocRef)
+            // Fetch the viewer's following array ONCE, then all rows in
+            // parallel — the old per-row sequential fetches (plus a redundant
+            // own-doc fetch per row) made long lists crawl
+            let viewerFollowing: string[] = []
+            if (user) {
+                const currentUserDoc = await getDoc(doc(db, 'users', user.uid))
+                if (currentUserDoc.exists()) {
+                    viewerFollowing = currentUserDoc.data().following || []
+                }
+            }
 
+            const snapshots = await Promise.all(
+                userIds.map((uid: string) => getDoc(doc(db, 'users', uid)))
+            )
+            for (const userSnapshot of snapshots) {
                 if (userSnapshot.exists()) {
-                    const data = userSnapshot.data()
-
-                    // Check if current user is following this person
-                    let isFollowingThisUser = false
-                    if (user) {
-                        const currentUserDoc = await getDoc(
-                            doc(db, 'users', user.uid)
-                        )
-                        if (currentUserDoc.exists()) {
-                            const currentUserData = currentUserDoc.data()
-                            isFollowingThisUser = (
-                                currentUserData.following || []
-                            ).includes(uid)
-                        }
-                    }
-
                     users.push({
-                        id: uid,
-                        username: data.username || 'Unknown',
-                        isFollowing: isFollowingThisUser,
+                        id: userSnapshot.id,
+                        username: userSnapshot.data().username || 'Unknown',
+                        isFollowing: viewerFollowing.includes(userSnapshot.id),
                     })
                 }
             }
@@ -589,9 +604,17 @@ export default function UnifiedProfileView({
     const handleFollowFromList = async (targetUserId: string) => {
         if (!user || targetUserId === user.uid) return
 
+        // Per-user in-flight guard — a double tap would double-fire the
+        // callable and revert to stale state
+        if (followListPending.current.has(targetUserId)) return
+        followListPending.current.add(targetUserId)
+
         // Find the user in the list
         const userInList = followList.find((u) => u.id === targetUserId)
-        if (!userInList) return
+        if (!userInList) {
+            followListPending.current.delete(targetUserId)
+            return
+        }
 
         // Optimistic update immediately
         setFollowList(
@@ -621,10 +644,31 @@ export default function UnifiedProfileView({
                 )
             )
             showToast('error', 'Failed to update follow status')
+        } finally {
+            followListPending.current.delete(targetUserId)
         }
     }
 
     const handleFollowToggle = async () => {
+        if (!user || !userId) return
+
+        // Unfollowing deserves a confirm — a stray tap on "Following"
+        // shouldn't silently sever the relationship
+        if (isFollowing) {
+            Alert.alert('Unfollow', `Unfollow @${username}?`, [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Unfollow',
+                    style: 'destructive',
+                    onPress: () => performFollowToggle(),
+                },
+            ])
+            return
+        }
+        performFollowToggle()
+    }
+
+    const performFollowToggle = async () => {
         if (!user || !userId) return
 
         // Debounce with ref — non-blocking, just skips duplicate in-flight calls
@@ -703,12 +747,33 @@ export default function UnifiedProfileView({
                         ) : (
                             <View style={styles.profileInfo}>
                                 <View style={styles.statsContainer}>
+                                    {profilePicture ? (
+                                        <Image
+                                            source={{ uri: profilePicture }}
+                                            style={styles.avatar}
+                                            contentFit="cover"
+                                            accessibilityLabel={`@${username}'s profile picture`}
+                                        />
+                                    ) : (
+                                        <View style={styles.avatarPlaceholder}>
+                                            <Text style={styles.avatarInitial}>
+                                                {username
+                                                    ? username[0].toUpperCase()
+                                                    : '?'}
+                                            </Text>
+                                        </View>
+                                    )}
                                     <Text
                                         style={styles.username}
                                         accessibilityRole="header"
                                     >
                                         @{username}
                                     </Text>
+                                    {joinedText ? (
+                                        <Text style={styles.joinedText}>
+                                            Joined {joinedText}
+                                        </Text>
+                                    ) : null}
                                     <View style={styles.statRow}>
                                         <TouchableOpacity
                                             style={styles.statItem}
@@ -1490,11 +1555,37 @@ const styles = StyleSheet.create({
     statsContainer: {
         alignItems: 'center',
     },
+    avatar: {
+        width: 84,
+        height: 84,
+        borderRadius: 42,
+        marginBottom: 12,
+        backgroundColor: colors.cardElevated,
+    },
+    avatarPlaceholder: {
+        width: 84,
+        height: 84,
+        borderRadius: 42,
+        marginBottom: 12,
+        backgroundColor: colors.cardElevated,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    avatarInitial: {
+        fontSize: 34,
+        fontWeight: '700',
+        color: colors.textSecondary,
+    },
     username: {
         fontSize: 24,
         fontWeight: 'bold',
-        marginBottom: 16,
+        marginBottom: 4,
         color: colors.textPrimary,
+    },
+    joinedText: {
+        fontSize: 13,
+        color: colors.textTertiary,
+        marginBottom: 16,
     },
     statRow: {
         flexDirection: 'row',

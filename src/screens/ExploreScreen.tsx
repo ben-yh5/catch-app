@@ -4,6 +4,7 @@ import ActivityFeed from '@/components/NotificationInbox'
 import RecommendedPostCard from '@/components/RecommendedPostCard'
 import ThreadModal from '@/components/ThreadModal'
 import ErrorState from '@/components/ui/ErrorState'
+import { ExploreSkeleton } from '@/components/ui/Skeleton'
 import { useAuth } from '@/context/AuthContext'
 import { useRecommendedFeed } from '@/hooks/useRecommendedFeed'
 import { db } from '@/services/firebase'
@@ -473,9 +474,18 @@ export default function ExploreScreen() {
     const isLoading = loadingLists && loadingTrending && loadingNew
 
     if (isLoading && !refreshing) {
+        // Skeleton, not a bare spinner — shows the page shape immediately
         return (
-            <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
+            <View style={styles.container}>
+                <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+                    <Text
+                        style={styles.headerTitle}
+                        accessibilityRole="header"
+                    >
+                        Explore
+                    </Text>
+                </View>
+                <ExploreSkeleton />
             </View>
         )
     }

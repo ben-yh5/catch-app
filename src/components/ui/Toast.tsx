@@ -39,10 +39,10 @@ interface ToastContextValue {
 // --- Config ---
 
 const TOAST_COLORS: Record<ToastType, string> = {
-    success: '#30D158',
-    error: '#FF453A',
-    warning: '#FF9F0A',
-    info: '#007AFF',
+    success: colors.success,
+    error: colors.error,
+    warning: colors.warning,
+    info: colors.info,
 }
 
 const TOAST_ICONS: Record<ToastType, keyof typeof Ionicons.glyphMap> = {

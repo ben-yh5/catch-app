@@ -1,4 +1,5 @@
 import { colors } from '@/theme/colors'
+import { smallTargetHitSlop } from '@/theme/tokens'
 import { Ionicons } from '@expo/vector-icons'
 import React, { useEffect, useState } from 'react'
 import {
@@ -81,6 +82,7 @@ export default function ExploreSearchBar({
                 {query.length > 0 && !loading && (
                     <TouchableOpacity
                         onPress={handleClear}
+                        hitSlop={smallTargetHitSlop}
                         style={styles.clearButton}
                         accessibilityLabel="Clear search"
                         accessibilityRole="button"

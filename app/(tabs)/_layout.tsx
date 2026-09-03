@@ -3,6 +3,7 @@ import React from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated'
 import OnboardingModal from '@/components/OnboardingModal'
+import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
 
 const AnimatedIcon = ({
@@ -35,6 +36,8 @@ const AnimatedIcon = ({
 }
 
 export default function TabLayout() {
+    const { unreadCount } = useAuth()
+
     return (
         <>
             {/* First-run intro — shows once, over whichever tab loads first */}
@@ -49,7 +52,13 @@ export default function TabLayout() {
                 name="index"
                 options={{
                     title: 'Explore',
-                    tabBarAccessibilityLabel: 'Explore tab',
+                    tabBarAccessibilityLabel:
+                        unreadCount > 0
+                            ? `Explore tab, ${unreadCount} unread notifications`
+                            : 'Explore tab',
+                    // Unread notifications are otherwise only visible inside
+                    // the Explore header
+                    tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
                     tabBarIcon: ({ color, focused }) => (
                         <AnimatedIcon
                             name="compass"

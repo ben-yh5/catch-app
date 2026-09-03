@@ -1,3 +1,4 @@
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
@@ -7,7 +8,6 @@ import { addDoc, collection, doc, getDoc, updateDoc } from 'firebase/firestore'
 import React, { useState } from 'react'
 import {
     ActivityIndicator,
-    Alert,
     BackHandler,
     KeyboardAvoidingView,
     Platform,
@@ -23,6 +23,7 @@ export default function CreateListModal() {
     const router = useRouter()
     const insets = useSafeAreaInsets()
     const { user } = useAuth()
+    const { showToast } = useToast()
     const params = useLocalSearchParams()
     const listId = params.listId as string | undefined
     const isEditing = !!listId
@@ -45,13 +46,14 @@ export default function CreateListModal() {
                     }
                 } catch (error) {
                     console.error('Error loading list:', error)
-                    Alert.alert('Error', 'Failed to load list')
+                    showToast('error', "Couldn't load list", 'Check your connection and try again.')
                 } finally {
                     setIsLoadingList(false)
                 }
             }
             loadList()
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditing, listId])
 
     // Handle hardware back button
@@ -72,7 +74,7 @@ export default function CreateListModal() {
 
         // Validate name
         if (!name.trim()) {
-            Alert.alert('Error', 'Please enter a list name')
+            showToast('warning', 'Name required', 'Give your list a name first.')
             return
         }
 
@@ -106,7 +108,7 @@ export default function CreateListModal() {
             router.back()
         } catch (error) {
             console.error('Error saving list:', error)
-            Alert.alert('Error', 'Failed to save list. Please try again.')
+            showToast('error', "Couldn't save list", 'Check your connection and try again.')
         } finally {
             setLoading(false)
         }

@@ -273,28 +273,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const markAllNotificationsAsRead = async () => {
         if (!user) return
+        if (!notifications.some((n) => !n.read)) return
 
-        // This should potentialy be a batch update or cloud function for efficiency
-        // For now, client-side loop is okay for small numbers
-        const unreadNotifications = notifications.filter((n) => !n.read)
-
-        if (unreadNotifications.length === 0) return
-
-        // Just mark the visible ones for now
-        import('firebase/firestore').then(async ({ writeBatch, doc }) => {
-            const batch = writeBatch(db)
-
-            unreadNotifications.forEach((n) => {
-                const ref = doc(db, 'users', user.uid, 'notifications', n.id)
-                batch.update(ref, { read: true })
-            })
-
-            try {
-                await batch.commit()
-            } catch (error) {
-                console.error('Error batch marking read:', error)
-            }
-        })
+        // Server-side bulk update — covers the whole subcollection, not just
+        // the (client-capped) notifications loaded on this device. On failure
+        // the snapshot listener keeps showing the true unread state.
+        try {
+            const markAllReadFn = httpsCallable(
+                functions,
+                'markAllNotificationsRead'
+            )
+            await markAllReadFn()
+        } catch (error) {
+            console.error('Error marking notifications read:', error)
+        }
     }
 
     /**
