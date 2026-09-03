@@ -12,6 +12,7 @@ interface UseRecommendedFeedReturn {
     loading: boolean
     loadingMore: boolean
     hasMore: boolean
+    error: boolean
     refresh: () => Promise<void>
     loadMore: () => Promise<void>
 }
@@ -22,14 +23,20 @@ export function useRecommendedFeed(): UseRecommendedFeedReturn {
     const [loading, setLoading] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
     const [hasMore, setHasMore] = useState(true)
+    const [error, setError] = useState(false)
     const cursorRef = useRef<string | null>(null)
     const fetchingRef = useRef(false)
 
     const fetchFeed = useCallback(
         async (isRefresh: boolean) => {
-            if (!user) return
+            if (!user) {
+                // No fetch without a user — don't leave the loading spinner up
+                setLoading(false)
+                return
+            }
             if (fetchingRef.current) return
             fetchingRef.current = true
+            setError(false)
 
             if (isRefresh) {
                 setLoading(true)
@@ -74,6 +81,7 @@ export function useRecommendedFeed(): UseRecommendedFeedReturn {
                 setHasMore(more)
             } catch (error) {
                 console.error('Error fetching recommended feed:', error)
+                setError(true)
             } finally {
                 setLoading(false)
                 setLoadingMore(false)
@@ -111,5 +119,5 @@ export function useRecommendedFeed(): UseRecommendedFeedReturn {
         return posts.filter((p) => !blocked.has(p.authorId))
     }, [posts, blockedUserIds])
 
-    return { posts: filteredPosts, loading, loadingMore, hasMore, refresh, loadMore }
+    return { posts: filteredPosts, loading, loadingMore, hasMore, error, refresh, loadMore }
 }

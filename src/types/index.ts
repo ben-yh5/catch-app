@@ -31,8 +31,7 @@ export interface Post {
     thumbnailURL?: string
     mediumURL?: string
     isPioneer?: boolean
-    contributionEarned?: number
-    lastCaughtAt?: any // Firestore Timestamp — set when post is caught, used for bounty classification
+    lastCaughtAt?: any // Firestore Timestamp — set when post is caught, used for lost-place classification
 }
 
 /**

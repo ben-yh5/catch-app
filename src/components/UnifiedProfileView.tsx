@@ -62,8 +62,7 @@ export default function UnifiedProfileView({
     const isFocused = useIsFocused()
     const insets = useSafeAreaInsets()
     const [username, setUsername] = useState<string>('')
-    const [, setTotalCatches] = useState<number>(0)
-    const [contribution, setContribution] = useState<number>(0)
+    const [totalCatches, setTotalCatches] = useState<number>(0)
     const [, setTotalPosts] = useState<number>(0)
     const [followerCount, setFollowerCount] = useState<number>(0)
     const [followingCount, setFollowingCount] = useState<number>(0)
@@ -92,6 +91,7 @@ export default function UnifiedProfileView({
         { id: string; username: string }[]
     >([])
     const [searchLoading, setSearchLoading] = useState(false)
+    const [searchError, setSearchError] = useState(false)
     const [followListVisible, setFollowListVisible] = useState(false)
     const [followListType, setFollowListType] = useState<
         'followers' | 'following'
@@ -115,7 +115,6 @@ export default function UnifiedProfileView({
                 const userData = userDoc.data()
                 setUsername(userData.username || 'Unknown')
                 setTotalCatches(userData.totalCatches || 0)
-                setContribution(userData.contribution || 0)
                 setTotalPosts(userData.totalPosts || 0)
                 const followers = (userData.followers || []).filter(
                     (id: string) => id !== userId
@@ -129,7 +128,6 @@ export default function UnifiedProfileView({
                 // Sync stats to AuthContext so Explore page stays in sync
                 if (isOwnProfile) {
                     updateStats({
-                        contribution: userData.contribution || 0,
                         totalPosts: userData.totalPosts || 0,
                         totalCatches: userData.totalCatches || 0,
                     })
@@ -410,6 +408,7 @@ export default function UnifiedProfileView({
         }
 
         setSearchLoading(true)
+        setSearchError(false)
         try {
             // Search users by username prefix (case-sensitive for now)
             const searchLower = text.toLowerCase()
@@ -433,6 +432,8 @@ export default function UnifiedProfileView({
             setSearchResults(results)
         } catch (error) {
             console.error('Error searching users:', error)
+            // Distinguish a failed search from "no users found"
+            setSearchError(true)
         } finally {
             setSearchLoading(false)
         }
@@ -707,15 +708,15 @@ export default function UnifiedProfileView({
                                             onPress={() =>
                                                 setShowActivityFeed(true)
                                             }
-                                            accessibilityLabel={`${contribution} Contribution`}
+                                            accessibilityLabel={`${totalCatches} Catches`}
                                             accessibilityRole="button"
                                             accessibilityHint="View activity feed"
                                         >
                                             <Text style={styles.statNumber}>
-                                                {contribution}
+                                                {totalCatches}
                                             </Text>
                                             <Text style={styles.statLabel}>
-                                                Contribution
+                                                Catches
                                             </Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
@@ -1128,6 +1129,11 @@ export default function UnifiedProfileView({
                                     )}
                                 </TouchableOpacity>
                             ))
+                        ) : searchError ? (
+                            <Text style={styles.searchNoResults}>
+                                Search failed — check your connection and try
+                                again
+                            </Text>
                         ) : searchQuery.length > 0 ? (
                             <Text style={styles.searchNoResults}>
                                 No users found

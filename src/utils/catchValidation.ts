@@ -11,6 +11,13 @@
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '../services/firebase'
 
+/**
+ * Mirrors CATCH_RADIUS_METERS in functions/src/lib/constants.ts.
+ * Display-only hint (live distance indicator, onboarding copy) — the
+ * server-side validateCatch check remains the authority.
+ */
+export const CATCH_RADIUS_METERS = 100
+
 interface ValidateCatchRequest {
     postId: string
     userLat: number

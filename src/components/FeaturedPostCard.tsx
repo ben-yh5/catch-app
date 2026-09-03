@@ -43,8 +43,8 @@ export default function FeaturedPostCard({
             onPress={onPress}
             activeOpacity={0.9}
             accessibilityRole="button"
-            accessibilityLabel={`Post by @${post.authorUsername}${post.caption ? `, ${post.caption}` : ''}, ${post.catchCount} ${post.catchCount === 1 ? 'catch' : 'catches'}`}
-            accessibilityHint="View post"
+            accessibilityLabel={`Shot by @${post.authorUsername}${post.caption ? `, ${post.caption}` : ''}, ${post.catchCount} ${post.catchCount === 1 ? 'catch' : 'catches'}`}
+            accessibilityHint="View shot"
         >
             <Image
                 source={{ uri: post.mediumURL || post.photoURL }}
@@ -52,7 +52,7 @@ export default function FeaturedPostCard({
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 priority="normal"
-                accessibilityLabel="Post photo"
+                accessibilityLabel="Shot photo"
             />
 
             {isOwnPost && <CaughtBadge containerStyle={styles.cornerBadge} />}

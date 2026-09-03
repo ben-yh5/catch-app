@@ -51,15 +51,10 @@ interface AuthContextType {
     blockUser: (targetUserId: string) => Promise<void>
     unblockUser: (targetUserId: string) => Promise<void>
 
-    // Contribution stats
-    contribution: number
+    // Passport stats
     totalPosts: number
     totalCatches: number
-    updateStats: (stats: {
-        contribution: number
-        totalPosts: number
-        totalCatches: number
-    }) => void
+    updateStats: (stats: { totalPosts: number; totalCatches: number }) => void
 
     // Notifications
     notifications: Notification[]
@@ -86,7 +81,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const [loading, setLoading] = useState(true)
     const [dataContributionEnabled, setDataContributionEnabled] =
         useState(false)
-    const [contribution, setContribution] = useState(0)
     const [totalPosts, setTotalPosts] = useState(0)
     const [totalCatches, setTotalCatches] = useState(0)
     const [blockedUserIds, setBlockedUserIds] = useState<string[]>([])
@@ -117,7 +111,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                         setDataContributionEnabled(
                             data.dataContributionEnabled || false
                         )
-                        setContribution(data.contribution || 0)
                         setTotalPosts(data.totalPosts || 0)
                         setTotalCatches(data.totalCatches || 0)
                         setBlockedUserIds(data.blockedUsers || [])
@@ -153,7 +146,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 }
             } else {
                 setDataContributionEnabled(false)
-                setContribution(0)
                 setTotalPosts(0)
                 setTotalCatches(0)
                 setBlockedUserIds([])
@@ -396,11 +388,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     const updateStats = (stats: {
-        contribution: number
         totalPosts: number
         totalCatches: number
     }) => {
-        setContribution(stats.contribution)
         setTotalPosts(stats.totalPosts)
         setTotalCatches(stats.totalCatches)
     }
@@ -454,7 +444,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 blockedUserIds,
                 blockUser,
                 unblockUser,
-                contribution,
                 totalPosts,
                 totalCatches,
                 updateStats,

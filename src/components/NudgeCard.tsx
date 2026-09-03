@@ -8,7 +8,6 @@
 
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
-import { CONTRIBUTION } from '@/utils/contributionConfig'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import React from 'react'
@@ -43,19 +42,19 @@ export default function NudgeCard({
                 onPress={() => onCatchInstead(post)}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel={`Similar thread found by @${post.authorUsername}. Catch for ${CONTRIBUTION.CATCH} points`}
-                accessibilityHint="Catch this thread instead"
+                accessibilityLabel={`This spot is already on the map — shot by @${post.authorUsername}`}
+                accessibilityHint="Catch the existing shot instead of posting a duplicate"
             >
                 <Image
                     source={{ uri: post.thumbnailURL || post.photoURL }}
                     style={styles.thumbnail}
                     contentFit="cover"
-                    accessibilityLabel="Similar post photo"
+                    accessibilityLabel="Existing shot at this spot"
                 />
 
                 <View style={styles.info}>
                     <Text style={styles.title} numberOfLines={1}>
-                        Similar thread found
+                        This spot is already on the map
                     </Text>
                     {post.caption ? (
                         <Text style={styles.caption} numberOfLines={1}>
@@ -65,11 +64,6 @@ export default function NudgeCard({
                     <Text style={styles.subtitle}>
                         By @{post.authorUsername}
                     </Text>
-                </View>
-
-                <View style={styles.pointsBadge}>
-                    <Text style={styles.pointsText}>+{CONTRIBUTION.CATCH}</Text>
-                    <Text style={styles.pointsLabel}>pts</Text>
                 </View>
 
                 <Ionicons
@@ -98,7 +92,7 @@ const styles = StyleSheet.create({
         padding: 12,
         marginBottom: 10,
         borderWidth: 1,
-        borderColor: colors.pinBounty + '40',
+        borderColor: colors.pinLostPlace + '40',
     },
     dismissButton: {
         position: 'absolute',
@@ -134,22 +128,6 @@ const styles = StyleSheet.create({
     subtitle: {
         fontSize: 11,
         color: colors.textTertiary,
-    },
-    pointsBadge: {
-        backgroundColor: colors.primary + '20',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    pointsText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: colors.primary,
-    },
-    pointsLabel: {
-        fontSize: 10,
-        color: colors.primary,
     },
     notAMatch: {
         fontSize: 12,

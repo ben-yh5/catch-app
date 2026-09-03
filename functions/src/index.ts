@@ -42,7 +42,7 @@ export {
 } from './callable/account'
 
 // ─── Callable Functions: Admin Reconciliation ───────────────────────────────
-export { reconcileContributions } from './callable/reconcile'
+export { reconcileCounters } from './callable/reconcile'
 
 // ─── Callable Functions: Recommendations ────────────────────────────────────
 export {

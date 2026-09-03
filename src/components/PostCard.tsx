@@ -356,7 +356,7 @@ export default function PostCard({
                                 contentFit="cover"
                                 cachePolicy="memory-disk"
                                 transition={200}
-                                accessibilityLabel={`Post photo ${index + 1} of ${images.length}`}
+                                accessibilityLabel={`Photo ${index + 1} of ${images.length}`}
                             />
                         </View>
                     )}
@@ -377,7 +377,7 @@ export default function PostCard({
                         contentFit="cover"
                         cachePolicy="memory-disk"
                         transition={200}
-                        accessibilityLabel="Post photo"
+                        accessibilityLabel="Photo"
                     />
                 </View>
             )}

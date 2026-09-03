@@ -13,7 +13,7 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == userId;
 
       // Users can update their own document (restricted to safe fields only)
-      // Server-computed fields (contribution, totalPosts, totalCatches, followers, following) are only writable by Cloud Functions
+      // Server-computed fields (totalPosts, totalCatches, followers, following) are only writable by Cloud Functions
       allow update: if request.auth != null && request.auth.uid == userId &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['username', 'pushToken', 'notificationSettings', 'dataContributionEnabled', 'bio']);
@@ -37,9 +37,22 @@ service cloud.firestore {
       // Anyone can read posts
       allow read: if true;
 
-      // Only authenticated users can create posts, must set authorId to own uid
+      // Only authenticated users can create posts, must set authorId to own uid.
+      // Originals must not claim thread membership; catches require a live
+      // permit issued by the validateCatch Cloud Function (proximity passed),
+      // so a scripted client can't mint catches without being there.
       allow create: if request.auth != null &&
-                       request.auth.uid == request.resource.data.authorId;
+                       request.auth.uid == request.resource.data.authorId &&
+                       (
+                         (request.resource.data.isOriginal == true &&
+                          request.resource.data.get('parentPostId', null) == null &&
+                          request.resource.data.get('rootPostId', null) == null) ||
+                         (request.resource.data.isOriginal == false &&
+                          request.resource.data.parentPostId is string &&
+                          request.resource.data.rootPostId is string &&
+                          exists(/databases/$(database)/documents/catch_permits/$(request.auth.uid + '_' + request.resource.data.rootPostId)) &&
+                          get(/databases/$(database)/documents/catch_permits/$(request.auth.uid + '_' + request.resource.data.rootPostId)).data.expiresAt > request.time)
+                       );
 
       // Only the post author can delete their posts
       allow delete: if request.auth != null &&
@@ -99,6 +112,13 @@ service cloud.firestore {
     // Processed events collection (deduplication for Firestore triggers)
     match /processed_events/{eventId} {
       // No client access — only written by Cloud Functions (admin SDK)
+      allow read, write: if false;
+    }
+
+    // Catch permits (issued by validateCatch, consumed by onPostCreated).
+    // Referenced via get()/exists() in the posts create rule above.
+    match /catch_permits/{permitId} {
+      // No client access — only Cloud Functions (admin SDK)
       allow read, write: if false;
     }
 

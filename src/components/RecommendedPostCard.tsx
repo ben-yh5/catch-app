@@ -40,8 +40,8 @@ export default function RecommendedPostCard({
             onPress={onPress}
             activeOpacity={0.9}
             accessibilityRole="button"
-            accessibilityLabel={`${post.reasonLabel}: Post by @${post.authorUsername}${post.caption ? `, ${post.caption}` : ''}`}
-            accessibilityHint="View post"
+            accessibilityLabel={`${post.reasonLabel}: Shot by @${post.authorUsername}${post.caption ? `, ${post.caption}` : ''}`}
+            accessibilityHint="View shot"
         >
             <Image
                 source={{ uri: post.mediumURL || post.photoURL }}
@@ -49,7 +49,7 @@ export default function RecommendedPostCard({
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 priority="normal"
-                accessibilityLabel="Post photo"
+                accessibilityLabel="Shot photo"
             />
 
             {isOwnPost && <CaughtBadge containerStyle={styles.cornerBadge} />}

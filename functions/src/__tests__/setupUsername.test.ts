@@ -141,7 +141,6 @@ describe('setupUsername', () => {
                 username: 'MyName',
                 totalPosts: 0,
                 totalCatches: 0,
-                contribution: 0,
                 followers: [],
                 following: [],
             })

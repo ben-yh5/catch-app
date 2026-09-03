@@ -1,7 +1,11 @@
 import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { distanceBetween } from 'geofire-common'
-import { CATCH_RADIUS_METERS, MAX_INSTANCES } from '../lib/constants'
+import {
+    CATCH_PERMIT_TTL_MINUTES,
+    CATCH_RADIUS_METERS,
+    MAX_INSTANCES,
+} from '../lib/constants'
 
 /**
  * HTTPS Callable Function: Validates if a user is close enough to catch a post
@@ -9,6 +13,11 @@ import { CATCH_RADIUS_METERS, MAX_INSTANCES } from '../lib/constants'
  * Security: Post coordinates are stored in a private collection (post_locations) that
  * clients cannot access. This function is the only way to validate catch proximity
  * without exposing exact coordinates to the client.
+ *
+ * On success it also issues a short-lived catch permit
+ * (catch_permits/{uid}_{rootPostId}). Security rules require a live permit to
+ * create a catch post, and onPostCreated consumes it — so this function is the
+ * only door to a catch, not just advice.
  *
  * @param data.postId - The ID of the post to catch
  * @param data.userLat - User's current latitude
@@ -102,6 +111,21 @@ export const validateCatch = functions
             const distance =
                 distanceBetween([userLat, userLng], [postLat, postLng]) * 1000 // km to meters
             const isValid = distance <= CATCH_RADIUS_METERS
+
+            if (isValid) {
+                await db
+                    .collection('catch_permits')
+                    .doc(`${context.auth.uid}_${rootPostId}`)
+                    .set({
+                        uid: context.auth.uid,
+                        rootPostId,
+                        expiresAt: admin.firestore.Timestamp.fromMillis(
+                            Date.now() + CATCH_PERMIT_TTL_MINUTES * 60 * 1000
+                        ),
+                        createdAt:
+                            admin.firestore.FieldValue.serverTimestamp(),
+                    })
+            }
 
             return {
                 isValid,

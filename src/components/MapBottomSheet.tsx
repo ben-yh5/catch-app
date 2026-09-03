@@ -14,11 +14,17 @@ import CompactPostCard from './CompactPostCard'
 interface MapBottomSheetProps {
     posts: any[]
     loading: boolean
+    /** Last fetch failed — show an error state instead of "no shots" */
+    error?: boolean
+    onRetry?: () => void
     onPostPress: (postId: string) => void
     onJumpToLocation: (latitude: number, longitude: number) => void
     selectedPostId?: string | null
     title?: string
     subtitle?: string
+    /** Override the default empty copy (e.g. for search results) */
+    emptyTitle?: string
+    emptySubtitle?: string
     onClose?: () => void
     isListMode?: boolean
 }
@@ -26,11 +32,15 @@ interface MapBottomSheetProps {
 function MapBottomSheet({
     posts,
     loading,
+    error,
+    onRetry,
     onPostPress,
     onJumpToLocation,
     selectedPostId,
     title,
     subtitle,
+    emptyTitle,
+    emptySubtitle,
     onClose,
     isListMode,
 }: MapBottomSheetProps) {
@@ -84,7 +94,9 @@ function MapBottomSheet({
                     <Text style={styles.countText}>
                         {loading
                             ? 'Loading...'
-                            : `${posts.length} shot${posts.length !== 1 ? 's' : ''} in this area`}
+                            : error && posts.length === 0
+                              ? "Couldn't load shots"
+                              : `${posts.length} shot${posts.length !== 1 ? 's' : ''} in this area`}
                     </Text>
                 </View>
             )}
@@ -95,12 +107,34 @@ function MapBottomSheet({
         <View style={styles.emptyContainer}>
             {loading ? (
                 <ActivityIndicator size="large" color={colors.primary} />
+            ) : error ? (
+                <>
+                    <Text style={styles.emptyIcon}>📡</Text>
+                    <Text style={styles.emptyText}>
+                        Couldn&apos;t load shots
+                    </Text>
+                    <Text style={styles.emptySubtext}>
+                        Check your connection and try again
+                    </Text>
+                    {onRetry && (
+                        <TouchableOpacity
+                            style={styles.retryButton}
+                            onPress={onRetry}
+                            accessibilityLabel="Retry loading shots"
+                            accessibilityRole="button"
+                        >
+                            <Text style={styles.retryButtonText}>Retry</Text>
+                        </TouchableOpacity>
+                    )}
+                </>
             ) : (
                 <>
                     <Text style={styles.emptyIcon}>🗺️</Text>
-                    <Text style={styles.emptyText}>No posts in this area</Text>
+                    <Text style={styles.emptyText}>
+                        {emptyTitle || 'No shots in this area'}
+                    </Text>
                     <Text style={styles.emptySubtext}>
-                        Try zooming out or panning the map
+                        {emptySubtitle || 'Try zooming out or panning the map'}
                     </Text>
                 </>
             )}
@@ -202,6 +236,21 @@ const styles = StyleSheet.create({
     emptySubtext: {
         fontSize: 14,
         color: '#CCCCCC', // Light gray text
+        textAlign: 'center',
+        paddingHorizontal: 24,
+    },
+    retryButton: {
+        marginTop: 16,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        borderRadius: 16,
+        paddingHorizontal: 24,
+        paddingVertical: 8,
+    },
+    retryButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.primary,
     },
     listHeaderContainer: {
         flexDirection: 'row',

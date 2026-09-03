@@ -1,20 +1,17 @@
 import { Post } from '@/types'
-import { CONTRIBUTION } from './contributionConfig'
 
-export type BountyStatus = 'bounty' | 'trending' | 'normal'
+/** Days since last catch before a post counts as a "lost place" */
+export const LOST_PLACE_INACTIVITY_DAYS = 30
 
 /**
- * Determines the bounty status of a post for map pin coloring and catch multipliers.
- *
- * - Bounty (Gold): 0 catches OR last caught >30 days ago — 3x catch pts
- * - Trending (Silver): catchCount >= threshold AND not bounty — 1.5x catch pts
- * - Normal: everything else — 1x catch pts
+ * A "lost place" (gold pin) is a spot whose photographic record has a gap
+ * worth filling: never caught, or last caught more than
+ * LOST_PLACE_INACTIVITY_DAYS ago.
  */
-export function getPostBountyStatus(post: Post): BountyStatus {
+export function isLostPlace(post: Post): boolean {
     const catchCount = post.catchCount ?? 0
 
-    // Bounty: never caught or inactive for too long
-    if (catchCount === 0) return 'bounty'
+    if (catchCount === 0) return true
 
     if (post.lastCaughtAt) {
         const lastCaughtMs =
@@ -24,13 +21,10 @@ export function getPostBountyStatus(post: Post): BountyStatus {
                 : 0)
         if (lastCaughtMs > 0) {
             const inactivityMs =
-                CONTRIBUTION.BOUNTY_INACTIVITY_DAYS * 24 * 60 * 60 * 1000
-            if (Date.now() - lastCaughtMs > inactivityMs) return 'bounty'
+                LOST_PLACE_INACTIVITY_DAYS * 24 * 60 * 60 * 1000
+            if (Date.now() - lastCaughtMs > inactivityMs) return true
         }
     }
 
-    // Trending: popular posts with enough catches
-    if (catchCount >= CONTRIBUTION.TRENDING_THRESHOLD) return 'trending'
-
-    return 'normal'
+    return false
 }

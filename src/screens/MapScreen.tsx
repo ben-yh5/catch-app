@@ -14,7 +14,7 @@ import {
     getPostLocations,
     MapBounds,
 } from '@/utils/geospatialQueries'
-import { getPostBountyStatus } from '@/utils/postClassification'
+import { isLostPlace } from '@/utils/postClassification'
 import { useCoverage, CoverageMode } from '@/hooks/useCoverage'
 import { Ionicons } from '@expo/vector-icons'
 import Mapbox, {
@@ -33,8 +33,8 @@ import { doc, getDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
-    Alert,
     BackHandler,
+    Linking,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -52,8 +52,7 @@ const MAP_COLORS = {
     pin: colors.pinDefault, // Blue - uncaught posts
     pinCaught: colors.pinCaught, // Pink - caught by user
     selectedPin: colors.pinSelected, // Light pink - currently selected
-    pinBounty: colors.pinBounty, // Gold - bounty posts
-    pinTrending: colors.pinTrending, // Silver - trending posts
+    pinLostPlace: colors.pinLostPlace, // Gold - lost places (record has a gap)
     stroke: colors.white,
 }
 
@@ -74,6 +73,9 @@ export default function MapScreen() {
     const [userLocation, setUserLocation] =
         useState<Location.LocationObject | null>(null)
     const [locationLoading, setLocationLoading] = useState(true)
+    const [locationDenied, setLocationDenied] = useState(false)
+    const [browseWithoutLocation, setBrowseWithoutLocation] = useState(false)
+    const [viewportError, setViewportError] = useState(false)
     const [initialLocation, setInitialLocation] =
         useState<Location.LocationObject | null>(null)
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
@@ -274,7 +276,7 @@ export default function MapScreen() {
                 }
             } catch (error) {
                 console.error('Error fetching post for locate:', error)
-                showToast('error', 'Failed to locate post')
+                showToast('error', 'Failed to locate shot')
             } finally {
                 setLoadingPosts(false)
             }
@@ -381,7 +383,11 @@ export default function MapScreen() {
                 isSearchModeRef.current = true
             } catch (error) {
                 console.error('Error searching posts:', error)
-                showToast('error', 'Search failed')
+                showToast(
+                    'error',
+                    'Search failed',
+                    'Check your connection and try again.'
+                )
                 isSearchModeRef.current = false
             } finally {
                 setSearchLoading(false)
@@ -390,44 +396,47 @@ export default function MapScreen() {
         [userLocation, showToast]
     )
 
-    // Get user's current location
-    useEffect(() => {
-        ;(async () => {
-            try {
-                const { status } =
-                    await Location.requestForegroundPermissionsAsync()
-                if (status !== 'granted') {
-                    Alert.alert(
-                        'Location Required',
-                        'Location permission is required to use the map. Please enable location in your device settings.'
-                    )
-                    setLocationLoading(false)
-                    return
-                }
+    // Get user's current location. Also the retry path after the user
+    // grants permission in Settings — re-requesting resolves silently
+    // once access is granted.
+    const requestLocation = useCallback(async () => {
+        try {
+            setLocationLoading(true)
+            const { status } =
+                await Location.requestForegroundPermissionsAsync()
+            if (status !== 'granted') {
+                setLocationDenied(true)
+                setLocationLoading(false)
+                return
+            }
+            setLocationDenied(false)
 
-                // Use last known location first for speed
-                const lastKnown = await Location.getLastKnownPositionAsync({})
-                if (lastKnown) {
-                    setUserLocation(lastKnown)
-                    setInitialLocation(lastKnown)
-                    setLocationLoading(false)
-                }
-
-                // Get current position in background for accuracy
-                const location = await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Balanced,
-                })
-                setUserLocation(location)
-                if (!lastKnown) {
-                    setInitialLocation(location)
-                    setLocationLoading(false)
-                }
-            } catch (error) {
-                console.error('Error getting location:', error)
+            // Use last known location first for speed
+            const lastKnown = await Location.getLastKnownPositionAsync({})
+            if (lastKnown) {
+                setUserLocation(lastKnown)
+                setInitialLocation(lastKnown)
                 setLocationLoading(false)
             }
-        })()
+
+            // Get current position in background for accuracy
+            const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            })
+            setUserLocation(location)
+            if (!lastKnown) {
+                setInitialLocation(location)
+                setLocationLoading(false)
+            }
+        } catch (error) {
+            console.error('Error getting location:', error)
+            setLocationLoading(false)
+        }
     }, [])
+
+    useEffect(() => {
+        requestLocation()
+    }, [requestLocation])
 
     // Handle Deep Links (Filter & Location)
     useEffect(() => {
@@ -621,14 +630,25 @@ export default function MapScreen() {
                 }
                 return posts
             })
+            setViewportError(false)
         } catch (error) {
             console.error('Error fetching posts in viewport:', error)
-            // Don't alert on auto-fetch error to avoid annoyance
+            // No alert (would fire on every failed pan) — surfaced as an
+            // error state in the bottom sheet instead
+            setViewportError(true)
         } finally {
             hasLoadedOnceRef.current = true
             setLoadingPosts(false)
         }
     }, [cachePosts, isListMode])
+
+    // Retry after a failed viewport fetch — reset the throttle/bounds cache
+    // so the retry actually refetches instead of being skipped
+    const handleViewportRetry = useCallback(() => {
+        lastFetchRef.current = 0
+        lastFetchBoundsRef.current = null
+        loadVisiblePosts()
+    }, [loadVisiblePosts])
 
     // Keep a stable reference so the deferred throttle retry always calls
     // the latest version of loadVisiblePosts
@@ -764,8 +784,7 @@ export default function MapScreen() {
                     isSelected: post.id === selectedPostId,
                     isOwn: post.authorId === user?.uid,
                     isCaught: caughtThreadIds.has(post.id),
-                    isBounty: getPostBountyStatus(post) === 'bounty',
-                    isTrending: getPostBountyStatus(post) === 'trending',
+                    isLostPlace: isLostPlace(post),
                 },
                 geometry: {
                     type: 'Point' as const,
@@ -885,6 +904,68 @@ export default function MapScreen() {
                         </Text>
                     </View>
                 </View>
+            ) : locationDenied && !browseWithoutLocation ? (
+                // Location denied: explain and offer recovery instead of
+                // silently dropping the user onto a default city
+                <View style={styles.map}>
+                    <View style={styles.locationDeniedContainer}>
+                        <Ionicons
+                            name="location-outline"
+                            size={56}
+                            color={colors.textTertiary}
+                        />
+                        <Text
+                            style={styles.locationDeniedTitle}
+                            accessibilityRole="header"
+                        >
+                            Turn on location to explore nearby
+                        </Text>
+                        <Text style={styles.locationDeniedText}>
+                            The map shows real shots taken around you, and
+                            catching one requires being at the spot. Your
+                            location is never shown to other people.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.locationDeniedPrimaryButton}
+                            onPress={() => Linking.openSettings()}
+                            accessibilityLabel="Open settings"
+                            accessibilityRole="button"
+                            accessibilityHint="Opens system settings for this app"
+                        >
+                            <Ionicons
+                                name="settings-outline"
+                                size={18}
+                                color={colors.white}
+                            />
+                            <Text
+                                style={styles.locationDeniedPrimaryButtonText}
+                            >
+                                Open Settings
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.locationDeniedSecondaryButton}
+                            onPress={requestLocation}
+                            accessibilityLabel="Try again"
+                            accessibilityRole="button"
+                        >
+                            <Text
+                                style={styles.locationDeniedSecondaryButtonText}
+                            >
+                                I&apos;ve enabled it — try again
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => setBrowseWithoutLocation(true)}
+                            accessibilityLabel="Browse the map without location"
+                            accessibilityRole="button"
+                        >
+                            <Text style={styles.locationDeniedLink}>
+                                Browse the map without location
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             ) : (
                 <MapView
                     ref={mapRef}
@@ -940,13 +1021,15 @@ export default function MapScreen() {
                     <Camera
                         ref={cameraRef}
                         defaultSettings={{
-                            zoomLevel: 12,
+                            // Without a location, start on a world view
+                            // rather than implying a specific place
+                            zoomLevel: initialLocation ? 12 : 1.5,
                             centerCoordinate: initialLocation
                                 ? [
                                       initialLocation.coords.longitude,
                                       initialLocation.coords.latitude,
                                   ]
-                                : [-122.4324, 37.78825],
+                                : [0, 20],
                         }}
                     />
 
@@ -1041,10 +1124,8 @@ export default function MapScreen() {
                                         MAP_COLORS.selectedPin,
                                         ['get', 'isCaught'],
                                         MAP_COLORS.pinCaught,
-                                        ['get', 'isBounty'],
-                                        MAP_COLORS.pinBounty,
-                                        ['get', 'isTrending'],
-                                        MAP_COLORS.pinTrending,
+                                        ['get', 'isLostPlace'],
+                                        MAP_COLORS.pinLostPlace,
                                         MAP_COLORS.pin,
                                     ],
                                     circleRadius: [
@@ -1111,7 +1192,7 @@ export default function MapScreen() {
             )}
 
             {/* Bottom Sheet */}
-            {!locationLoading && (
+            {!locationLoading && (!locationDenied || browseWithoutLocation) && (
                 <MapBottomSheet
                     posts={
                         isSearchMode
@@ -1119,6 +1200,8 @@ export default function MapScreen() {
                             : sortedVisiblePosts
                     }
                     loading={isSearchMode ? searchLoading : loadingPosts}
+                    error={!isSearchMode && viewportError}
+                    onRetry={handleViewportRetry}
                     onPostPress={handlePostPress}
                     onJumpToLocation={handleJumpToLocation}
                     selectedPostId={selectedPostId}
@@ -1129,7 +1212,17 @@ export default function MapScreen() {
                     }
                     subtitle={
                         isSearchMode
-                            ? `${filteredSearchResults.length} result${filteredSearchResults.length !== 1 ? 's' : ''}`
+                            ? `${filteredSearchResults.length} shot${filteredSearchResults.length !== 1 ? 's' : ''} found`
+                            : undefined
+                    }
+                    emptyTitle={
+                        isSearchMode
+                            ? `No shots match "${activeSearchQuery}"`
+                            : undefined
+                    }
+                    emptySubtitle={
+                        isSearchMode
+                            ? 'Try different words, like "sunset viewpoint" or "street art"'
                             : undefined
                     }
                     onClose={isSearchMode ? handleSearchClear : handleListClose}
@@ -1254,6 +1347,63 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: colors.background,
+    },
+    locationDeniedContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.background,
+        padding: 32,
+        gap: 12,
+    },
+    locationDeniedTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        textAlign: 'center',
+    },
+    locationDeniedText: {
+        fontSize: 14,
+        color: colors.textSecondary,
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 8,
+    },
+    locationDeniedPrimaryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: colors.primary,
+        borderRadius: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 32,
+        alignSelf: 'stretch',
+    },
+    locationDeniedPrimaryButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.white,
+    },
+    locationDeniedSecondaryButton: {
+        borderWidth: 1,
+        borderColor: colors.primary,
+        borderRadius: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 32,
+        alignSelf: 'stretch',
+        alignItems: 'center',
+    },
+    locationDeniedSecondaryButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: colors.primary,
+    },
+    locationDeniedLink: {
+        fontSize: 14,
+        color: colors.textTertiary,
+        textDecorationLine: 'underline',
+        marginTop: 8,
     },
     loadingText: {
         marginTop: 12,

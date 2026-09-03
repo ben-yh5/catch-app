@@ -60,7 +60,7 @@ export default function ExploreSearchBar({
                 />
                 <TextInput
                     style={styles.input}
-                    placeholder="Search for anything..."
+                    placeholder="Search shots and places..."
                     placeholderTextColor={colors.textTertiary}
                     value={query}
                     onChangeText={setQuery}

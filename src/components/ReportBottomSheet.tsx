@@ -199,7 +199,7 @@ export default function ReportBottomSheet({
                         )}
                         <Text style={styles.headerTitle}>
                             {isPostReport
-                                ? `Report post by @${targetUsername}`
+                                ? `Report shot by @${targetUsername}`
                                 : `Report @${targetUsername}`}
                         </Text>
                         <TouchableOpacity

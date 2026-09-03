@@ -167,8 +167,8 @@ export default function SettingsScreen() {
                         <View style={styles.settingTextContainer}>
                             <Text style={styles.settingLabel}>New Catches</Text>
                             <Text style={styles.settingDescription}>
-                                Get notified when someone catches your shots and
-                                you earn royalties.
+                                Get notified when someone stands where you
+                                stood and catches your shot.
                             </Text>
                         </View>
                         <Switch

@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router'
 import React from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated'
+import OnboardingModal from '@/components/OnboardingModal'
 import { colors } from '@/theme/colors'
 
 const AnimatedIcon = ({
@@ -35,7 +36,10 @@ const AnimatedIcon = ({
 
 export default function TabLayout() {
     return (
-        <Tabs
+        <>
+            {/* First-run intro — shows once, over whichever tab loads first */}
+            <OnboardingModal />
+            <Tabs
             screenOptions={{
                 tabBarActiveTintColor: colors.primary,
                 headerShown: false,
@@ -111,6 +115,7 @@ export default function TabLayout() {
                     ),
                 }}
             />
-        </Tabs>
+            </Tabs>
+        </>
     )
 }

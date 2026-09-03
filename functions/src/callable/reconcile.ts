@@ -4,19 +4,15 @@ import { requireAdmin } from '../lib/adminAuth'
 import { MAX_INSTANCES } from '../lib/constants'
 
 /**
- * Admin-only: Reconciles user contribution balances and counters against the
- * canonical source of truth — surviving posts.
+ * Admin-only: Reconciles user counters against the canonical source of
+ * truth — surviving posts.
  *
- * By design, a user's balance is fully derivable from their posts:
- *   contribution  = sum(contributionEarned) over posts where authorId == user
- *                   (roots carry base points + received royalties; catches
- *                   carry their catch points)
+ * By design, a user's counters are fully derivable from their posts:
  *   totalPosts    = count of original posts
  *   totalCatches  = count of catch posts
  *
- * Any drift (from historical trigger bugs, legacy catches without royalty
- * fields, or partial failures) is detected and — unless dryRun — corrected
- * by writing the recomputed absolute values.
+ * Any drift (from historical trigger bugs or partial failures) is detected
+ * and — unless dryRun — corrected by writing the recomputed absolute values.
  *
  * @param data.dryRun - If true (default), report discrepancies without fixing
  * @returns Summary with per-user discrepancies (capped at 200 entries)
@@ -25,7 +21,7 @@ import { MAX_INSTANCES } from '../lib/constants'
  * — a post created or deleted mid-scan can register as a false discrepancy or
  * clobber a concurrent trigger update.
  */
-export const reconcileContributions = functions
+export const reconcileCounters = functions
     .runWith({
         timeoutSeconds: 540,
         memory: '512MB',
@@ -38,10 +34,10 @@ export const reconcileContributions = functions
         const db = admin.firestore()
         const PAGE_SIZE = 500
 
-        // --- Phase 1: aggregate expected balances from all posts ---
+        // --- Phase 1: aggregate expected counters from all posts ---
         const expected = new Map<
             string,
-            { contribution: number; totalPosts: number; totalCatches: number }
+            { totalPosts: number; totalCatches: number }
         >()
 
         let postsScanned = 0
@@ -62,11 +58,9 @@ export const reconcileContributions = functions
                 if (!authorId) continue
 
                 const entry = expected.get(authorId) ?? {
-                    contribution: 0,
                     totalPosts: 0,
                     totalCatches: 0,
                 }
-                entry.contribution += post.contributionEarned || 0
                 if (post.isOriginal) {
                     entry.totalPosts += 1
                 } else if (post.parentPostId) {
@@ -81,7 +75,7 @@ export const reconcileContributions = functions
         }
 
         functions.logger.info(
-            `[reconcileContributions] Scanned ${postsScanned} posts covering ${expected.size} authors`
+            `[reconcileCounters] Scanned ${postsScanned} posts covering ${expected.size} authors`
         )
 
         // --- Phase 2: compare every user against expected, fix drift ---
@@ -112,13 +106,11 @@ export const reconcileContributions = functions
                 usersChecked++
                 const userData = userDoc.data()
                 const exp = expected.get(userDoc.id) ?? {
-                    contribution: 0,
                     totalPosts: 0,
                     totalCatches: 0,
                 }
 
-                const fields: ['contribution' | 'totalPosts' | 'totalCatches', number][] = [
-                    ['contribution', userData.contribution || 0],
+                const fields: ['totalPosts' | 'totalCatches', number][] = [
                     ['totalPosts', userData.totalPosts || 0],
                     ['totalCatches', userData.totalCatches || 0],
                 ]
@@ -156,7 +148,7 @@ export const reconcileContributions = functions
         }
 
         functions.logger.info(
-            `[reconcileContributions] dryRun=${dryRun}: ${usersChecked} users checked, ${usersFixed} with drift, ${discrepancies.length} discrepancies reported`
+            `[reconcileCounters] dryRun=${dryRun}: ${usersChecked} users checked, ${usersFixed} with drift, ${discrepancies.length} discrepancies reported`
         )
 
         return {

@@ -81,7 +81,6 @@ export const setupUsername = functions
                     email: context.auth!.token.email || '',
                     totalPosts: 0,
                     totalCatches: 0,
-                    contribution: 0,
                     followers: [],
                     following: [],
                     pushToken: null,

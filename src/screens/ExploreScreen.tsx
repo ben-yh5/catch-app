@@ -3,6 +3,7 @@ import ExploreSection from '@/components/ExploreSection'
 import ActivityFeed from '@/components/NotificationInbox'
 import RecommendedPostCard from '@/components/RecommendedPostCard'
 import ThreadModal from '@/components/ThreadModal'
+import ErrorState from '@/components/ui/ErrorState'
 import { useAuth } from '@/context/AuthContext'
 import { useRecommendedFeed } from '@/hooks/useRecommendedFeed'
 import { db } from '@/services/firebase'
@@ -37,7 +38,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 const POSTS_LIMIT = 5
 
 export default function ExploreScreen() {
-    const { user, contribution, unreadCount } = useAuth()
+    const { user, unreadCount } = useAuth()
     const router = useRouter()
     const insets = useSafeAreaInsets()
 
@@ -48,6 +49,9 @@ export default function ExploreScreen() {
     const [loadingLists, setLoadingLists] = useState(true)
     const [loadingTrending, setLoadingTrending] = useState(true)
     const [loadingNew, setLoadingNew] = useState(true)
+    const [listsError, setListsError] = useState(false)
+    const [trendingError, setTrendingError] = useState(false)
+    const [newError, setNewError] = useState(false)
     const [refreshing, setRefreshing] = useState(false)
     const [showNotifications, setShowNotifications] = useState(false)
 
@@ -61,6 +65,7 @@ export default function ExploreScreen() {
     const fetchFeaturedLists = async () => {
         try {
             setLoadingLists(true)
+            setListsError(false)
             const listsQuery = query(
                 collection(db, 'lists'),
                 where('isPublic', '==', true),
@@ -106,6 +111,7 @@ export default function ExploreScreen() {
             setFeaturedLists(lists)
         } catch (error) {
             console.error('Error fetching lists', error)
+            setListsError(true)
         } finally {
             setLoadingLists(false)
         }
@@ -114,6 +120,7 @@ export default function ExploreScreen() {
     const fetchTrendingPosts = async () => {
         try {
             setLoadingTrending(true)
+            setTrendingError(false)
             const q = query(
                 collection(db, 'posts'),
                 where('isOriginal', '==', true),
@@ -126,6 +133,7 @@ export default function ExploreScreen() {
             )
         } catch (e) {
             console.error(e)
+            setTrendingError(true)
         } finally {
             setLoadingTrending(false)
         }
@@ -134,6 +142,7 @@ export default function ExploreScreen() {
     const fetchNewPosts = async () => {
         try {
             setLoadingNew(true)
+            setNewError(false)
             const q = query(
                 collection(db, 'posts'),
                 where('isOriginal', '==', true),
@@ -146,6 +155,7 @@ export default function ExploreScreen() {
             )
         } catch (e) {
             console.error(e)
+            setNewError(true)
         } finally {
             setLoadingNew(false)
         }
@@ -218,6 +228,15 @@ export default function ExploreScreen() {
 
     const renderFeaturedListSection = useCallback(() => {
         if (loadingLists) return null // Simplified loading for lists
+        if (listsError) {
+            return (
+                <ErrorState
+                    message="Couldn't load Featured Lists"
+                    onRetry={fetchFeaturedLists}
+                    style={styles.sectionError}
+                />
+            )
+        }
         if (featuredLists.length === 0) return null
 
         return (
@@ -309,7 +328,7 @@ export default function ExploreScreen() {
                 </ScrollView>
             </View>
         )
-    }, [loadingLists, featuredLists, router])
+    }, [loadingLists, listsError, featuredLists, router])
 
     const listHeaderComponent = useMemo(
         () => (
@@ -323,31 +342,47 @@ export default function ExploreScreen() {
 
                 {renderFeaturedListSection()}
 
-                <ExploreSection
-                    title="Trending"
-                    posts={trendingPosts}
-                    onPostPress={handlePostPress}
-                    onSeeAllPress={() =>
-                        router.push({
-                            pathname: '/(tabs)/map',
-                            params: { filter: 'trending' },
-                        })
-                    }
-                    loading={loadingTrending}
-                />
+                {trendingError ? (
+                    <ErrorState
+                        message="Couldn't load Trending"
+                        onRetry={fetchTrendingPosts}
+                        style={styles.sectionError}
+                    />
+                ) : (
+                    <ExploreSection
+                        title="Trending"
+                        posts={trendingPosts}
+                        onPostPress={handlePostPress}
+                        onSeeAllPress={() =>
+                            router.push({
+                                pathname: '/(tabs)/map',
+                                params: { filter: 'trending' },
+                            })
+                        }
+                        loading={loadingTrending}
+                    />
+                )}
 
-                <ExploreSection
-                    title="New"
-                    posts={newPosts}
-                    onPostPress={handlePostPress}
-                    onSeeAllPress={() =>
-                        router.push({
-                            pathname: '/(tabs)/map',
-                            params: { filter: 'new' },
-                        })
-                    }
-                    loading={loadingNew}
-                />
+                {newError ? (
+                    <ErrorState
+                        message="Couldn't load New shots"
+                        onRetry={fetchNewPosts}
+                        style={styles.sectionError}
+                    />
+                ) : (
+                    <ExploreSection
+                        title="New"
+                        posts={newPosts}
+                        onPostPress={handlePostPress}
+                        onSeeAllPress={() =>
+                            router.push({
+                                pathname: '/(tabs)/map',
+                                params: { filter: 'new' },
+                            })
+                        }
+                        loading={loadingNew}
+                    />
+                )}
 
                 {/* For You section header */}
                 {recommendedFeed.loading ? (
@@ -357,6 +392,12 @@ export default function ExploreScreen() {
                             color={colors.primary}
                         />
                     </View>
+                ) : recommendedFeed.error ? (
+                    <ErrorState
+                        message="Couldn't load your feed"
+                        onRetry={recommendedFeed.refresh}
+                        style={styles.sectionError}
+                    />
                 ) : recommendedFeed.posts.length > 0 ? (
                     <View style={styles.forYouHeader}>
                         <Text
@@ -372,9 +413,41 @@ export default function ExploreScreen() {
                 ) : (
                     <View style={styles.forYouEmpty}>
                         <Text style={styles.emptyText}>
-                            Follow users and search cities to get personalized
-                            recommendations
+                            Your feed fills up as you follow people and
+                            explore new places
                         </Text>
+                        <View style={styles.emptyActions}>
+                            <TouchableOpacity
+                                style={styles.emptyActionButton}
+                                onPress={() => router.push('/(tabs)/map')}
+                                accessibilityLabel="Explore the map"
+                                accessibilityRole="button"
+                            >
+                                <Ionicons
+                                    name="map-outline"
+                                    size={18}
+                                    color={colors.white}
+                                />
+                                <Text style={styles.emptyActionText}>
+                                    Explore the Map
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.emptyActionButtonSecondary}
+                                onPress={() => router.push('/(tabs)/post')}
+                                accessibilityLabel="Share a shot"
+                                accessibilityRole="button"
+                            >
+                                <Ionicons
+                                    name="camera-outline"
+                                    size={18}
+                                    color={colors.primary}
+                                />
+                                <Text style={styles.emptyActionTextSecondary}>
+                                    Share a Shot
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 )}
             </>
@@ -384,11 +457,15 @@ export default function ExploreScreen() {
             renderFeaturedListSection,
             trendingPosts,
             loadingTrending,
+            trendingError,
             newPosts,
             loadingNew,
+            newError,
             handlePostPress,
             router,
             recommendedFeed.loading,
+            recommendedFeed.error,
+            recommendedFeed.refresh,
             recommendedFeed.posts.length,
         ]
     )
@@ -410,18 +487,6 @@ export default function ExploreScreen() {
                     Explore
                 </Text>
                 <View style={styles.headerRight}>
-                    <TouchableOpacity
-                        style={styles.contributionBadge}
-                        onPress={() => setShowNotifications(true)}
-                        accessibilityLabel={`Contribution score: ${contribution}`}
-                        accessibilityRole="button"
-                        accessibilityHint="View your notifications"
-                    >
-                        <Text style={styles.contributionEmoji}>🏆</Text>
-                        <Text style={styles.contributionText}>
-                            {contribution}
-                        </Text>
-                    </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.notificationButton}
                         onPress={() => setShowNotifications(true)}
@@ -526,23 +591,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-    },
-    contributionBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.surface,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: '#FFD700',
-        gap: 4,
-    },
-    contributionEmoji: { fontSize: 14 },
-    contributionText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: colors.textPrimary,
     },
     notificationButton: { padding: 4, position: 'relative' },
     unreadBadge: {
@@ -650,6 +698,44 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: colors.border,
+    },
+    emptyActions: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 16,
+    },
+    emptyActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: colors.primary,
+        borderRadius: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+    },
+    emptyActionButtonSecondary: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        borderRadius: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+    },
+    emptyActionText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.white,
+    },
+    emptyActionTextSecondary: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.primary,
+    },
+    sectionError: {
+        marginHorizontal: 16,
+        marginTop: 16,
     },
     footerLoader: { paddingVertical: 20, alignItems: 'center' },
 })

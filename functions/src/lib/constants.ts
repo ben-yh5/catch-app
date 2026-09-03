@@ -1,19 +1,26 @@
 /** Maximum distance (in meters) a user must be from a post location to catch it */
 export const CATCH_RADIUS_METERS = 100
 
-/** Contribution System Constants */
-export const CONTRIBUTION = {
-    PIONEER_POST: 10, // Creating a post >50m from existing pins
-    NEARBY_POST: 2, // Creating a post within 50m of existing pins
-    CATCH: 14, // Catching any post
-    ROYALTY_PIONEER: 7, // Royalty to original poster when Pioneer post is caught
-    ROYALTY_NEARBY: 2, // Royalty to original poster when Nearby post is caught
-    NEARBY_THRESHOLD_METERS: 50,
-    BOUNTY_MULTIPLIER: 3, // Gold pin: 3x catch pts for dead posts
-    TRENDING_MULTIPLIER: 1.5, // Silver pin: 1.5x catch pts for popular posts
-    TRENDING_THRESHOLD: 5, // Catches needed to be trending
-    BOUNTY_INACTIVITY_DAYS: 30, // Days since last catch to become bounty
-}
+/**
+ * Minutes a catch permit (catch_permits/{uid}_{rootPostId}) stays valid after
+ * validateCatch approves. Long enough to cover photo checks + upload on a slow
+ * connection; short enough that a permit can't be stockpiled.
+ */
+export const CATCH_PERMIT_TTL_MINUTES = 10
+
+/**
+ * Distance threshold (meters) for Pioneer classification: an original post
+ * farther than this from every existing pin earns permanent Pioneer
+ * attribution ("first found here"). Attribution only — there is no point
+ * economy.
+ */
+export const NEARBY_THRESHOLD_METERS = 50
+
+/**
+ * Days since last catch before a post counts as a "lost place" (gold pin on
+ * the map — a spot whose photographic record has a gap worth filling).
+ */
+export const LOST_PLACE_INACTIVITY_DAYS = 30
 
 /** Maximum results per geohash sub-query in getPostsInArea */
 export const GEOHASH_QUERY_LIMIT = 200

@@ -18,6 +18,7 @@
  * - Catches: isOriginal=false, rootPostId=<root_id>
  */
 
+import CatchRevealModal from '@/components/CatchRevealModal'
 import ReportBottomSheet from '@/components/ReportBottomSheet'
 import CatchBadge from '@/components/ui/CatchBadge'
 import CaughtBadge from '@/components/ui/CaughtBadge'
@@ -116,11 +117,15 @@ export default function ThreadModal({
         fetchingLocation,
         uploading,
         statusMessage,
+        issues,
         handleCatchPress,
         handlePhotoTaken,
         handleCameraCancel,
         handleConfirmCatch,
         handlePreviewCancel,
+        handleRetake,
+        revealData,
+        dismissReveal,
     } = useCatchFlow({
         rootPost: threadPosts[0] || null,
         postLocation,
@@ -384,7 +389,7 @@ export default function ThreadModal({
 
     const handleGetDirections = async () => {
         if (!postLocation) {
-            showToast('warning', 'Location not available for this post')
+            showToast('warning', 'Location not available for this shot')
             return
         }
 
@@ -442,10 +447,10 @@ export default function ThreadModal({
 
         const confirmDelete = await new Promise<boolean>((resolve) => {
             Alert.alert(
-                'Delete Post',
+                'Delete Shot',
                 currentPost.isOriginal && threadPosts.length > 1
-                    ? 'This is the original post. Deleting it will promote the oldest catch to become the new thread starter. Continue?'
-                    : 'Are you sure you want to delete this post?',
+                    ? 'This is the original shot. Deleting it will make the oldest catch the new start of this timeline. Continue?'
+                    : 'Are you sure you want to delete this shot?',
                 [
                     {
                         text: 'Cancel',
@@ -531,12 +536,12 @@ export default function ThreadModal({
                 })
             })
 
-            showToast('success', 'Post deleted successfully')
+            showToast('success', 'Shot deleted')
             onPostDelete?.(deletedPost.id)
             notifyPostEvent('delete', deletedPost.id, deletedPost.authorId)
         } catch (error) {
             console.error('Error deleting post:', error)
-            showToast('error', 'Failed to delete post. Please try again.')
+            showToast('error', 'Failed to delete shot. Please try again.')
         }
     }
 
@@ -631,6 +636,7 @@ export default function ThreadModal({
                     onPhotoTaken={handlePhotoTaken}
                     onCancel={handleCameraCancel}
                     originalPhotoUrl={rootPost?.photoURL}
+                    targetLocation={postLocation}
                 />
             </Modal>
         )
@@ -659,6 +665,8 @@ export default function ThreadModal({
                     originalPhotoUrl={rootPost?.photoURL}
                     hasLocation={true}
                     loadingLocation={fetchingLocation}
+                    issues={issues}
+                    onRetake={handleRetake}
                 />
             </Modal>
         )
@@ -837,7 +845,7 @@ export default function ThreadModal({
                                                                 handleDeletePost
                                                             }
                                                             accessibilityRole="menuitem"
-                                                            accessibilityLabel="Delete post"
+                                                            accessibilityLabel="Delete shot"
                                                         >
                                                             <Text
                                                                 style={[
@@ -863,7 +871,7 @@ export default function ThreadModal({
                                                                 )
                                                             }}
                                                             accessibilityRole="menuitem"
-                                                            accessibilityLabel="Report post"
+                                                            accessibilityLabel="Report shot"
                                                         >
                                                             <Text
                                                                 style={[
@@ -1133,6 +1141,14 @@ export default function ThreadModal({
                     targetPostId={currentPost.id}
                 />
             )}
+
+            {/* Catch reveal — the then/now payoff after a successful catch */}
+            <CatchRevealModal
+                visible={!!revealData}
+                originalPost={revealData?.originalPost ?? null}
+                catchPhotoUri={revealData?.catchPhotoUri ?? null}
+                onClose={dismissReveal}
+            />
         </Modal>
     )
 }

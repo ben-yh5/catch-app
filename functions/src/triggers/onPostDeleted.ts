@@ -6,28 +6,20 @@ import { MAX_INSTANCES } from '../lib/constants'
 /**
  * Firestore Trigger: Handles post deletion events
  *
- * Complex logic handles different deletion scenarios:
- * 1. Catch deleted: Decrements user's totalCatches and root post's catchCount,
- *    claws back the royalty from whoever actually received it
+ * Deletion scenarios:
+ * 1. Catch deleted: Decrements user's totalCatches and root post's catchCount
  * 2. Root with catches deleted: Promotes oldest catch to new root, updates all
  *    thread references
  * 3. Root without catches deleted: Simply cleans up location data
  *
  * Also removes the post from any lists containing it.
  *
- * Structure: all balance-critical writes (contribution, counters, royalty
- * clawback) run in a single transaction that also owns the processed_events
- * dedup marker — all-or-nothing, applied exactly once. Cleanup steps (lists,
- * thread promotion, location data, coverage) run afterwards, each in its own
- * try/catch, so one failure — e.g. the author's user doc already being gone
- * during account deletion — can't skip the remaining cleanup.
- *
- * Royalty clawback uses the royaltyRecipientId/royaltyAmount/royaltyRootPostId
- * fields stamped on catches by onPostCreated. If the catch has been re-pointed
- * to a promoted root (royaltyRootPostId !== rootPostId), the royalty was
- * already settled when the old root was deleted (it was part of that root's
- * contributionEarned), so no clawback happens — the promoted author never
- * received it. Legacy catches without these fields skip clawback entirely.
+ * Structure: counter writes run in a single transaction that also owns the
+ * processed_events dedup marker — all-or-nothing, applied exactly once.
+ * Cleanup steps (lists, thread promotion, location data, coverage) run
+ * afterwards, each in its own try/catch, so one failure — e.g. the author's
+ * user doc already being gone during account deletion — can't skip the
+ * remaining cleanup.
  */
 export const onPostDeleted = functions
     .runWith({ maxInstances: MAX_INSTANCES.DEFAULT })
@@ -49,7 +41,11 @@ export const onPostDeleted = functions
         const isCatch = Boolean(postData.parentPostId) && !postData.isOriginal
         const rootPostId = isCatch ? postData.rootPostId : null
 
-        // --- Balance-critical writes: one transaction, exactly once ---
+        // Catches rejected by onPostCreated (no valid permit) never had their
+        // counters incremented — skip the decrements or they'd drift negative.
+        const wasRejected = Boolean(postData.rejectedNoPermit)
+
+        // --- Counter writes: one transaction, exactly once ---
         let alreadyProcessed = false
         try {
             alreadyProcessed = await db.runTransaction(async (t) => {
@@ -64,39 +60,10 @@ export const onPostDeleted = functions
                     : null
                 const rootDoc = rootRef ? await t.get(rootRef) : null
 
-                // Royalty clawback only applies when the root that paid it
-                // still exists and the catch was never re-pointed by a thread
-                // promotion (see header comment).
-                const royaltyAmount = postData.royaltyAmount ?? 0
-                const royaltyRecipientId = postData.royaltyRecipientId ?? null
-                const clawbackApplies =
-                    isCatch &&
-                    royaltyAmount > 0 &&
-                    royaltyRecipientId &&
-                    rootDoc?.exists &&
-                    postData.royaltyRootPostId === rootPostId
-
-                let recipientRef = null
-                let recipientExists = false
-                if (clawbackApplies) {
-                    recipientRef = db
-                        .collection('users')
-                        .doc(royaltyRecipientId)
-                    const recipientDoc = await t.get(recipientRef)
-                    recipientExists = recipientDoc.exists
-                }
-
                 // Author may already be gone (account deletion race) — skip
                 // author writes but continue with everything else.
-                if (userDoc.exists) {
+                if (userDoc.exists && !wasRejected) {
                     const authorUpdate: Record<string, any> = {}
-                    const contributionEarned = postData.contributionEarned || 0
-                    if (contributionEarned > 0) {
-                        authorUpdate.contribution =
-                            admin.firestore.FieldValue.increment(
-                                -contributionEarned
-                            )
-                    }
                     if (isCatch) {
                         authorUpdate.totalCatches =
                             admin.firestore.FieldValue.increment(-1)
@@ -110,23 +77,9 @@ export const onPostDeleted = functions
                     }
                 }
 
-                if (isCatch && rootDoc?.exists && rootRef) {
-                    const rootUpdate: Record<string, any> = {
+                if (isCatch && !wasRejected && rootDoc?.exists && rootRef) {
+                    t.update(rootRef, {
                         catchCount: admin.firestore.FieldValue.increment(-1),
-                    }
-                    if (clawbackApplies) {
-                        rootUpdate.contributionEarned =
-                            admin.firestore.FieldValue.increment(-royaltyAmount)
-                    }
-                    t.update(rootRef, rootUpdate)
-                }
-
-                if (clawbackApplies && recipientExists && recipientRef) {
-                    t.update(recipientRef, {
-                        contribution:
-                            admin.firestore.FieldValue.increment(
-                                -royaltyAmount
-                            ),
                     })
                 }
 
@@ -137,12 +90,12 @@ export const onPostDeleted = functions
             })
         } catch (error) {
             functions.logger.error(
-                `[onPostDeleted] Balance transaction failed for post ${postId}:`,
+                `[onPostDeleted] Counter transaction failed for post ${postId}:`,
                 error
             )
             // Fall through to cleanup — location/list cleanup is still better
             // done than skipped, and the marker wasn't set so a redelivery
-            // can retry the balances.
+            // can retry the counters.
         }
 
         if (alreadyProcessed) {
@@ -202,28 +155,17 @@ export const onPostDeleted = functions
                     // Promote oldest catch to root. catchCount is derived
                     // from the surviving catches (the old root's counter may
                     // be missing or stale). isPioneer is inherited from the
-                    // deleted root — it's a property of the location, and
-                    // future royalty math reads it. The promoted post keeps
-                    // its contributionEarned (the author did earn those catch
-                    // points); its royalty bookkeeping fields are cleared
-                    // since the original-post deletion path doesn't use them.
+                    // deleted root — it's a property of the location, not the
+                    // author.
                     batch.update(newRootDoc.ref, {
                         isOriginal: true,
                         parentPostId: null,
                         rootPostId: null,
                         catchCount: catchesQuery.docs.length - 1,
                         isPioneer: postData.isPioneer ?? true,
-                        royaltyRecipientId:
-                            admin.firestore.FieldValue.delete(),
-                        royaltyAmount: admin.firestore.FieldValue.delete(),
-                        royaltyRootPostId:
-                            admin.firestore.FieldValue.delete(),
                     })
 
-                    // Update remaining catches to point to new root. Their
-                    // royaltyRootPostId still names the deleted root, which
-                    // is exactly how later deletions know the royalty was
-                    // already settled and skip the clawback.
+                    // Update remaining catches to point to new root
                     for (let i = 1; i < catchesQuery.docs.length; i++) {
                         const catchDoc = catchesQuery.docs[i]
                         batch.update(catchDoc.ref, {

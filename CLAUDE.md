@@ -122,15 +122,16 @@ Posts form threads. Original posts have `isOriginal: true`. Catches reference th
 - Root with catches deleted → promote oldest catch to new root, repoint all catches
 - Root without catches → delete location data
 
-### Contribution System
+### Progression (no point economy)
 
-Users earn contribution points. Defined in `src/utils/contributionConfig.ts` and mirrored in `functions/src/index.ts`:
-- **Pioneer Post** (10 pts): Original post >50m from any existing pin
-- **Nearby Post** (2 pts): Original post within 50m of existing pins
-- **Catch** (14 pts): Catching any post
-- **Royalties**: Original poster earns 7 pts (Pioneer) or 2 pts (Nearby) when their post is caught
-
-Pioneer/Nearby classification uses geohash queries on `post_locations` in `onPostCreated`.
+There is deliberately **no scoring economy** — no points, XP, royalties, or catch multipliers. Progression is passport-style collection and attribution:
+- **Pioneer attribution**: An original post >50m from any existing pin gets `isPioneer: true` — permanent "first found here" credit. Classification uses geohash queries on `post_locations` in `onPostCreated` (threshold in `NEARBY_THRESHOLD_METERS`, `functions/src/lib/constants.ts`).
+- **Counters as stats**: `totalPosts` / `totalCatches` on user docs are plain counts, not currency.
+- **Caught notification**: When someone catches your post you get a `caught` notification (in-app + push) — the reward is knowing someone stood where you stood.
+- **Lost places (gold pins)**: Posts with 0 catches or no catch in >30 days render gold on the map (`isLostPlace()` in `src/utils/postClassification.ts`), pointing players at spots whose photographic record has a gap.
+- **Nudge over penalty**: `NudgeCard` suggests catching an existing nearby thread instead of posting a duplicate — behavior is steered by UX, not point differentials.
+- **Catch reveal**: After a successful catch, `CatchRevealModal` shows the then/now pair (original photo + new catch) — this payoff screen is the success feedback (no toast). Wired into both catch paths (`useCatchFlow` → ThreadModal, and PostScreen's nudge path).
+- **Catch permits**: `validateCatch` is a gate, not advice — success issues a 10-minute permit that security rules require for the catch write and `onPostCreated` consumes in its transaction. See `catch_permits` schema entry.
 
 ### Location Security
 
@@ -168,20 +169,20 @@ Natural language search powered by Gemini and Firestore vector search. Users sea
 
 In-app notifications stored in `users/{userId}/notifications/` subcollection. Push notifications via FCM/APNs using native device tokens (not Expo push service).
 
-Notification types: `new_post`, `follow`, `royalty`.
+Notification types: `new_post`, `follow`, `caught`.
 
 ## Firestore Schema
 
 ### users/{userId}
 - `username`, `email`, `createdAt`
-- `totalPosts`, `totalCatches`, `contribution` (number)
+- `totalPosts`, `totalCatches` (plain counters, not currency)
 - `followers`, `following` (arrays of user IDs)
 - `blockedUsers` (array of user IDs; server-only writes via `blockUser`/`unblockUser`)
 - `pushToken` (FCM/APNs token)
 
 ### users/{userId}/notifications/{notifId}
-- `type`: `'new_post' | 'follow' | 'royalty'`
-- `fromUserId`, `postId` (optional), `amount` (for royalty)
+- `type`: `'new_post' | 'follow' | 'caught'`
+- `fromUserId`, `postId` (optional)
 - `read`: boolean, `createdAt`
 
 ### posts/{postId}
@@ -189,8 +190,8 @@ Notification types: `new_post`, `follow`, `royalty`.
 - `photoURL`, `thumbnailURL`, `mediumURL`
 - `hasLocation`: boolean
 - `isOriginal`: boolean, `parentPostId`, `rootPostId`
-- `catchCount`: number (meaningful on root posts only)
-- `isPioneer`: boolean, `contributionEarned`: number
+- `catchCount`: number (meaningful on root posts only), `lastCaughtAt`: timestamp
+- `isPioneer`: boolean (attribution: first find at this spot)
 
 ### post_locations/{locationId} (server-only, client reads blocked)
 - `postId`, `latitude`, `longitude`, `geohash`
@@ -209,6 +210,10 @@ Notification types: `new_post`, `follow`, `royalty`.
 ### processed_events/{eventId} (trigger deduplication, server-only)
 - `processedAt`: timestamp
 
+### catch_permits/{uid}_{rootPostId} (server-only)
+- `uid`, `rootPostId`, `expiresAt`, `createdAt`
+- Issued by `validateCatch` on success (10 min TTL). Security rules require a live permit to create a catch post; `onPostCreated` consumes it (first catch wins) and rejects+deletes permitless catches (stamped `rejectedNoPermit` so `onPostDeleted` skips counter decrements)
+
 ### training_pairs/{pairId} (opt-in ML training data, written by client when `dataContributionEnabled`)
 - `pairId`, `userId`, `originalId`, `catchId`, `label` (`POSITIVE` | `HARD_NEGATIVE`)
 - `originalStoragePath`, `catchStoragePath` — images live under the `training_data/` Storage prefix
@@ -219,7 +224,7 @@ Notification types: `new_post`, `follow`, `royalty`.
 
 | Function | Type | Purpose |
 |---|---|---|
-| `validateCatch` | HTTPS Callable | Validates proximity, prevents self-catch and duplicate catches |
+| `validateCatch` | HTTPS Callable | Validates proximity, prevents self-catch and duplicate catches. On success issues a short-lived catch permit (`catch_permits/{uid}_{rootPostId}`, 10 min TTL) |
 | `getPostLocation` | HTTPS Callable | Returns coordinates for a single post |
 | `getPostLocations` | HTTPS Callable | Batch coordinates (max 500 posts) |
 | `getPostsInArea` | HTTPS Callable | Geospatial query by viewport bounds or radius |
@@ -228,8 +233,8 @@ Notification types: `new_post`, `follow`, `royalty`.
 | `unfollowUser` | HTTPS Callable | Atomically removes from both users' following/followers arrays in a transaction |
 | `reportUser` / `reportPost` | HTTPS Callable | Content/user reports into `reports` collection; one report per reporter per target |
 | `blockUser` / `unblockUser` | HTTPS Callable | Manages caller's `blockedUsers` array; blocking also severs follows both ways. Client filters blocked authors from feeds/map |
-| `reconcileContributions` | HTTPS Callable | Admin-only: recomputes `contribution`/`totalPosts`/`totalCatches` from surviving posts' `contributionEarned`; `dryRun` (default) reports drift without fixing |
-| `onPostCreated` | Firestore Trigger | Contribution points, Pioneer/Nearby check, catchCount increment, notifications. Idempotent via `context.eventId` dedup |
+| `reconcileCounters` | HTTPS Callable | Admin-only: recomputes `totalPosts`/`totalCatches` from surviving posts; `dryRun` (default) reports drift without fixing |
+| `onPostCreated` | Firestore Trigger | Pioneer attribution, counter/catchCount increments, caught + follower notifications. Idempotent via `context.eventId` dedup |
 | `onPostDeleted` | Firestore Trigger | Thread promotion, counter decrements (catchCount), list cleanup. Idempotent via `context.eventId` dedup |
 | `onUserFollowed` | Firestore Trigger | Follow notifications (in-app + push) |
 | `searchPosts` | HTTPS Callable | Semantic vector search: query expansion → embedding → Firestore `findNearest()` → geo re-ranking |
@@ -245,9 +250,8 @@ Notification types: `new_post`, `follow`, `royalty`.
 - **Platform branching**: Camera is native-only (`expo-camera`); use `Alert.alert()` on native, `window.alert()` on web
 - **Path alias**: `@/` maps to `src/` (configured in tsconfig)
 - **`post_locations` geohash**: Used for spatial queries; new posts must include geohash via `geohashForLocation()` from `geofire-common`
-- **Server-only counters**: `catchCount`, `contribution`, `totalPosts`, `totalCatches` are only writable by Cloud Functions (admin SDK). Client-side Firestore rules block direct updates to these fields.
-- **Trigger idempotency + atomic balances**: `onPostCreated` and `onPostDeleted` run all balance-critical writes (contribution, counters, royalties, `contributionEarned`) in a single transaction that also owns the `processed_events/{eventId}` dedup marker — all-or-nothing and exactly-once. Best-effort work (notifications, enrichment, coverage, list/location cleanup) runs after the transaction, each step in its own try/catch.
-- **Royalty clawback tracking**: catches store `royaltyRecipientId`, `royaltyAmount`, and `royaltyRootPostId` at creation. Deletion claws back the royalty only if the paying root still exists and the catch was never re-pointed by thread promotion (`royaltyRootPostId === rootPostId`); otherwise the royalty was already settled when the old root was deleted.
+- **Server-only counters**: `catchCount`, `totalPosts`, `totalCatches` are only writable by Cloud Functions (admin SDK). Client-side Firestore rules block direct updates to these fields.
+- **Trigger idempotency + atomic counters**: `onPostCreated` and `onPostDeleted` run all counter writes in a single transaction that also owns the `processed_events/{eventId}` dedup marker — all-or-nothing and exactly-once. Best-effort work (notifications, enrichment, coverage, list/location cleanup) runs after the transaction, each step in its own try/catch.
 - **Username uniqueness**: `setupUsername` Cloud Function uses a `usernames/{lowercase}` collection as an atomic uniqueness index via Firestore transaction.
 - **Atomic follow/unfollow**: `followUser`/`unfollowUser` Cloud Functions update both users' arrays in a single transaction. No client-side writes to `followers` or `following`.
 - **Geospatial query limits**: `getPostsInArea` caps results at 200 per geohash sub-query and 500 total. Validates `radiusInMeters > 0`, coordinate ranges, and viewport bounds.
@@ -264,7 +268,7 @@ Notification types: `new_post`, `follow`, `royalty`.
 Rules enforce authorization, not just authentication:
 - **Users**: Reads require authentication (`allow read: if request.auth != null`). Self-update restricted to allowlisted fields (`username`, `pushToken`, `notificationSettings`, `dataContributionEnabled`, `bio`). Server-computed fields (`contribution`, `totalPosts`, `totalCatches`, `followers`, `following`) only writable by Cloud Functions (admin SDK).
 - **Followers/Following**: Managed exclusively by `followUser`/`unfollowUser` Cloud Functions. No client-side writes.
-- **Posts**: `create` requires `authorId == auth.uid`. No client-side updates allowed (`catchCount` managed by Cloud Functions). Only author can delete.
+- **Posts**: `create` requires `authorId == auth.uid`. Originals must have null `parentPostId`/`rootPostId` (no thread pollution); catches require a live `catch_permits/{uid}_{rootPostId}` doc (issued by `validateCatch`), so forged catches are blocked at the rules layer. No client-side updates allowed (`catchCount` managed by Cloud Functions). Only author can delete.
 - **Notifications**: Proper subcollection rules under `match /notifications/{notifId}` with owner-only access. Updates restricted to `read` field only.
 - **Post locations**: `create` validates required fields (`postId`, `latitude`, `longitude`, `geohash`) and coordinate ranges. No client reads.
 

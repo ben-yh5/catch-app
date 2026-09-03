@@ -14,6 +14,7 @@
  * - Animated slide-up presentation
  */
 
+import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
@@ -66,6 +67,7 @@ export default function ListSelectionBottomSheet({
     onSelectionChange,
 }: ListSelectionBottomSheetProps) {
     const { user } = useAuth()
+    const { showToast } = useToast()
     const [lists, setLists] = useState<List[]>([])
     const [selectedListIds, setSelectedListIds] = useState<Set<string>>(
         new Set()
@@ -124,8 +126,14 @@ export default function ListSelectionBottomSheet({
                     )
                 } catch (error) {
                     console.error('Error toggling list:', error)
-                    // Revert on error
+                    // Revert on error — and say so, or the failed save
+                    // looks like it succeeded
                     setSelectedListIds(selectedListIds)
+                    showToast(
+                        'error',
+                        "Couldn't update list",
+                        'Check your connection and try again.'
+                    )
                 } finally {
                     setUpdating(null)
                 }
@@ -140,6 +148,7 @@ export default function ListSelectionBottomSheet({
             postId,
             onSaveStateChange,
             onSelectionChange,
+            showToast,
         ]
     )
 
@@ -201,6 +210,7 @@ export default function ListSelectionBottomSheet({
             }
         } catch (error) {
             console.error('Error fetching lists:', error)
+            showToast('error', "Couldn't load your lists")
         } finally {
             setLoading(false)
         }

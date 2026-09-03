@@ -12,10 +12,13 @@
  * - ThreadModal: Catching existing posts (shows original photo as reference)
  */
 
+import { CATCH_RADIUS_METERS } from '@/utils/catchValidation'
 import { Ionicons } from '@expo/vector-icons'
 import { CameraType, CameraView } from 'expo-camera'
 import { Image } from 'expo-image'
-import React, { useRef, useState } from 'react'
+import * as Location from 'expo-location'
+import { distanceBetween } from 'geofire-common'
+import React, { useEffect, useRef, useState } from 'react'
 import {
     Dimensions,
     StatusBar,
@@ -34,19 +37,63 @@ interface UnifiedCameraViewProps {
     onPhotoTaken: (uri: string) => void
     onCancel: () => void
     originalPhotoUrl?: string
+    /**
+     * Target coordinates for catches. When set, a live distance pill shows
+     * whether the user is within catch range BEFORE they commit to a photo.
+     */
+    targetLocation?: { latitude: number; longitude: number } | null
 }
 
 export default function UnifiedCameraView({
     onPhotoTaken,
     onCancel,
     originalPhotoUrl,
+    targetLocation,
 }: UnifiedCameraViewProps) {
     const [facing, setFacing] = useState<CameraType>('back')
     const [isCameraReady, setIsCameraReady] = useState(false)
     const [ghostOpacity] = useState(0.5)
     const [showGhost, setShowGhost] = useState(true)
+    const [liveDistance, setLiveDistance] = useState<number | null>(null)
     const cameraRef = useRef<CameraView>(null)
     const insets = useSafeAreaInsets()
+
+    // Live distance to the target while framing the shot
+    useEffect(() => {
+        if (!targetLocation) return
+
+        let cancelled = false
+        let subscription: Location.LocationSubscription | null = null
+
+        ;(async () => {
+            const { status } = await Location.getForegroundPermissionsAsync()
+            if (status !== 'granted' || cancelled) return
+            try {
+                subscription = await Location.watchPositionAsync(
+                    {
+                        accuracy: Location.Accuracy.Balanced,
+                        timeInterval: 2000,
+                        distanceInterval: 3,
+                    },
+                    (loc) => {
+                        const km = distanceBetween(
+                            [loc.coords.latitude, loc.coords.longitude],
+                            [targetLocation.latitude, targetLocation.longitude]
+                        )
+                        setLiveDistance(Math.round(km * 1000))
+                    }
+                )
+                if (cancelled) subscription.remove()
+            } catch (error) {
+                console.warn('[Camera] Distance watcher failed:', error)
+            }
+        })()
+
+        return () => {
+            cancelled = true
+            subscription?.remove()
+        }
+    }, [targetLocation])
 
     const handleCameraReady = () => {
         setIsCameraReady(true)
@@ -144,6 +191,44 @@ export default function UnifiedCameraView({
                     },
                 ]}
             />
+
+            {/* Live distance to target (catch mode) */}
+            {targetLocation && liveDistance !== null && (
+                <View
+                    style={[
+                        styles.distancePill,
+                        { top: insets.top + 64 },
+                        liveDistance <= CATCH_RADIUS_METERS
+                            ? styles.distancePillInRange
+                            : styles.distancePillOutOfRange,
+                    ]}
+                    accessibilityRole="text"
+                    accessibilityLabel={
+                        liveDistance <= CATCH_RADIUS_METERS
+                            ? `In range, ${liveDistance} meters from the shot`
+                            : `${liveDistance} meters away, get within ${CATCH_RADIUS_METERS} meters`
+                    }
+                >
+                    <Ionicons
+                        name={
+                            liveDistance <= CATCH_RADIUS_METERS
+                                ? 'checkmark-circle'
+                                : 'walk'
+                        }
+                        size={16}
+                        color="white"
+                    />
+                    <Text style={styles.distanceText}>
+                        {liveDistance <= CATCH_RADIUS_METERS
+                            ? `In range — ${liveDistance} m away`
+                            : `${
+                                  liveDistance < 1000
+                                      ? `${liveDistance} m`
+                                      : `${(liveDistance / 1000).toFixed(1)} km`
+                              } away — get within ${CATCH_RADIUS_METERS} m`}
+                    </Text>
+                </View>
+            )}
 
             {/* Top Controls */}
             <View style={[styles.topControls, { top: insets.top + 10 }]}>
@@ -312,6 +397,28 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: '600',
         fontSize: 14,
+    },
+    distancePill: {
+        position: 'absolute',
+        alignSelf: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+        zIndex: 10,
+    },
+    distancePillInRange: {
+        backgroundColor: 'rgba(48, 209, 88, 0.9)',
+    },
+    distancePillOutOfRange: {
+        backgroundColor: 'rgba(255, 159, 10, 0.92)',
+    },
+    distanceText: {
+        color: 'white',
+        fontWeight: '600',
+        fontSize: 13,
     },
 
     // Shutter

@@ -5,6 +5,7 @@ import { List } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
+import ErrorState from '@/components/ui/ErrorState'
 import { ListsTabSkeleton } from '@/components/ui/Skeleton'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -28,11 +29,13 @@ export default function ListsScreen() {
     const [refreshing, setRefreshing] = useState(false)
     const [activeTab, setActiveTab] = useState<'my' | 'community'>('my')
     const [refreshEnabled, setRefreshEnabled] = useState(true)
+    const [fetchError, setFetchError] = useState(false)
 
     const fetchMyLists = useCallback(async () => {
         if (!user) return
 
         try {
+            setFetchError(false)
             const listsQuery = query(
                 collection(db, 'lists'),
                 where('creatorId', '==', user.uid),
@@ -64,6 +67,7 @@ export default function ListsScreen() {
             setLists(sortedLists)
         } catch (error) {
             console.error('Error fetching lists:', error)
+            setFetchError(true)
         } finally {
             setLoading(false)
         }
@@ -71,6 +75,7 @@ export default function ListsScreen() {
 
     const fetchCommunityLists = useCallback(async () => {
         try {
+            setFetchError(false)
             const listsQuery = query(
                 collection(db, 'lists'),
                 where('isPublic', '==', true),
@@ -90,6 +95,7 @@ export default function ListsScreen() {
             setLists(fetchedLists)
         } catch (error) {
             console.error('Error fetching community lists:', error)
+            setFetchError(true)
         } finally {
             setLoading(false)
         }
@@ -167,23 +173,48 @@ export default function ListsScreen() {
         )
     }
 
-    const renderEmptyState = () => (
-        <View style={styles.emptyContainer}>
-            <Ionicons
-                name="list-outline"
-                size={64}
-                color={colors.textTertiary}
-            />
-            <Text style={styles.emptyText}>
-                {activeTab === 'my' ? 'No Lists Yet' : 'No Community Lists'}
-            </Text>
-            {activeTab === 'my' && (
-                <Text style={styles.emptySubtext}>
-                    Create your first list to organize locations
+    const renderEmptyState = () => {
+        if (fetchError) {
+            return (
+                <ErrorState
+                    message="Couldn't load lists"
+                    onRetry={fetchLists}
+                    style={styles.errorState}
+                />
+            )
+        }
+        return (
+            <View style={styles.emptyContainer}>
+                <Ionicons
+                    name="list-outline"
+                    size={64}
+                    color={colors.textTertiary}
+                />
+                <Text style={styles.emptyText}>
+                    {activeTab === 'my' ? 'No Lists Yet' : 'No Community Lists'}
                 </Text>
-            )}
-        </View>
-    )
+                {activeTab === 'my' && (
+                    <>
+                        <Text style={styles.emptySubtext}>
+                            Create your first list to organize shots you want
+                            to visit
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.emptyCreateButton}
+                            onPress={() => router.push('/create-list')}
+                            accessibilityLabel="Create a list"
+                            accessibilityRole="button"
+                        >
+                            <Ionicons name="add" size={18} color="#fff" />
+                            <Text style={styles.emptyCreateButtonText}>
+                                Create a List
+                            </Text>
+                        </TouchableOpacity>
+                    </>
+                )}
+            </View>
+        )
+    }
 
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -429,6 +460,26 @@ const styles = StyleSheet.create({
         color: colors.textTertiary,
         marginTop: 8,
         textAlign: 'center',
+        paddingHorizontal: 32,
+    },
+    emptyCreateButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: colors.primary,
+        borderRadius: 10,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        marginTop: 16,
+    },
+    emptyCreateButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    errorState: {
+        marginHorizontal: 16,
+        marginTop: 40,
     },
     fab: {
         position: 'absolute',

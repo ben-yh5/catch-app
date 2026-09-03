@@ -1,3 +1,4 @@
+import { CatchIssue } from '@/components/CatchIssuesPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { useDeviceSensors } from '@/hooks/useDeviceSensors'
@@ -15,7 +16,7 @@ import { addDoc, collection, doc, getDoc } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { geohashForLocation } from 'geofire-common'
 import { useState } from 'react'
-import { Alert } from 'react-native'
+import { Alert, Linking } from 'react-native'
 
 interface UseCatchFlowProps {
     rootPost: Post | null
@@ -28,9 +29,22 @@ interface UseCatchFlowProps {
     onSuccess: (newPost: Post) => void
 }
 
+const LOCATION_DENIED_ISSUE: CatchIssue = {
+    title: 'Location needed',
+    message:
+        'Catching verifies you are really at the spot. Enable location access in Settings, then retake your photo.',
+    requiresRetake: true,
+    action: 'settings',
+}
+
 /**
  * useCatchFlow - Hook to manage the multi-step "Catch" process
  * Includes: sensor tracking, photo processing, distance/orientation validation, and Firestore upload
+ *
+ * Validation UX: quality checks (brightness/blur) run at capture time, and
+ * confirm-time checks are collected into `issues` in a single pass — the
+ * preview shows every problem at once with a Retake action, instead of
+ * revealing one transient toast per attempt.
  */
 export function useCatchFlow({
     rootPost,
@@ -52,7 +66,20 @@ export function useCatchFlow({
     const [uploading, setUploading] = useState(false)
     const [fetchingLocation, setFetchingLocation] = useState(false)
 
+    // Set after a successful catch to drive the CatchRevealModal (the
+    // then/now payoff screen). Holds its own copy of the photo URI because
+    // handlePreviewCancel clears catchImageUri.
+    const [revealData, setRevealData] = useState<{
+        originalPost: Post
+        catchPhotoUri: string
+    } | null>(null)
+
     const [statusMessage, setStatusMessage] = useState<string>('')
+
+    // Validation problems shown persistently in the preview
+    const [issues, setIssues] = useState<CatchIssue[]>([])
+    // Capture-time quality results, reused at confirm so checks run once
+    const [qualityIssues, setQualityIssues] = useState<CatchIssue[]>([])
 
     const {
         heading,
@@ -69,14 +96,44 @@ export function useCatchFlow({
             const { granted } = await requestCameraPermission()
             if (!granted) {
                 Alert.alert(
-                    'Permission Required',
-                    'Camera permission is required to catch this location.'
+                    'Camera access needed',
+                    'Catching a shot means re-taking it with your camera. Enable camera access in Settings to continue.',
+                    [
+                        { text: 'Not Now', style: 'cancel' },
+                        {
+                            text: 'Open Settings',
+                            onPress: () => Linking.openSettings(),
+                        },
+                    ]
                 )
                 return
             }
         }
         setCatchMode(true)
         startSensors()
+    }
+
+    const runQualityChecks = async (uri: string): Promise<CatchIssue[]> => {
+        const [isBrightEnough, isSharpEnough] = await Promise.all([
+            checkBrightness(uri),
+            checkBlur(uri),
+        ])
+        const found: CatchIssue[] = []
+        if (!isBrightEnough) {
+            found.push({
+                title: 'Too dark',
+                message: 'Retake your photo with better lighting.',
+                requiresRetake: true,
+            })
+        }
+        if (!isSharpEnough) {
+            found.push({
+                title: 'Too blurry',
+                message: 'Hold your phone steady and retake the photo.',
+                requiresRetake: true,
+            })
+        }
+        return found
     }
 
     const handlePhotoTaken = async (photoUri: string) => {
@@ -86,17 +143,48 @@ export function useCatchFlow({
             setCatchImageUri(processedUri)
             setCatchMode(false)
             setCatchPreviewMode(true)
+            setIssues([])
+            setQualityIssues([])
 
             setFetchingLocation(true)
-            const { status } =
-                await Location.requestForegroundPermissionsAsync()
-            if (status === 'granted') {
-                const location = await Location.getCurrentPositionAsync({})
-                setCatchLocation({
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
+            // Quality checks and location fix run concurrently; problems
+            // surface in the preview immediately, before captioning
+            const [quality, locationResult] = await Promise.all([
+                runQualityChecks(processedUri),
+                (async () => {
+                    const { status } =
+                        await Location.requestForegroundPermissionsAsync()
+                    if (status !== 'granted') return 'denied' as const
+                    try {
+                        const location = await Location.getCurrentPositionAsync(
+                            {}
+                        )
+                        return {
+                            latitude: location.coords.latitude,
+                            longitude: location.coords.longitude,
+                        }
+                    } catch {
+                        return 'error' as const
+                    }
+                })(),
+            ])
+
+            const found = [...quality]
+            if (locationResult === 'denied') {
+                found.push(LOCATION_DENIED_ISSUE)
+            } else if (locationResult === 'error') {
+                found.push({
+                    title: 'Location unavailable',
+                    message:
+                        "Couldn't get a location fix. Move somewhere with a clearer view of the sky, then retake.",
+                    requiresRetake: true,
                 })
+            } else {
+                setCatchLocation(locationResult)
             }
+
+            setQualityIssues(quality)
+            setIssues(found)
             setFetchingLocation(false)
         } catch (error) {
             console.error('Error processing catch photo:', error)
@@ -117,15 +205,44 @@ export function useCatchFlow({
         setCatchImageUri(null)
         setCatchLocation(null)
         setStatusMessage('')
+        setIssues([])
+        setQualityIssues([])
         resetCapture()
+    }
+
+    // Back to the camera without abandoning the whole flow — the recovery
+    // path for every "retake" issue
+    const handleRetake = () => {
+        setCatchPreviewMode(false)
+        setCatchImageUri(null)
+        setCatchLocation(null)
+        setStatusMessage('')
+        setIssues([])
+        setQualityIssues([])
+        resetCapture()
+        setCatchMode(true)
+        startSensors()
     }
 
     const handleConfirmCatch = async (
         caption?: string,
         listIds?: Set<string>
     ) => {
-        if (!rootPost || !catchImageUri || !catchLocation || !user) {
-            showToast('error', 'Missing information to complete catch')
+        if (!rootPost || !catchImageUri || !user) {
+            showToast(
+                'error',
+                'Something went wrong',
+                'Please retake your photo and try again.'
+            )
+            return
+        }
+
+        if (!catchLocation) {
+            // Location was denied or failed at capture — the panel already
+            // explains the fix; just make sure it's visible
+            setIssues((prev) =>
+                prev.length > 0 ? prev : [LOCATION_DENIED_ISSUE]
+            )
             return
         }
 
@@ -134,60 +251,33 @@ export function useCatchFlow({
             showToast(
                 'warning',
                 'Not Allowed',
-                'You cannot catch your own post.'
+                'You cannot catch your own shot.'
             )
             return
         }
 
         setUploading(true)
-        setStatusMessage('Verifying location...')
+        setIssues([])
+        setStatusMessage('Checking your shot...')
 
         try {
-            // 1. Geography validation (also checks self-catch and duplicate catch server-side)
+            // Single validation pass: collect EVERY failed check so the user
+            // sees all problems at once instead of one per attempt
             const validation = await validateCatch(
                 rootPost.id,
                 catchLocation.latitude,
                 catchLocation.longitude
             )
+
+            const found: CatchIssue[] = [...qualityIssues]
+
             if (!validation.isValid) {
-                setUploading(false)
-                setStatusMessage('')
-                showToast(
-                    'warning',
-                    'Too Far Away',
-                    `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m.`
-                )
-                return
+                found.push({
+                    title: 'Too far away',
+                    message: `You're ${validation.distance} m from this shot. Get within ${validation.requiredDistance} m, then try again.`,
+                })
             }
 
-            // 2. Quality validation (Brightness & Blur)
-            setStatusMessage('Checking image quality...')
-            const isBrightEnough = await checkBrightness(catchImageUri)
-            if (!isBrightEnough) {
-                setUploading(false)
-                setStatusMessage('')
-                showToast(
-                    'warning',
-                    'Too Dark',
-                    'Please try again with better lighting.'
-                )
-                return
-            }
-
-            const isSharpEnough = await checkBlur(catchImageUri)
-            if (!isSharpEnough) {
-                setUploading(false)
-                setStatusMessage('')
-                showToast(
-                    'warning',
-                    'Too Blurry',
-                    'Please steady your hand and try again.'
-                )
-                return
-            }
-
-            // 3. Orientation validation
-            setStatusMessage('Verifying angle...')
             const HEADING_THRESHOLD = 75
             const PITCH_THRESHOLD = 75
 
@@ -195,33 +285,35 @@ export function useCatchFlow({
                 let headingDiff = Math.abs(validation.heading - capturedHeading)
                 if (headingDiff > 180) headingDiff = 360 - headingDiff
                 if (headingDiff > HEADING_THRESHOLD) {
-                    setUploading(false)
-                    setStatusMessage('')
-                    showToast(
-                        'warning',
-                        'Wrong Direction',
-                        `Face the original view (off by ${Math.round(headingDiff)}°).`
-                    )
-                    return
+                    found.push({
+                        title: 'Wrong direction',
+                        message: `Turn to face the original view — you're off by ${Math.round(headingDiff)}°. Use the ghost overlay to line up, then retake.`,
+                        requiresRetake: true,
+                    })
                 }
             }
 
             if (validation.pitch !== undefined && capturedPitch !== null) {
                 const pitchDiff = Math.abs(validation.pitch - capturedPitch)
                 if (pitchDiff > PITCH_THRESHOLD) {
-                    setUploading(false)
-                    setStatusMessage('')
-                    showToast(
-                        'warning',
-                        'Wrong Angle',
-                        `Try to match the original angle (off by ${Math.round(pitchDiff)}°).`
-                    )
-                    return
+                    found.push({
+                        title: 'Wrong angle',
+                        message: `Tilt your phone to match the original angle — you're off by ${Math.round(pitchDiff)}°. Retake to try again.`,
+                        requiresRetake: true,
+                    })
                 }
             }
 
-            // 4. Visual Verification ("The Judge")
-            setStatusMessage('Analyzing view similarity...')
+            if (found.length > 0) {
+                setUploading(false)
+                setStatusMessage('')
+                setIssues(found)
+                return
+            }
+
+            // Visual Verification ("The Judge") — runs only once everything
+            // else passes, since it's the expensive on-device model
+            setStatusMessage('Comparing views...')
             try {
                 const similarity = await verifyViewSimilarity(
                     rootPost.photoURL,
@@ -232,11 +324,14 @@ export function useCatchFlow({
                 if (similarity < SIMILARITY_THRESHOLD) {
                     setUploading(false)
                     setStatusMessage('')
-                    showToast(
-                        'warning',
-                        'Match Failed',
-                        "Your shot doesn't visually match the original view well enough. Try to align it more closely!"
-                    )
+                    setIssues([
+                        {
+                            title: "Views don't match",
+                            message:
+                                "Your photo doesn't match the original view closely enough. Use the ghost overlay to line it up, then retake.",
+                            requiresRetake: true,
+                        },
+                    ])
                     return
                 }
             } catch (aiError) {
@@ -253,7 +348,7 @@ export function useCatchFlow({
                 )
             }
 
-            // 5. Upload & Create Post
+            // Upload & Create Post
             setStatusMessage('Uploading catch...')
             const userDoc = await getDoc(doc(db, 'users', user.uid))
             const username = userDoc.exists()
@@ -338,7 +433,11 @@ export function useCatchFlow({
                 )
             }
 
-            showToast('success', 'Location caught!', 'Contribution earned!')
+            // The reveal modal (then/now) is the success feedback — no toast
+            setRevealData({
+                originalPost: rootPost,
+                catchPhotoUri: catchImageUri,
+            })
             onSuccess({ id: docRef.id, ...postData } as Post)
             setStatusMessage('')
             handlePreviewCancel()
@@ -346,7 +445,11 @@ export function useCatchFlow({
             console.error('Error in catch confirm:', error)
             setUploading(false)
             setStatusMessage('')
-            showToast('error', 'Catch Failed', error.message)
+            showToast(
+                'error',
+                'Catch failed',
+                'Something went wrong — check your connection and try again.'
+            )
         }
     }
 
@@ -357,11 +460,15 @@ export function useCatchFlow({
         fetchingLocation,
         uploading,
         statusMessage,
+        issues,
         heading,
         handleCatchPress,
         handlePhotoTaken,
         handleCameraCancel,
         handleConfirmCatch,
         handlePreviewCancel,
+        handleRetake,
+        revealData,
+        dismissReveal: () => setRevealData(null),
     }
 }

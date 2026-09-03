@@ -54,7 +54,6 @@ describe('users collection', () => {
                 email: 'test@test.com',
                 totalPosts: 0,
                 totalCatches: 0,
-                contribution: 0,
                 followers: [],
                 following: [],
                 pushToken: null,
@@ -163,16 +162,6 @@ describe('users collection', () => {
 
     // --- Self-update BLOCKED for server-computed fields ---
 
-    test('owner CANNOT update contribution', async () => {
-        await seedUser(USER_ID)
-        const authed = testEnv.authenticatedContext(USER_ID)
-        await assertFails(
-            updateDoc(doc(authed.firestore(), 'users', USER_ID), {
-                contribution: 999999,
-            })
-        )
-    })
-
     test('owner CANNOT update totalPosts', async () => {
         await seedUser(USER_ID)
         const authed = testEnv.authenticatedContext(USER_ID)
@@ -249,8 +238,7 @@ describe('notifications subcollection', () => {
                     NOTIF_ID
                 ),
                 {
-                    type: 'royalty',
-                    amount: 7,
+                    type: 'caught',
                     fromUserId: OTHER_USER_ID,
                     read: false,
                     createdAt: new Date(),
@@ -434,6 +422,88 @@ describe('posts collection', () => {
         const unauthed = testEnv.unauthenticatedContext()
         await assertFails(
             setDoc(doc(unauthed.firestore(), 'posts', 'post1'), validPost)
+        )
+    })
+
+    test('CANNOT create original post claiming thread membership', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'posts', 'post1'), {
+                ...validPost,
+                rootPostId: 'someThread',
+            })
+        )
+    })
+
+    // --- Catch posts require a live permit from validateCatch ---
+
+    const validCatch = {
+        authorId: USER_ID,
+        authorUsername: 'testuser',
+        photoURL: 'https://example.com/photo.jpg',
+        caption: '',
+        hasLocation: true,
+        catchCount: 0,
+        isOriginal: false,
+        parentPostId: 'rootPost1',
+        rootPostId: 'rootPost1',
+        createdAt: new Date(),
+    }
+
+    const seedPermit = async (expiresAt: Date) => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(
+                doc(
+                    context.firestore(),
+                    'catch_permits',
+                    `${USER_ID}_rootPost1`
+                ),
+                { uid: USER_ID, rootPostId: 'rootPost1', expiresAt }
+            )
+        })
+    }
+
+    test('CANNOT create catch post without a permit', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'posts', 'catch1'), validCatch)
+        )
+    })
+
+    test('can create catch post with a live permit', async () => {
+        await seedPermit(new Date(Date.now() + 10 * 60 * 1000))
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertSucceeds(
+            setDoc(doc(authed.firestore(), 'posts', 'catch1'), validCatch)
+        )
+    })
+
+    test('CANNOT create catch post with an expired permit', async () => {
+        await seedPermit(new Date(Date.now() - 60 * 1000))
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'posts', 'catch1'), validCatch)
+        )
+    })
+
+    test("CANNOT use another user's permit", async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(
+                doc(
+                    context.firestore(),
+                    'catch_permits',
+                    `${OTHER_USER_ID}_rootPost1`
+                ),
+                {
+                    uid: OTHER_USER_ID,
+                    rootPostId: 'rootPost1',
+                    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+                }
+            )
+        })
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'posts', 'catch1'), validCatch)
         )
     })
 

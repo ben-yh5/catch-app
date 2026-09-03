@@ -6,7 +6,8 @@ const mockWhere: jest.Mock = jest.fn().mockReturnValue({
     get: mockGet,
 })
 const mockDocGet = jest.fn()
-const mockDoc = jest.fn().mockReturnValue({ get: mockDocGet })
+const mockDocSet = jest.fn().mockResolvedValue(undefined)
+const mockDoc = jest.fn().mockReturnValue({ get: mockDocGet, set: mockDocSet })
 const mockCollection = jest
     .fn()
     .mockReturnValue({ doc: mockDoc, where: mockWhere })
@@ -19,6 +20,9 @@ jest.mock('firebase-admin', () => ({
             arrayUnion: jest.fn(),
             arrayRemove: jest.fn(),
             increment: jest.fn(),
+        },
+        Timestamp: {
+            fromMillis: (ms: number) => ({ toMillis: () => ms }),
         },
     }),
 }))
@@ -120,6 +124,13 @@ describe('validateCatch', () => {
         expect(result.isValid).toBe(true)
         expect(result.distance).toBe(0)
         expect(result.requiredDistance).toBe(100)
+
+        // A valid catch issues a permit keyed on uid + rootPostId
+        expect(mockCollection).toHaveBeenCalledWith('catch_permits')
+        expect(mockDoc).toHaveBeenCalledWith('user1_p1')
+        expect(mockDocSet).toHaveBeenCalledWith(
+            expect.objectContaining({ uid: 'user1', rootPostId: 'p1' })
+        )
     })
 
     it('returns isValid=false when outside catch radius', async () => {
@@ -151,6 +162,9 @@ describe('validateCatch', () => {
 
         expect(result.isValid).toBe(false)
         expect(result.distance).toBeGreaterThan(100)
+
+        // No permit is issued when the user is out of range
+        expect(mockDocSet).not.toHaveBeenCalled()
     })
 
     it('returns heading and pitch when available', async () => {

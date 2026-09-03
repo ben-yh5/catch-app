@@ -1,3 +1,5 @@
+import { CatchIssue } from '@/components/CatchIssuesPanel'
+import CatchRevealModal from '@/components/CatchRevealModal'
 import UnifiedCameraView from '@/components/UnifiedCameraView'
 import UnifiedPreviewScreen from '@/components/UnifiedPreviewScreen'
 import { useAuth } from '@/context/AuthContext'
@@ -10,7 +12,7 @@ import { validateCatch } from '@/utils/catchValidation'
 import { getPostsInRadius } from '@/utils/geospatialQueries'
 import { uploadTrainingPair } from '@/services/trainingData'
 import { cropToSquare } from '@/utils/imageProcessing'
-import { checkBlur } from '@/utils/imageValidation'
+import { checkBlur, checkBrightness } from '@/utils/imageValidation'
 import { addPostToList } from '@/utils/listUtils'
 import { findMostSimilar } from '@/utils/visualMatcher'
 import { useToast } from '@/components/ui/Toast'
@@ -31,11 +33,40 @@ import {
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { geohashForLocation } from 'geofire-common'
 import React, { useRef, useState } from 'react'
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import {
+    Alert,
+    Linking,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native'
 
 interface LocationData {
     latitude: number
     longitude: number
+}
+
+const openSettingsAlert = (title: string, message: string) => {
+    Alert.alert(title, message, [
+        { text: 'Not Now', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => Linking.openSettings() },
+    ])
+}
+
+const LOCATION_DENIED_ISSUE: CatchIssue = {
+    title: 'Location needed',
+    message:
+        'Shots are pinned to the real spot where you took them. Enable location access in Settings, then retake your photo.',
+    requiresRetake: true,
+    action: 'settings',
+}
+
+const LOCATION_ERROR_ISSUE: CatchIssue = {
+    title: 'Location unavailable',
+    message:
+        "Couldn't get a location fix. Move somewhere with a clearer view of the sky, then retake.",
+    requiresRetake: true,
 }
 
 export default function PostScreen() {
@@ -49,6 +80,12 @@ export default function PostScreen() {
     const [uploading, setUploading] = useState(false)
     const [similarPost, setSimilarPost] = useState<Post | null>(null)
     const [catchTarget, setCatchTarget] = useState<Post | null>(null)
+    const [revealData, setRevealData] = useState<{
+        originalPost: Post
+        catchPhotoUri: string
+    } | null>(null)
+    // Validation problems shown persistently on the preview screen
+    const [previewIssues, setPreviewIssues] = useState<CatchIssue[]>([])
     const processingRef = useRef(false)
     const router = useRouter()
     const { user, dataContributionEnabled } = useAuth()
@@ -71,9 +108,9 @@ export default function PostScreen() {
         if (!permission.granted) {
             const result = await requestPermission()
             if (!result.granted) {
-                Alert.alert(
-                    'Camera Permission Required',
-                    'Please enable camera permissions in settings to take photos.'
+                openSettingsAlert(
+                    'Camera access needed',
+                    'Sharing a shot means taking a fresh photo. Enable camera access in Settings to continue.'
                 )
                 return
             }
@@ -83,9 +120,9 @@ export default function PostScreen() {
         if (!status?.granted) {
             const result = await requestLocationPermission()
             if (!result.granted) {
-                Alert.alert(
-                    'Location Permission Required',
-                    'Location is required for the compass and to tag your photos.'
+                openSettingsAlert(
+                    'Location access needed',
+                    'Shots are pinned to the real spot where you take them. Enable location access in Settings to continue.'
                 )
                 return
             }
@@ -95,61 +132,68 @@ export default function PostScreen() {
         startSensors()
     }
 
-    const getDeviceLocation = async (): Promise<LocationData | null> => {
+    const getDeviceLocation = async (): Promise<
+        LocationData | 'denied' | 'error'
+    > => {
         try {
             if (!status?.granted) {
                 const result = await requestLocationPermission()
                 if (!result.granted) {
-                    Alert.alert(
-                        'Location Required',
-                        'Location permission is required to share locations. Please enable location permissions in your device settings.'
-                    )
-                    return null
+                    return 'denied'
                 }
             }
 
-            // 1. Fetch fresh location (Strict Mode for New Posts)
+            // Fetch fresh location (Strict Mode for New Posts)
             // We do NOT use lastKnownPosition here because new posts must be accurate
-            try {
-                const locationPromise = Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Highest, // Highest accuracy for new posts
-                })
+            const locationPromise = Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Highest, // Highest accuracy for new posts
+            })
 
-                const timeoutPromise = new Promise<Location.LocationObject>(
-                    (_, reject) => {
-                        setTimeout(
-                            () =>
-                                reject(new Error('Location request timed out')),
-                            10000
-                        )
-                    }
-                )
-
-                const location = await Promise.race([
-                    locationPromise,
-                    timeoutPromise,
-                ])
-                console.log('[PostScreen] Got fresh location')
-                return {
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
+            const timeoutPromise = new Promise<Location.LocationObject>(
+                (_, reject) => {
+                    setTimeout(
+                        () => reject(new Error('Location request timed out')),
+                        10000
+                    )
                 }
-            } catch (error) {
-                console.error(
-                    '[PostScreen] Error getting fresh location:',
-                    error
-                )
-                throw error
+            )
+
+            const location = await Promise.race([
+                locationPromise,
+                timeoutPromise,
+            ])
+            console.log('[PostScreen] Got fresh location')
+            return {
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
             }
         } catch (error) {
             console.error('Error getting device location:', error)
-            showToast(
-                'error',
-                'Location Error',
-                'Could not get your current location. Please try again or move to an area with better signal.'
-            )
-            return null
+            return 'error'
         }
+    }
+
+    const runQualityChecks = async (uri: string): Promise<CatchIssue[]> => {
+        const [isBrightEnough, isSharpEnough] = await Promise.all([
+            checkBrightness(uri),
+            checkBlur(uri),
+        ])
+        const found: CatchIssue[] = []
+        if (!isBrightEnough) {
+            found.push({
+                title: 'Too dark',
+                message: 'Retake your photo with better lighting.',
+                requiresRetake: true,
+            })
+        }
+        if (!isSharpEnough) {
+            found.push({
+                title: 'Too blurry',
+                message: 'Hold your phone steady and retake the photo.',
+                requiresRetake: true,
+            })
+        }
+        return found
     }
 
     const handlePhotoTaken = async (uri: string) => {
@@ -175,9 +219,15 @@ export default function PostScreen() {
             // Close camera and show preview
             setShowCamera(false)
             setCapturedImage(processedUri)
+            setPreviewIssues([])
             setLoadingLocation(true)
 
-            const photoLocation = await getDeviceLocation()
+            // Quality checks and location fix run concurrently; problems
+            // surface in the preview immediately, before captioning
+            const [locationResult, quality] = await Promise.all([
+                getDeviceLocation(),
+                runQualityChecks(processedUri),
+            ])
 
             // Check again if cancelled
             if (!processingRef.current) {
@@ -185,7 +235,18 @@ export default function PostScreen() {
                 return
             }
 
+            const found = [...quality]
+            let photoLocation: LocationData | null = null
+            if (locationResult === 'denied') {
+                found.push(LOCATION_DENIED_ISSUE)
+            } else if (locationResult === 'error') {
+                found.push(LOCATION_ERROR_ISSUE)
+            } else {
+                photoLocation = locationResult
+            }
+
             setLocation(photoLocation)
+            setPreviewIssues(found)
             setLoadingLocation(false)
 
             // Run nudge detection in background (non-blocking)
@@ -303,15 +364,30 @@ export default function PostScreen() {
         caption?: string,
         listIds?: Set<string>
     ) => {
-        if (!user || !capturedImage || !catchTarget || !location) {
-            showToast('error', 'Missing information to complete catch.')
+        if (!user || !capturedImage || !catchTarget) {
+            showToast(
+                'error',
+                'Something went wrong',
+                'Please retake your photo and try again.'
+            )
+            return
+        }
+
+        if (!location) {
+            // Location was denied or failed at capture — the panel already
+            // explains the fix; just make sure it's visible
+            setPreviewIssues((prev) =>
+                prev.length > 0 ? prev : [LOCATION_DENIED_ISSUE]
+            )
             return
         }
 
         setUploading(true)
+        setPreviewIssues([])
 
         try {
-            // 1. Validate catch (proximity, self-catch, duplicate)
+            // 1. Validate catch (proximity, self-catch, duplicate) —
+            // quality was already checked at capture time
             const validation = await validateCatch(
                 catchTarget.id,
                 location.latitude,
@@ -319,27 +395,16 @@ export default function PostScreen() {
             )
             if (!validation.isValid) {
                 setUploading(false)
-                showToast(
-                    'warning',
-                    'Too Far Away',
-                    `You're ${validation.distance}m away. Must be within ${validation.requiredDistance}m.`
-                )
+                setPreviewIssues([
+                    {
+                        title: 'Too far away',
+                        message: `You're ${validation.distance} m from this shot. Get within ${validation.requiredDistance} m, then try again.`,
+                    },
+                ])
                 return
             }
 
-            // 2. Quality check
-            const isSharpEnough = await checkBlur(capturedImage)
-            if (!isSharpEnough) {
-                setUploading(false)
-                showToast(
-                    'warning',
-                    'Too Blurry',
-                    'Please steady your hand and try again.'
-                )
-                return
-            }
-
-            // 3. Upload image
+            // 2. Upload image
             const userDoc = await getDoc(doc(db, 'users', user.uid))
             const username = userDoc.exists()
                 ? userDoc.data().username
@@ -352,7 +417,7 @@ export default function PostScreen() {
             await uploadBytes(storageRef, blob)
             const photoURL = await getDownloadURL(storageRef)
 
-            // 4. Create catch post
+            // 3. Create catch post
             const postData = {
                 authorId: user.uid,
                 authorUsername: username,
@@ -367,7 +432,7 @@ export default function PostScreen() {
             }
             const docRef = await addDoc(collection(db, 'posts'), postData)
 
-            // 5. Store location
+            // 4. Store location
             const geohash = geohashForLocation([
                 location.latitude,
                 location.longitude,
@@ -382,7 +447,7 @@ export default function PostScreen() {
                 createdAt: new Date(),
             })
 
-            // 6. Add to lists
+            // 5. Add to lists
             if (listIds && listIds.size > 0) {
                 await Promise.all(
                     Array.from(listIds).map((id) =>
@@ -391,20 +456,30 @@ export default function PostScreen() {
                 ).catch((e) => console.error('Error adding to lists:', e))
             }
 
-            showToast('success', 'Location caught!', 'Contribution earned!')
+            // The reveal modal (then/now) is the success feedback — no toast.
+            // Capture reveal data before resetting state; navigation happens
+            // when the user dismisses the reveal.
+            setRevealData({
+                originalPost: catchTarget,
+                catchPhotoUri: capturedImage,
+            })
 
             // Reset state
             setCapturedImage(null)
             setLocation(null)
             setCatchTarget(null)
+            setPreviewIssues([])
             setUploading(false)
 
             notifyPostEvent('catch', docRef.id, user.uid)
-            router.push('/(tabs)/profile')
         } catch (error: any) {
             console.error('Error in catch confirm:', error)
             setUploading(false)
-            showToast('error', 'Catch Failed', error.message || 'Unknown error')
+            showToast(
+                'error',
+                'Catch failed',
+                'Something went wrong — check your connection and try again.'
+            )
         }
     }
 
@@ -422,26 +497,19 @@ export default function PostScreen() {
 
     const handlePost = async (caption?: string, listIds?: Set<string>) => {
         if (!user || !capturedImage) {
-            showToast('error', 'User not authenticated or no image captured')
-            return
-        }
-
-        // Location is now mandatory
-        if (!location) {
-            Alert.alert(
-                'Location Required',
-                'You must enable location permissions to share a location. Please try again with location enabled.'
+            showToast(
+                'error',
+                'Something went wrong',
+                'Please retake your photo and try again.'
             )
             return
         }
 
-        // Check for blur
-        const isSharpEnough = await checkBlur(capturedImage)
-        if (!isSharpEnough) {
-            showToast(
-                'warning',
-                'Too Blurry',
-                'Please steady your hand and try again.'
+        // Location is mandatory — the capture-time panel already explains
+        // the fix if it's missing (quality problems disable the button)
+        if (!location) {
+            setPreviewIssues((prev) =>
+                prev.length > 0 ? prev : [LOCATION_DENIED_ISSUE]
             )
             return
         }
@@ -522,11 +590,9 @@ export default function PostScreen() {
                 }
             }
 
-            const alertTitle = isPioneer
-                ? 'Pioneer Bonus! (+10 XP)'
-                : 'Shared! (+2 XP)'
+            const alertTitle = isPioneer ? 'Pioneer!' : 'Shared!'
             const alertMsg = isPioneer
-                ? 'You mapped a new area! You are the first to post here.'
+                ? "You're the first to map this spot."
                 : 'You added to the map! Nice shot.'
 
             showToast('success', alertTitle, alertMsg)
@@ -534,6 +600,7 @@ export default function PostScreen() {
             // Reset state
             setCapturedImage(null)
             setLocation(null)
+            setPreviewIssues([])
             setUploading(false)
 
             // Notify subscribers of new post creation
@@ -554,7 +621,21 @@ export default function PostScreen() {
         setLocation(null)
         setSimilarPost(null)
         setCatchTarget(null)
+        setPreviewIssues([])
         setLoadingLocation(false)
+    }
+
+    // Back to the camera without abandoning the flow (keeps catch mode if
+    // active) — the recovery path for every "retake" issue
+    const handleRetake = () => {
+        processingRef.current = false
+        setCapturedImage(null)
+        setLocation(null)
+        setSimilarPost(null)
+        setPreviewIssues([])
+        setLoadingLocation(false)
+        setShowCamera(true)
+        startSensors()
     }
 
     // Camera View
@@ -582,6 +663,8 @@ export default function PostScreen() {
                 hasLocation={!!location}
                 loadingLocation={loadingLocation}
                 originalPhotoUrl={catchTarget.photoURL}
+                issues={previewIssues}
+                onRetake={handleRetake}
             />
         )
     }
@@ -601,6 +684,8 @@ export default function PostScreen() {
                 similarPost={similarPost}
                 onCatchInstead={handleCatchInstead}
                 onNotAMatch={handleNotAMatch}
+                issues={previewIssues}
+                onRetake={handleRetake}
             />
         )
     }
@@ -608,6 +693,16 @@ export default function PostScreen() {
     // Default View - Camera Button
     return (
         <View style={styles.container}>
+            {/* Catch reveal — then/now payoff after catching via the nudge */}
+            <CatchRevealModal
+                visible={!!revealData}
+                originalPost={revealData?.originalPost ?? null}
+                catchPhotoUri={revealData?.catchPhotoUri ?? null}
+                onClose={() => {
+                    setRevealData(null)
+                    router.push('/(tabs)/profile')
+                }}
+            />
             <Ionicons
                 name="location"
                 size={80}

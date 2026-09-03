@@ -111,7 +111,7 @@ export default function LocationSearchBar({
                 />
                 <TextInput
                     style={styles.input}
-                    placeholder="Search for anything..."
+                    placeholder="Search cities and places..."
                     placeholderTextColor={colors.textTertiary}
                     value={query}
                     onChangeText={searchPlaces}

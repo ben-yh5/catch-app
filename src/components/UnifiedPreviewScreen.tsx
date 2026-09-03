@@ -23,6 +23,7 @@ import {
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import CatchIssuesPanel, { CatchIssue } from './CatchIssuesPanel'
 import ListSelectionBottomSheet from './ListSelectionBottomSheet'
 import NudgeCard from './NudgeCard'
 import PostCard from './PostCard'
@@ -39,6 +40,8 @@ interface UnifiedPreviewScreenProps {
     similarPost?: Post | null
     onCatchInstead?: (post: Post) => void
     onNotAMatch?: () => void
+    issues?: CatchIssue[]
+    onRetake?: () => void
 }
 
 export default function UnifiedPreviewScreen({
@@ -54,6 +57,8 @@ export default function UnifiedPreviewScreen({
     similarPost,
     onCatchInstead,
     onNotAMatch,
+    issues = [],
+    onRetake,
 }: UnifiedPreviewScreenProps) {
     const [caption, setCaption] = useState('')
     const [showListSelection, setShowListSelection] = useState(false)
@@ -70,8 +75,12 @@ export default function UnifiedPreviewScreen({
     const isPost = mode === 'post'
     const isCatch = mode === 'catch'
 
+    // A retake-required issue blocks confirm until a new photo is taken;
+    // other issues (e.g. too far away) leave it enabled for another try
+    const retakeRequired = issues.some((issue) => issue.requiresRetake)
+
     // Determine button state
-    const buttonDisabled = loading || loadingLocation
+    const buttonDisabled = loading || loadingLocation || retakeRequired
     const buttonLoading = loading
 
     let buttonText = isPost ? 'Post' : 'Catch This Shot'
@@ -129,22 +138,37 @@ export default function UnifiedPreviewScreen({
                 />
             </ScrollView>
 
-            {isPost && similarPost && !nudgeDismissed && onCatchInstead && (
+            {(issues.length > 0 ||
+                (isPost && similarPost && !nudgeDismissed && onCatchInstead)) && (
                 <View
                     style={[
                         styles.nudgeOverlay,
                         { bottom: insets.bottom + 10 },
                     ]}
                 >
-                    <NudgeCard
-                        post={similarPost}
-                        onCatchInstead={onCatchInstead}
-                        onDismiss={() => setNudgeDismissed(true)}
-                        onNotAMatch={() => {
-                            setNudgeDismissed(true)
-                            onNotAMatch?.()
-                        }}
-                    />
+                    {issues.length > 0 && (
+                        <CatchIssuesPanel
+                            issues={issues}
+                            onRetake={onRetake}
+                            onTryAgain={loading ? undefined : handleConfirm}
+                        />
+                    )}
+                    {isPost &&
+                        similarPost &&
+                        !nudgeDismissed &&
+                        onCatchInstead && (
+                            <View style={issues.length > 0 && styles.nudgeGap}>
+                                <NudgeCard
+                                    post={similarPost}
+                                    onCatchInstead={onCatchInstead}
+                                    onDismiss={() => setNudgeDismissed(true)}
+                                    onNotAMatch={() => {
+                                        setNudgeDismissed(true)
+                                        onNotAMatch?.()
+                                    }}
+                                />
+                            </View>
+                        )}
                 </View>
             )}
 
@@ -171,5 +195,8 @@ const styles = StyleSheet.create({
         position: 'absolute',
         left: 10,
         right: 10,
+    },
+    nudgeGap: {
+        marginTop: 10,
     },
 })

@@ -39,8 +39,8 @@ export default function CompactPostCard({
             onPress={onPress}
             activeOpacity={0.9}
             accessibilityRole="button"
-            accessibilityLabel={`Post by @${post.authorUsername}${post.caption ? `, ${post.caption}` : ''}`}
-            accessibilityHint="View post details"
+            accessibilityLabel={`Shot by @${post.authorUsername}${post.caption ? `, ${post.caption}` : ''}`}
+            accessibilityHint="View shot details"
         >
             <View style={styles.imageContainer}>
                 <Image
@@ -49,7 +49,7 @@ export default function CompactPostCard({
                     contentFit="cover"
                     cachePolicy="memory-disk"
                     priority="normal"
-                    accessibilityLabel="Post photo"
+                    accessibilityLabel="Shot photo"
                 />
                 {highlighted && (
                     <CaughtBadge

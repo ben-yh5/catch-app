@@ -2,7 +2,6 @@ import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Notification } from '@/types/Notification'
-import { CONTRIBUTION } from '@/utils/contributionConfig'
 import { Post } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
@@ -22,7 +21,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ThreadModal from './ThreadModal'
 
-type FilterType = 'all' | 'xp' | 'social'
+type FilterType = 'all' | 'catches' | 'social'
 
 interface ActivityFeedProps {
     visible: boolean
@@ -34,7 +33,6 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
         notifications,
         markAllNotificationsAsRead,
         clearAllNotifications,
-        contribution,
         totalPosts,
         totalCatches,
     } = useAuth()
@@ -44,7 +42,6 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
         Notification[]
     >([])
     const [loading, setLoading] = useState(false)
-    const [showHowItWorks, setShowHowItWorks] = useState(false)
     const [activeFilter, setActiveFilter] = useState<FilterType>('all')
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [threadModalVisible, setThreadModalVisible] = useState(false)
@@ -62,8 +59,17 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
 
     const hydrateNotifications = async () => {
         setLoading(true)
+        // Legacy docs: map old 'royalty' notifications to 'caught', drop
+        // retired xp_* activity entries from the points era.
+        const renderable = notifications
+            .filter((n) => !['xp_post', 'xp_catch'].includes(n.type as string))
+            .map((n) =>
+                (n.type as string) === 'royalty'
+                    ? { ...n, type: 'caught' as const }
+                    : n
+            )
         const hydrated = await Promise.all(
-            notifications.map(async (n): Promise<Notification> => {
+            renderable.map(async (n): Promise<Notification> => {
                 const note = { ...n } as Notification
 
                 // Fetch "From User" details
@@ -106,10 +112,8 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
 
     const filteredNotifications = useMemo(() => {
         if (activeFilter === 'all') return hydratedNotifications
-        if (activeFilter === 'xp') {
-            return hydratedNotifications.filter((n) =>
-                ['xp_post', 'xp_catch', 'royalty'].includes(n.type)
-            )
+        if (activeFilter === 'catches') {
+            return hydratedNotifications.filter((n) => n.type === 'caught')
         }
         // social
         return hydratedNotifications.filter((n) =>
@@ -186,35 +190,7 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
     }
 
     const renderNotificationIcon = (item: Notification) => {
-        if (item.type === 'xp_post') {
-            return (
-                <View
-                    style={[
-                        styles.iconCircle,
-                        {
-                            backgroundColor: item.isPioneer
-                                ? '#FFD700'
-                                : colors.primary,
-                        },
-                    ]}
-                >
-                    <Ionicons name="location" size={20} color="#fff" />
-                </View>
-            )
-        }
-        if (item.type === 'xp_catch') {
-            return (
-                <View
-                    style={[
-                        styles.iconCircle,
-                        { backgroundColor: colors.secondary },
-                    ]}
-                >
-                    <Ionicons name="camera" size={20} color="#fff" />
-                </View>
-            )
-        }
-        // Social notifications: show avatar
+        // Show the avatar of whoever the notification is from
         if (item.fromUserPhoto) {
             return (
                 <Image
@@ -236,26 +212,6 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
     }
 
     const renderNotificationText = (item: Notification) => {
-        if (item.type === 'xp_post') {
-            return (
-                <Text style={styles.itemText}>
-                    You earned
-                    <Text style={styles.xpAmount}> +{item.amount}</Text>
-                    <Text style={styles.xpLabel}> XP </Text>
-                    for a {item.isPioneer ? 'Pioneer' : 'Nearby'} post
-                </Text>
-            )
-        }
-        if (item.type === 'xp_catch') {
-            return (
-                <Text style={styles.itemText}>
-                    You earned
-                    <Text style={styles.xpAmount}> +{item.amount}</Text>
-                    <Text style={styles.xpLabel}> XP </Text>
-                    for catching a post
-                </Text>
-            )
-        }
         if (item.type === 'follow') {
             return (
                 <Text style={styles.itemText}>
@@ -272,24 +228,21 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
                 </Text>
             )
         }
-        // royalty
+        // caught — someone stood where you stood and re-took your photo
         return (
             <Text style={styles.itemText}>
                 <Text style={styles.username}>@{item.fromUsername} </Text>
                 caught your shot!
-                <Text style={styles.xpAmount}> +{item.amount}</Text>
-                <Text style={styles.xpLabel}> XP</Text>
             </Text>
         )
     }
 
     const showThumbnail = (item: Notification) =>
-        ['royalty', 'xp_post', 'xp_catch', 'new_post'].includes(item.type) &&
-        item.postThumbnail
+        ['caught', 'new_post'].includes(item.type) && item.postThumbnail
 
     const filters: { key: FilterType; label: string }[] = [
         { key: 'all', label: 'All' },
-        { key: 'xp', label: 'Points' },
+        { key: 'catches', label: 'Catches' },
         { key: 'social', label: 'Social' },
     ]
 
@@ -342,14 +295,8 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
                     </View>
                 ) : (
                     <ScrollView contentContainerStyle={styles.content}>
-                        {/* Contribution Summary */}
+                        {/* Passport Summary */}
                         <View style={styles.summaryContainer}>
-                            <Text style={styles.summaryTotal}>
-                                {contribution}
-                            </Text>
-                            <Text style={styles.summaryTotalLabel}>
-                                Total Points
-                            </Text>
                             <View style={styles.summaryStats}>
                                 <View style={styles.summaryStatItem}>
                                     <Text style={styles.summaryStatNumber}>
@@ -370,111 +317,6 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
                                 </View>
                             </View>
                         </View>
-
-                        {/* How Points Work (collapsible) */}
-                        <TouchableOpacity
-                            style={styles.howItWorksToggle}
-                            onPress={() => setShowHowItWorks(!showHowItWorks)}
-                            accessibilityRole="button"
-                            accessibilityLabel="How Points Work"
-                            accessibilityState={{ expanded: showHowItWorks }}
-                        >
-                            <Text style={styles.howItWorksToggleText}>
-                                How Points Work
-                            </Text>
-                            <Ionicons
-                                name={
-                                    showHowItWorks
-                                        ? 'chevron-up'
-                                        : 'chevron-down'
-                                }
-                                size={18}
-                                color={colors.textTertiary}
-                            />
-                        </TouchableOpacity>
-                        {showHowItWorks && (
-                            <View style={styles.howItWorksContent}>
-                                <View style={styles.pointRow}>
-                                    <Text style={styles.pointLabel}>
-                                        Pioneer Post
-                                    </Text>
-                                    <Text style={styles.pointValue}>
-                                        +{CONTRIBUTION.PIONEER_POST} pts
-                                    </Text>
-                                </View>
-                                <View style={styles.pointRow}>
-                                    <Text style={styles.pointLabel}>
-                                        Nearby Post
-                                    </Text>
-                                    <Text style={styles.pointValue}>
-                                        +{CONTRIBUTION.NEARBY_POST} pts
-                                    </Text>
-                                </View>
-                                <View style={styles.pointRow}>
-                                    <Text style={styles.pointLabel}>Catch</Text>
-                                    <Text style={styles.pointValue}>
-                                        +{CONTRIBUTION.CATCH} pts
-                                    </Text>
-                                </View>
-                                <View style={styles.pointRow}>
-                                    <Text style={styles.pointLabel}>
-                                        Pioneer Royalty
-                                    </Text>
-                                    <Text style={styles.pointValue}>
-                                        +{CONTRIBUTION.ROYALTY_PIONEER} pts
-                                    </Text>
-                                </View>
-                                <View style={styles.pointRow}>
-                                    <Text style={styles.pointLabel}>
-                                        Nearby Royalty
-                                    </Text>
-                                    <Text style={styles.pointValue}>
-                                        +{CONTRIBUTION.ROYALTY_NEARBY} pts
-                                    </Text>
-                                </View>
-                                <View style={styles.pointDivider} />
-                                <View style={styles.pointRow}>
-                                    <View style={styles.pointLabelRow}>
-                                        <View
-                                            style={[
-                                                styles.pinDot,
-                                                {
-                                                    backgroundColor:
-                                                        colors.pinBounty,
-                                                },
-                                            ]}
-                                        />
-                                        <Text style={styles.pointLabel}>
-                                            Gold Pin (Bounty)
-                                        </Text>
-                                    </View>
-                                    <Text style={styles.pointValue}>
-                                        {CONTRIBUTION.BOUNTY_MULTIPLIER}x catch
-                                        pts
-                                    </Text>
-                                </View>
-                                <View style={styles.pointRow}>
-                                    <View style={styles.pointLabelRow}>
-                                        <View
-                                            style={[
-                                                styles.pinDot,
-                                                {
-                                                    backgroundColor:
-                                                        colors.pinTrending,
-                                                },
-                                            ]}
-                                        />
-                                        <Text style={styles.pointLabel}>
-                                            Silver Pin (Trending)
-                                        </Text>
-                                    </View>
-                                    <Text style={styles.pointValue}>
-                                        {CONTRIBUTION.TRENDING_MULTIPLIER}x
-                                        catch pts
-                                    </Text>
-                                </View>
-                            </View>
-                        )}
 
                         {/* Filter Tabs */}
                         <View style={styles.filterRow}>
@@ -616,21 +458,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
 
-    // Contribution Summary
+    // Passport Summary
     summaryContainer: {
         alignItems: 'center',
         paddingVertical: 24,
         paddingHorizontal: 24,
-    },
-    summaryTotal: {
-        fontSize: 48,
-        fontWeight: '800',
-        color: colors.textPrimary,
-    },
-    summaryTotalLabel: {
-        fontSize: 14,
-        color: colors.textTertiary,
-        marginBottom: 16,
     },
     summaryStats: {
         flexDirection: 'row',
@@ -662,65 +494,14 @@ const styles = StyleSheet.create({
         backgroundColor: colors.border,
     },
 
-    // How It Works
-    howItWorksToggle: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        gap: 6,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    howItWorksToggleText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: colors.textTertiary,
-    },
-    howItWorksContent: {
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        backgroundColor: colors.card,
-    },
-    pointRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 6,
-    },
-    pointLabelRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    pointLabel: {
-        fontSize: 14,
-        color: colors.textSecondary,
-    },
-    pointValue: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: colors.textPrimary,
-    },
-    pointDivider: {
-        height: 1,
-        backgroundColor: colors.border,
-        marginVertical: 8,
-    },
-    pinDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-    },
-
     // Filter Tabs
     filterRow: {
         flexDirection: 'row',
         paddingHorizontal: 16,
         paddingVertical: 12,
         gap: 8,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
     },
     filterTab: {
         paddingHorizontal: 16,
@@ -784,13 +565,6 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
     },
-    iconCircle: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
     itemContent: {
         flex: 1,
         marginRight: 12,
@@ -803,16 +577,6 @@ const styles = StyleSheet.create({
     },
     username: {
         fontWeight: 'bold',
-    },
-    xpAmount: {
-        color: '#FFD700',
-        fontWeight: '800',
-        fontSize: 16,
-    },
-    xpLabel: {
-        color: '#FFD700',
-        fontWeight: '600',
-        fontSize: 12,
     },
     timeText: {
         fontSize: 12,

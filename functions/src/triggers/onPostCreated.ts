@@ -4,24 +4,23 @@ import { distanceBetween, geohashQueryBounds } from 'geofire-common'
 import { TaskType } from '@google/generative-ai'
 import { getGenAI } from '../lib/gemini'
 import { updateCoverageCells } from '../lib/coverage'
-import { CONTRIBUTION, MAX_INSTANCES } from '../lib/constants'
+import { NEARBY_THRESHOLD_METERS, MAX_INSTANCES } from '../lib/constants'
 import { sendPushNotification } from '../lib/notifications'
 
 /**
  * Firestore Trigger: Handles post creation events
  *
  * Performs:
- * 1. Contribution points for original posts (Pioneer vs Nearby check)
- * 2. Contribution points for catches + royalties to original poster
- * 3. Increments user's totalCatches/totalPosts counters
+ * 1. Pioneer attribution for original posts (first find at this spot)
+ * 2. Increments user's totalCatches/totalPosts counters and the root's
+ *    catchCount/lastCaughtAt for catches
+ * 3. Notifies the original poster when their spot is caught
  * 4. Sends push notifications to followers for original posts
  *
- * All balance-critical writes (contribution, counters, contributionEarned)
- * happen in a single transaction that also owns the processed_events dedup
- * marker. This makes awards all-or-nothing: a crash mid-trigger can no longer
- * leave points awarded without being recorded on the post (or vice versa),
- * and a duplicate delivery is still applied exactly once. Best-effort work
- * (notifications, coverage, AI enrichment) runs after the transaction.
+ * All counter writes happen in a single transaction that also owns the
+ * processed_events dedup marker — all-or-nothing, applied exactly once even
+ * on duplicate delivery. Best-effort work (notifications, coverage, AI
+ * enrichment) runs after the transaction.
  */
 export const onPostCreated = functions
     .runWith({ maxInstances: MAX_INSTANCES.EXPENSIVE })
@@ -50,6 +49,11 @@ export const onPostCreated = functions
             // Handle CATCH posts
             if (postData.parentPostId && !postData.isOriginal) {
                 const rootPostId = postData.rootPostId
+                const permitRef = rootPostId
+                    ? db
+                          .collection('catch_permits')
+                          .doc(`${authorId}_${rootPostId}`)
+                    : null
 
                 const txnResult = await db.runTransaction(async (t) => {
                     // All reads first (transaction requirement), then writes
@@ -61,10 +65,11 @@ export const onPostCreated = functions
                     const rootDoc = rootPostId
                         ? await t.get(db.collection('posts').doc(rootPostId))
                         : null
+                    const permitDoc = permitRef ? await t.get(permitRef) : null
 
-                    // Post already deleted (rapid create -> delete): award
-                    // nothing — including no root catchCount/royalty writes —
-                    // so the books stay balanced. Marker is still set so a
+                    // Post already deleted (rapid create -> delete): write
+                    // nothing — including no root catchCount update — so the
+                    // counters stay balanced. Marker is still set so a
                     // redelivery doesn't retry.
                     if (!postDoc.exists) {
                         t.set(eventRef, {
@@ -74,69 +79,31 @@ export const onPostCreated = functions
                         return { postDeleted: true } as const
                     }
 
-                    let catchPoints = CONTRIBUTION.CATCH
-                    let catchMultiplier = 1
-                    let royalty = 0
-                    let royaltyRecipientId: string | null = null
+                    // Permit check: validateCatch issues a short-lived permit
+                    // on success, and it's consumed here — first catch wins.
+                    // A catch without a live permit (forged write, or a second
+                    // post racing the same permit) is rejected: stamp it so
+                    // onPostDeleted skips counter decrements, then delete it
+                    // after the transaction.
+                    const permitValid =
+                        permitDoc?.exists &&
+                        (permitDoc.data()?.expiresAt?.toMillis?.() ?? 0) >
+                            Date.now()
+                    if (!permitValid) {
+                        t.update(postRef, { rejectedNoPermit: true })
+                        t.set(eventRef, {
+                            processedAt:
+                                admin.firestore.FieldValue.serverTimestamp(),
+                        })
+                        return { rejected: true } as const
+                    }
+                    t.delete(permitRef!)
+
+                    let rootAuthorId: string | null = null
 
                     if (rootDoc?.exists) {
-                        const rootData = rootDoc.data()!
-                        const rootCatchCount = rootData.catchCount ?? 0
-                        const lastCaughtAt =
-                            rootData.lastCaughtAt?.toMillis?.() ?? 0
-                        const thirtyDaysAgo =
-                            Date.now() -
-                            CONTRIBUTION.BOUNTY_INACTIVITY_DAYS *
-                                24 *
-                                60 *
-                                60 *
-                                1000
-
-                        const isBountyPost =
-                            rootCatchCount === 0 ||
-                            (lastCaughtAt > 0 && lastCaughtAt < thirtyDaysAgo)
-                        const isTrendingPost =
-                            !isBountyPost &&
-                            rootCatchCount >= CONTRIBUTION.TRENDING_THRESHOLD
-
-                        if (isBountyPost) {
-                            catchMultiplier = CONTRIBUTION.BOUNTY_MULTIPLIER
-                        } else if (isTrendingPost) {
-                            catchMultiplier = CONTRIBUTION.TRENDING_MULTIPLIER
-                        }
-                        catchPoints = Math.round(
-                            CONTRIBUTION.CATCH * catchMultiplier
-                        )
-
-                        // Royalty to the original poster (unmultiplied).
-                        // Only awarded — and only recorded on the root — when
-                        // the recipient is a different, existing user, so the
-                        // root's contributionEarned never includes royalties
-                        // that were never paid out.
-                        const rootAuthorId = rootData.authorId
-                        const isPioneer = rootData.isPioneer ?? true
-                        if (rootAuthorId && rootAuthorId !== authorId) {
-                            const recipientRef = db
-                                .collection('users')
-                                .doc(rootAuthorId)
-                            const recipientDoc = await t.get(recipientRef)
-                            if (recipientDoc.exists) {
-                                royalty = isPioneer
-                                    ? CONTRIBUTION.ROYALTY_PIONEER
-                                    : CONTRIBUTION.ROYALTY_NEARBY
-                                royaltyRecipientId = rootAuthorId
-                                t.update(recipientRef, {
-                                    contribution:
-                                        admin.firestore.FieldValue.increment(
-                                            royalty
-                                        ),
-                                })
-                            }
-                        }
-
+                        rootAuthorId = rootDoc.data()!.authorId ?? null
                         t.update(rootDoc.ref, {
-                            contributionEarned:
-                                admin.firestore.FieldValue.increment(royalty),
                             catchCount: admin.firestore.FieldValue.increment(1),
                             lastCaughtAt:
                                 admin.firestore.FieldValue.serverTimestamp(),
@@ -146,36 +113,15 @@ export const onPostCreated = functions
                     if (userDoc.exists) {
                         t.update(userRef, {
                             totalCatches: admin.firestore.FieldValue.increment(1),
-                            contribution:
-                                admin.firestore.FieldValue.increment(
-                                    catchPoints
-                                ),
                         })
                     }
-
-                    // Record what was actually paid, and to whom, so deletion
-                    // can claw back precisely. royaltyRootPostId lets deletion
-                    // detect thread promotion: if the catch has been re-pointed
-                    // to a new root, the royalty was already settled when the
-                    // old root was deleted.
-                    t.update(postRef, {
-                        contributionEarned: userDoc.exists ? catchPoints : 0,
-                        royaltyRecipientId,
-                        royaltyAmount: royalty,
-                        royaltyRootPostId: rootPostId ?? null,
-                    })
 
                     t.set(eventRef, {
                         processedAt:
                             admin.firestore.FieldValue.serverTimestamp(),
                     })
 
-                    return {
-                        catchPoints,
-                        catchMultiplier,
-                        royalty,
-                        royaltyRecipientId,
-                    } as const
+                    return { rootAuthorId } as const
                 })
 
                 if ('duplicate' in txnResult) {
@@ -190,55 +136,72 @@ export const onPostCreated = functions
                     )
                     return
                 }
+                if ('rejected' in txnResult) {
+                    functions.logger.warn(
+                        `[onPostCreated] Catch ${postId} by ${authorId} had no valid permit — deleting forged/duplicate catch`
+                    )
+                    try {
+                        await postRef.delete()
+                    } catch (e) {
+                        functions.logger.error(
+                            `[onPostCreated] Failed to delete rejected catch ${postId}`,
+                            e
+                        )
+                    }
+                    return
+                }
 
                 functions.logger.info(
-                    `Catch multiplier: ${txnResult.catchMultiplier}x, awarded ${txnResult.catchPoints} to catcher ${authorId}, royalty ${txnResult.royalty} to ${txnResult.royaltyRecipientId ?? 'nobody'}`
+                    `Catch ${postId} recorded for catcher ${authorId} on root ${rootPostId ?? 'unknown'}`
                 )
 
-                // --- Best-effort work below (failures don't affect balances) ---
+                // --- Best-effort work below (failures don't affect counters) ---
 
-                if (txnResult.royaltyRecipientId) {
+                // Notify the original poster that someone stood where they
+                // stood — this is the reward for having found the spot.
+                if (
+                    txnResult.rootAuthorId &&
+                    txnResult.rootAuthorId !== authorId
+                ) {
                     try {
                         await db
                             .collection('users')
-                            .doc(txnResult.royaltyRecipientId)
+                            .doc(txnResult.rootAuthorId)
                             .collection('notifications')
                             .add({
-                                type: 'royalty',
-                                amount: txnResult.royalty,
+                                type: 'caught',
                                 fromUserId: authorId,
                                 postId: rootPostId,
                                 createdAt:
                                     admin.firestore.FieldValue.serverTimestamp(),
                                 read: false,
                             })
+
+                        const recipientDoc = await db
+                            .collection('users')
+                            .doc(txnResult.rootAuthorId)
+                            .get()
+                        const pushToken = recipientDoc.data()?.pushToken
+                        if (pushToken) {
+                            const catcherUsername =
+                                postData.authorUsername || 'Someone'
+                            await sendPushNotification(
+                                pushToken,
+                                'Your spot was caught!',
+                                `@${catcherUsername} stood where you stood and re-took your photo.`,
+                                {
+                                    userId: authorId,
+                                    postId: rootPostId,
+                                    type: 'caught',
+                                }
+                            )
+                        }
                     } catch (e) {
                         functions.logger.error(
-                            `[onPostCreated] Failed to create royalty notification for ${txnResult.royaltyRecipientId}`,
+                            `[onPostCreated] Failed to notify ${txnResult.rootAuthorId} of catch`,
                             e
                         )
                     }
-                }
-
-                // Log xp_catch to catcher's activity feed
-                try {
-                    await db
-                        .collection('users')
-                        .doc(authorId)
-                        .collection('notifications')
-                        .add({
-                            type: 'xp_catch',
-                            amount: txnResult.catchPoints,
-                            postId: rootPostId || postData.parentPostId,
-                            createdAt:
-                                admin.firestore.FieldValue.serverTimestamp(),
-                            read: true,
-                        })
-                } catch (e) {
-                    functions.logger.error(
-                        `[onPostCreated] Failed to create xp_catch notification`,
-                        e
-                    )
                 }
 
                 // Update coverage cells for catch post
@@ -268,7 +231,8 @@ export const onPostCreated = functions
             // Handle ORIGINAL posts
             if (postData.isOriginal) {
                 // Pioneer classification (geohash queries) runs outside the
-                // transaction — it's a point-in-time check, not a balance.
+                // transaction — it's a point-in-time check. Pioneer is pure
+                // attribution: "first found at this spot".
                 const locationQuery = await db
                     .collection('post_locations')
                     .where('postId', '==', postId)
@@ -276,7 +240,6 @@ export const onPostCreated = functions
                     .get()
 
                 let isPioneer = true
-                let contributionAmount = CONTRIBUTION.PIONEER_POST
 
                 if (!locationQuery.empty) {
                     const newPostLocation = locationQuery.docs[0].data()
@@ -288,7 +251,7 @@ export const onPostCreated = functions
                     // Query nearby posts using geohash
                     const bounds = geohashQueryBounds(
                         center,
-                        CONTRIBUTION.NEARBY_THRESHOLD_METERS
+                        NEARBY_THRESHOLD_METERS
                     )
 
                     const nearbyPromises = bounds.map(([start, end]) =>
@@ -313,11 +276,8 @@ export const onPostCreated = functions
                                     otherLocation.longitude,
                                 ]) * 1000 // Convert km to meters
 
-                            if (
-                                distance <= CONTRIBUTION.NEARBY_THRESHOLD_METERS
-                            ) {
+                            if (distance <= NEARBY_THRESHOLD_METERS) {
                                 isPioneer = false
-                                contributionAmount = CONTRIBUTION.NEARBY_POST
                                 break
                             }
                         }
@@ -332,7 +292,7 @@ export const onPostCreated = functions
                     const postDoc = await t.get(postRef)
                     const userDoc = await t.get(userRef)
 
-                    // Post already deleted: skip awards, keep books balanced
+                    // Post already deleted: skip writes, keep counters balanced
                     if (!postDoc.exists) {
                         t.set(eventRef, {
                             processedAt:
@@ -341,20 +301,11 @@ export const onPostCreated = functions
                         return { postDeleted: true } as const
                     }
 
-                    t.update(postRef, {
-                        isPioneer,
-                        contributionEarned: userDoc.exists
-                            ? contributionAmount
-                            : 0,
-                    })
+                    t.update(postRef, { isPioneer })
 
                     if (userDoc.exists) {
                         t.update(userRef, {
                             totalPosts: admin.firestore.FieldValue.increment(1),
-                            contribution:
-                                admin.firestore.FieldValue.increment(
-                                    contributionAmount
-                                ),
                         })
                     }
 
@@ -380,32 +331,10 @@ export const onPostCreated = functions
                 }
 
                 functions.logger.info(
-                    `Post ${postId} isPioneer=${isPioneer}, awarded ${contributionAmount} contribution to ${authorId}`
+                    `Post ${postId} isPioneer=${isPioneer} by ${authorId}`
                 )
 
-                // --- Best-effort work below (failures don't affect balances) ---
-
-                // Log xp_post to author's activity feed
-                try {
-                    await db
-                        .collection('users')
-                        .doc(authorId)
-                        .collection('notifications')
-                        .add({
-                            type: 'xp_post',
-                            amount: contributionAmount,
-                            isPioneer,
-                            postId,
-                            createdAt:
-                                admin.firestore.FieldValue.serverTimestamp(),
-                            read: true,
-                        })
-                } catch (e) {
-                    functions.logger.error(
-                        `[onPostCreated] Failed to create xp_post notification`,
-                        e
-                    )
-                }
+                // --- Best-effort work below (failures don't affect counters) ---
 
                 // --- AI Search: Enrich post with metadata + embedding ---
                 // Each step is independent and wrapped in try/catch so
