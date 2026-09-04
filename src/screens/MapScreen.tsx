@@ -83,7 +83,9 @@ export default function MapScreen() {
 
     // State
     const [visiblePosts, setVisiblePosts] = useState<Post[]>([])
-    const [loadingPosts, setLoadingPosts] = useState(false)
+    // Starts true so the sheet says "Loading..." instead of claiming
+    // "0 shots" before the first camera-driven fetch resolves
+    const [loadingPosts, setLoadingPosts] = useState(true)
     const [zoomedTooFarOut, setZoomedTooFarOut] = useState(false)
     const [activeFilter, setActiveFilter] = useState<FilterType>('trending')
     const [userLocation, setUserLocation] =
