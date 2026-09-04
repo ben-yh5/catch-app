@@ -3,7 +3,7 @@ import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { List } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import ErrorState from '@/components/ui/ErrorState'
 import { ListsTabSkeleton } from '@/components/ui/Skeleton'
@@ -19,23 +19,29 @@ import {
 import PagerView from 'react-native-pager-view'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+type ListsTab = 'my' | 'community'
+const TAB_ORDER: ListsTab[] = ['my', 'community']
+
 export default function ListsScreen() {
     const { user } = useAuth()
     const insets = useSafeAreaInsets()
     const router = useRouter()
     const pagerRef = useRef<PagerView>(null)
-    const [lists, setLists] = useState<List[]>([])
-    const [loading, setLoading] = useState(true)
+    // Per-tab data so the two pager pages never share state — while a
+    // page's data is still null it renders a skeleton instead of
+    // mirroring the other tab's rows during the swipe
+    const [myLists, setMyLists] = useState<List[] | null>(null)
+    const [communityLists, setCommunityLists] = useState<List[] | null>(null)
+    const [myError, setMyError] = useState(false)
+    const [communityError, setCommunityError] = useState(false)
+    const [activeTab, setActiveTab] = useState<ListsTab>('my')
     const [refreshing, setRefreshing] = useState(false)
-    const [activeTab, setActiveTab] = useState<'my' | 'community'>('my')
     const [refreshEnabled, setRefreshEnabled] = useState(true)
-    const [fetchError, setFetchError] = useState(false)
 
     const fetchMyLists = useCallback(async () => {
         if (!user) return
 
         try {
-            setFetchError(false)
             const listsQuery = query(
                 collection(db, 'lists'),
                 where('creatorId', '==', user.uid),
@@ -60,22 +66,16 @@ export default function ListsScreen() {
                 (l) => !l.isSavedList && l.name !== 'Saved'
             )
 
-            const sortedLists = savedList
-                ? [savedList, ...otherLists]
-                : otherLists
-
-            setLists(sortedLists)
+            setMyLists(savedList ? [savedList, ...otherLists] : otherLists)
+            setMyError(false)
         } catch (error) {
             console.error('Error fetching lists:', error)
-            setFetchError(true)
-        } finally {
-            setLoading(false)
+            setMyError(true)
         }
     }, [user])
 
     const fetchCommunityLists = useCallback(async () => {
         try {
-            setFetchError(false)
             const listsQuery = query(
                 collection(db, 'lists'),
                 where('isPublic', '==', true),
@@ -92,44 +92,52 @@ export default function ListsScreen() {
                 } as List)
             })
 
-            setLists(fetchedLists)
+            setCommunityLists(fetchedLists)
+            setCommunityError(false)
         } catch (error) {
             console.error('Error fetching community lists:', error)
-            setFetchError(true)
-        } finally {
-            setLoading(false)
+            setCommunityError(true)
         }
     }, [])
 
-    const fetchLists = useCallback(() => {
-        if (activeTab === 'my') {
+    // Refetch my lists on every focus so a list created elsewhere shows up
+    // without pull-to-refresh; existing data stays on screen while the
+    // refetch is in flight (no skeleton flash)
+    useFocusEffect(
+        useCallback(() => {
             fetchMyLists()
-        } else {
-            fetchCommunityLists()
-        }
-    }, [activeTab, fetchMyLists, fetchCommunityLists])
+        }, [fetchMyLists])
+    )
 
-    // Handle page swipe
-    const handlePageSelected = (e: any) => {
-        const position = e.nativeEvent.position
-        const newTab = position === 0 ? 'my' : 'community'
-        if (newTab !== activeTab) {
-            setActiveTab(newTab)
-            setLoading(true)
-        }
+    // Prefetch the community page so swiping to it usually reveals real
+    // content; the skeleton only shows if the fetch hasn't landed yet
+    useEffect(() => {
+        fetchCommunityLists()
+    }, [fetchCommunityLists])
+
+    const selectTab = (tab: ListsTab) => {
+        setActiveTab(tab)
+        pagerRef.current?.setPage(TAB_ORDER.indexOf(tab))
     }
 
-    useEffect(() => {
-        fetchLists()
-    }, [fetchLists])
+    const handlePageSelected = (e: { nativeEvent: { position: number } }) => {
+        const tab = TAB_ORDER[e.nativeEvent.position]
+        if (tab && tab !== activeTab) {
+            setActiveTab(tab)
+        }
+    }
 
     const handleRefresh = async () => {
         setRefreshing(true)
-        await fetchLists()
+        if (activeTab === 'my') {
+            await fetchMyLists()
+        } else {
+            await fetchCommunityLists()
+        }
         setRefreshing(false)
     }
 
-    const renderListItem = ({ item }: { item: List }) => {
+    const renderListItem = (item: List, tab: ListsTab) => {
         return (
             <TouchableOpacity
                 style={styles.listItem}
@@ -138,7 +146,7 @@ export default function ListsScreen() {
                     // live there). All lists are public — no lock affordance.
                     router.push(`/list-detail?listId=${item.id}` as any)
                 }
-                accessibilityLabel={`${item.name}, ${item.postIds.length} ${item.postIds.length === 1 ? 'shot' : 'shots'}${activeTab === 'community' ? `, by @${item.creatorUsername}` : ''}`}
+                accessibilityLabel={`${item.name}, ${item.postIds.length} ${item.postIds.length === 1 ? 'shot' : 'shots'}${tab === 'community' ? `, by @${item.creatorUsername}` : ''}`}
                 accessibilityRole="button"
                 accessibilityHint="Open this list"
             >
@@ -158,7 +166,7 @@ export default function ListsScreen() {
                             <Text style={styles.listMeta}>
                                 {item.postIds.length}{' '}
                                 {item.postIds.length === 1 ? 'shot' : 'shots'}
-                                {activeTab === 'community'
+                                {tab === 'community'
                                     ? ` • @${item.creatorUsername}`
                                     : ''}
                             </Text>
@@ -169,12 +177,14 @@ export default function ListsScreen() {
         )
     }
 
-    const renderEmptyState = () => {
-        if (fetchError) {
+    const renderEmptyState = (tab: ListsTab) => {
+        const error = tab === 'my' ? myError : communityError
+        const retry = tab === 'my' ? fetchMyLists : fetchCommunityLists
+        if (error) {
             return (
                 <ErrorState
                     message="Couldn't load lists"
-                    onRetry={fetchLists}
+                    onRetry={retry}
                     style={styles.errorState}
                 />
             )
@@ -187,13 +197,13 @@ export default function ListsScreen() {
                     color={colors.textTertiary}
                 />
                 <Text style={styles.emptyText}>
-                    {activeTab === 'my' ? 'No Lists Yet' : 'No Community Lists'}
+                    {tab === 'my' ? 'No Lists Yet' : 'No Community Lists'}
                 </Text>
-                {activeTab === 'my' && (
+                {tab === 'my' && (
                     <>
                         <Text style={styles.emptySubtext}>
-                            Create your first list to organize shots you want
-                            to visit
+                            Create your first list to organize shots you want to
+                            visit
                         </Text>
                         <TouchableOpacity
                             style={styles.emptyCreateButton}
@@ -212,6 +222,41 @@ export default function ListsScreen() {
         )
     }
 
+    const renderListsPage = (tab: ListsTab) => {
+        const data = tab === 'my' ? myLists : communityLists
+        const error = tab === 'my' ? myError : communityError
+
+        // Data never loaded: ghost skeleton while in flight, error state if
+        // the fetch failed outright
+        if (data === null) {
+            if (error) {
+                return renderEmptyState(tab)
+            }
+            return <ListsTabSkeleton />
+        }
+
+        return (
+            <FlatList
+                data={data}
+                renderItem={({ item }) => renderListItem(item, tab)}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.listContainer}
+                refreshControl={
+                    // Always mounted — unmounting mid-swipe causes a
+                    // relayout flash when the pager settles. `enabled` is
+                    // Android-only, the one platform where a pager drag
+                    // can trigger pull-to-refresh.
+                    <RefreshControl
+                        refreshing={refreshing && activeTab === tab}
+                        onRefresh={handleRefresh}
+                        enabled={refreshEnabled}
+                    />
+                }
+                ListEmptyComponent={renderEmptyState(tab)}
+            />
+        )
+    }
+
     return (
         <View style={[styles.container, { paddingTop: insets.top }]}>
             <View style={styles.header}>
@@ -224,11 +269,7 @@ export default function ListsScreen() {
             <View style={styles.tabContainer}>
                 <TouchableOpacity
                     style={[styles.tab, activeTab === 'my' && styles.activeTab]}
-                    onPress={() => {
-                        setActiveTab('my')
-                        pagerRef.current?.setPage(0)
-                        setLoading(true)
-                    }}
+                    onPress={() => selectTab('my')}
                     accessibilityLabel="My Lists"
                     accessibilityRole="button"
                     accessibilityState={{ selected: activeTab === 'my' }}
@@ -247,11 +288,7 @@ export default function ListsScreen() {
                         styles.tab,
                         activeTab === 'community' && styles.activeTab,
                     ]}
-                    onPress={() => {
-                        setActiveTab('community')
-                        pagerRef.current?.setPage(1)
-                        setLoading(true)
-                    }}
+                    onPress={() => selectTab('community')}
                     accessibilityLabel="Community"
                     accessibilityRole="button"
                     accessibilityState={{ selected: activeTab === 'community' }}
@@ -282,50 +319,11 @@ export default function ListsScreen() {
                     }
                 }}
             >
-                {/* Page 0: My Lists */}
-                <View key="0" style={styles.pageContainer}>
-                    {loading ? (
-                        <ListsTabSkeleton />
-                    ) : (
-                        <FlatList
-                            data={lists}
-                            renderItem={renderListItem}
-                            keyExtractor={(item) => item.id}
-                            contentContainerStyle={styles.listContainer}
-                            refreshControl={
-                                refreshEnabled ? (
-                                    <RefreshControl
-                                        refreshing={refreshing}
-                                        onRefresh={handleRefresh}
-                                    />
-                                ) : undefined
-                            }
-                            ListEmptyComponent={renderEmptyState}
-                        />
-                    )}
+                <View key="my" style={styles.pageContainer}>
+                    {renderListsPage('my')}
                 </View>
-
-                {/* Page 1: Community */}
-                <View key="1" style={styles.pageContainer}>
-                    {loading ? (
-                        <ListsTabSkeleton />
-                    ) : (
-                        <FlatList
-                            data={lists}
-                            renderItem={renderListItem}
-                            keyExtractor={(item) => item.id}
-                            contentContainerStyle={styles.listContainer}
-                            refreshControl={
-                                refreshEnabled ? (
-                                    <RefreshControl
-                                        refreshing={refreshing}
-                                        onRefresh={handleRefresh}
-                                    />
-                                ) : undefined
-                            }
-                            ListEmptyComponent={renderEmptyState}
-                        />
-                    )}
+                <View key="community" style={styles.pageContainer}>
+                    {renderListsPage('community')}
                 </View>
             </PagerView>
 
@@ -390,11 +388,6 @@ const styles = StyleSheet.create({
     pageContainer: {
         flex: 1,
     },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
     listContainer: {
         padding: 16,
         flexGrow: 1,
@@ -434,10 +427,6 @@ const styles = StyleSheet.create({
     listMeta: {
         fontSize: 12,
         color: colors.textTertiary,
-    },
-    deleteButton: {
-        padding: 8,
-        marginLeft: 8,
     },
     emptyContainer: {
         flex: 1,

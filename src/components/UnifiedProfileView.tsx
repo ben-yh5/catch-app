@@ -40,6 +40,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
+import PagerView from 'react-native-pager-view'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import CompactPostCard from './CompactPostCard'
 import { CompactPostCardSkeleton, ProfileSkeleton } from './ui/Skeleton'
@@ -50,6 +51,9 @@ interface ProfileViewProps {
 }
 
 const POSTS_PER_PAGE = 20
+
+const TAB_ORDER = ['posts', 'catches', 'passport'] as const
+type ProfileTab = (typeof TAB_ORDER)[number]
 
 export default function UnifiedProfileView({
     userId,
@@ -83,9 +87,7 @@ export default function UnifiedProfileView({
         useState<QueryDocumentSnapshot<DocumentData> | null>(null)
     const [lastCatchDoc, setLastCatchDoc] =
         useState<QueryDocumentSnapshot<DocumentData> | null>(null)
-    const [activeTab, setActiveTab] = useState<
-        'posts' | 'catches' | 'passport'
-    >('posts')
+    const [activeTab, setActiveTab] = useState<ProfileTab>('posts')
     const [refreshing, setRefreshing] = useState(false)
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [modalVisible, setModalVisible] = useState(false)
@@ -108,7 +110,11 @@ export default function UnifiedProfileView({
     >([])
     const [followListLoading, setFollowListLoading] = useState(false)
     const [reportVisible, setReportVisible] = useState(false)
-    const flatListRef = React.useRef<FlatList>(null)
+    // Pull-to-refresh is disabled while the pager is mid-swipe so a
+    // horizontal pan can't trigger a vertical refresh
+    const [refreshEnabled, setRefreshEnabled] = useState(true)
+    const pagerRef = useRef<PagerView>(null)
+    const listRefs = useRef<Partial<Record<ProfileTab, FlatList | null>>>({})
     const searchInputRef = React.useRef<TextInput>(null)
 
     const fetchUserData = async () => {
@@ -288,7 +294,7 @@ export default function UnifiedProfileView({
                 if (isFocused) {
                     // Already on this tab, scroll to top and refresh
                     e.preventDefault()
-                    flatListRef.current?.scrollToOffset({
+                    listRefs.current[activeTab]?.scrollToOffset({
                         offset: 0,
                         animated: true,
                     })
@@ -303,7 +309,7 @@ export default function UnifiedProfileView({
 
         return unsubscribe
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [navigation, isFocused, isOwnProfile])
+    }, [navigation, isFocused, isOwnProfile, activeTab])
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true)
@@ -405,17 +411,6 @@ export default function UnifiedProfileView({
             console.error('Error loading more catches:', error)
         } finally {
             setLoadingMore(false)
-        }
-    }
-
-    const handleEndReached = () => {
-        // Load more posts if posts are shown and there are more
-        if (activeTab === 'posts' && hasMorePosts && !loadingMore) {
-            loadMorePosts()
-        }
-        // Load more catches if catches are shown and there are more
-        if (activeTab === 'catches' && hasMoreCatches && !loadingMore) {
-            loadMoreCatches()
         }
     }
 
@@ -706,12 +701,19 @@ export default function UnifiedProfileView({
         }
     }
 
-    // Combine and sort posts based on what's toggled on. The passport tab
-    // renders no post grid — PassportView takes over via ListEmptyComponent.
-    const displayedPosts = React.useMemo(() => {
-        if (activeTab === 'passport') return []
-        return activeTab === 'posts' ? posts : catches
-    }, [activeTab, posts, catches])
+    // Tab taps drive the pager; swipes come back through onPageSelected
+    const selectTab = (tab: ProfileTab) => {
+        setActiveTab(tab)
+        pagerRef.current?.setPage(TAB_ORDER.indexOf(tab))
+    }
+
+    const handlePageSelected = (e: { nativeEvent: { position: number } }) => {
+        const tab = TAB_ORDER[e.nativeEvent.position]
+        // No-op when the change came from a tab tap (activeTab already set)
+        if (tab && tab !== activeTab) {
+            setActiveTab(tab)
+        }
+    }
 
     const renderPost = ({ item }: { item: Post }) => (
         <View style={styles.postItemContainer}>
@@ -723,297 +725,295 @@ export default function UnifiedProfileView({
         </View>
     )
 
-    // ... existing code
+    // Rendered once, fixed above the pager — only the content below the
+    // tab bar swipes between pages
+    const renderProfileHeader = () =>
+        loading ? (
+            <ProfileSkeleton />
+        ) : (
+            <View style={styles.profileInfo}>
+                <View style={styles.statsContainer}>
+                    {profilePicture ? (
+                        <Image
+                            source={{ uri: profilePicture }}
+                            style={styles.avatar}
+                            contentFit="cover"
+                            accessibilityLabel={`@${username}'s profile picture`}
+                        />
+                    ) : (
+                        <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarInitial}>
+                                {username ? username[0].toUpperCase() : '?'}
+                            </Text>
+                        </View>
+                    )}
+                    <Text style={styles.username} accessibilityRole="header">
+                        @{username}
+                    </Text>
+                    {joinedText ? (
+                        <Text style={styles.joinedText}>
+                            Joined {joinedText}
+                        </Text>
+                    ) : null}
+                    <View style={styles.statRow}>
+                        <TouchableOpacity
+                            style={styles.statItem}
+                            // Activity feed is the viewer's own — only
+                            // offer it on your own profile, never on
+                            // someone else's stat
+                            disabled={!isOwnProfile}
+                            onPress={() => setShowActivityFeed(true)}
+                            accessibilityLabel={`${totalCatches} Catches`}
+                            accessibilityRole={isOwnProfile ? 'button' : 'text'}
+                            accessibilityHint={
+                                isOwnProfile ? 'View activity feed' : undefined
+                            }
+                        >
+                            <Text style={styles.statNumber}>
+                                {totalCatches}
+                            </Text>
+                            <Text style={styles.statLabel}>Catches</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.statItem}
+                            onPress={() => handleShowFollowList('followers')}
+                            accessibilityLabel={`${followerCount} Followers`}
+                            accessibilityRole="button"
+                            accessibilityHint="View followers list"
+                        >
+                            <Text style={styles.statNumber}>
+                                {followerCount}
+                            </Text>
+                            <Text style={styles.statLabel}>Followers</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.statItem}
+                            onPress={() => handleShowFollowList('following')}
+                            accessibilityLabel={`${followingCount} Following`}
+                            accessibilityRole="button"
+                            accessibilityHint="View following list"
+                        >
+                            <Text style={styles.statNumber}>
+                                {followingCount}
+                            </Text>
+                            <Text style={styles.statLabel}>Following</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {!isOwnProfile && (
+                    <AppButton
+                        title={isFollowing ? 'Following' : 'Follow'}
+                        onPress={handleFollowToggle}
+                        variant={isFollowing ? 'outline' : 'primary'}
+                        style={{
+                            marginTop: 20,
+                            alignSelf: 'center',
+                            width: 140,
+                        }}
+                    />
+                )}
+
+                <View style={styles.tabContainer}>
+                    <TouchableOpacity
+                        style={[
+                            styles.tab,
+                            activeTab === 'posts' && styles.tabActive,
+                        ]}
+                        onPress={() => {
+                            selectTab('posts')
+                        }}
+                        accessibilityLabel="Posts"
+                        accessibilityRole="button"
+                        accessibilityState={{
+                            selected: activeTab === 'posts',
+                        }}
+                    >
+                        <Text
+                            style={[
+                                styles.tabText,
+                                activeTab === 'posts' && styles.tabTextActive,
+                            ]}
+                        >
+                            Posts
+                        </Text>
+                        {activeTab === 'posts' && (
+                            <View style={styles.activeIndicator} />
+                        )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            styles.tab,
+                            activeTab === 'catches' && styles.tabActive,
+                        ]}
+                        onPress={() => {
+                            selectTab('catches')
+                        }}
+                        accessibilityLabel="Catches"
+                        accessibilityRole="button"
+                        accessibilityState={{
+                            selected: activeTab === 'catches',
+                        }}
+                    >
+                        <Text
+                            style={[
+                                styles.tabText,
+                                activeTab === 'catches' && styles.tabTextActive,
+                            ]}
+                        >
+                            Catches
+                        </Text>
+                        {activeTab === 'catches' && (
+                            <View style={styles.activeIndicator} />
+                        )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            styles.tab,
+                            activeTab === 'passport' && styles.tabActive,
+                        ]}
+                        onPress={() => {
+                            selectTab('passport')
+                        }}
+                        accessibilityLabel="Passport"
+                        accessibilityRole="button"
+                        accessibilityState={{
+                            selected: activeTab === 'passport',
+                        }}
+                    >
+                        <Text
+                            style={[
+                                styles.tabText,
+                                activeTab === 'passport' &&
+                                    styles.tabTextActive,
+                            ]}
+                        >
+                            Passport
+                        </Text>
+                        {activeTab === 'passport' && (
+                            <View style={styles.activeIndicator} />
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </View>
+        )
+
+    // Always mounted — unmounting the control mid-swipe forces a native
+    // scroll-view relayout that flashes when the pager settles. `enabled`
+    // is Android-only, which is also the only platform where a horizontal
+    // pager drag can trigger pull-to-refresh.
+    const renderRefreshControl = () => (
+        <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            enabled={refreshEnabled}
+        />
+    )
+
+    const renderGridPage = (tab: 'posts' | 'catches') => (
+        <FlatList
+            ref={(ref) => {
+                listRefs.current[tab] = ref
+            }}
+            data={loading ? [] : tab === 'posts' ? posts : catches}
+            renderItem={renderPost}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={renderRefreshControl()}
+            ListEmptyComponent={
+                loading ? (
+                    // Ghost skeleton while this page's data is in flight
+                    <View>
+                        <CompactPostCardSkeleton />
+                        <CompactPostCardSkeleton />
+                        <CompactPostCardSkeleton />
+                    </View>
+                ) : (
+                    <View style={styles.emptyContainer}>
+                        <Ionicons
+                            name="images-outline"
+                            size={80}
+                            color={colors.textTertiary}
+                        />
+                        <Text style={styles.emptyText}>
+                            {tab === 'posts'
+                                ? 'No posts yet'
+                                : 'No catches yet'}
+                        </Text>
+                    </View>
+                )
+            }
+            onEndReached={tab === 'posts' ? loadMorePosts : loadMoreCatches}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+                loadingMore && activeTab === tab ? (
+                    <View style={styles.footerLoader}>
+                        <ActivityIndicator
+                            size="small"
+                            color={colors.primary}
+                        />
+                    </View>
+                ) : null
+            }
+        />
+    )
 
     return (
         <>
             <View style={styles.container}>
-                <FlatList
-                    ref={flatListRef}
-                    data={displayedPosts}
-                    renderItem={renderPost}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={[
-                        styles.listContent,
-                        { paddingTop: insets.top + 56 },
-                    ]}
-                    // ... rest of FlatList props
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={refreshing}
-                            onRefresh={onRefresh}
-                            tintColor={colors.primary}
-                            progressViewOffset={insets.top + 56}
+                {/* Fixed header: everything above (and including) the tab
+                    bar stays put; only the pager below it swipes */}
+                <View style={{ paddingTop: insets.top + 56 }}>
+                    {renderProfileHeader()}
+                </View>
+                <PagerView
+                    ref={pagerRef}
+                    style={styles.pagerView}
+                    initialPage={0}
+                    onPageSelected={handlePageSelected}
+                    onPageScrollStateChanged={(e) => {
+                        if (e.nativeEvent.pageScrollState === 'dragging') {
+                            setRefreshEnabled(false)
+                        } else if (e.nativeEvent.pageScrollState === 'idle') {
+                            setRefreshEnabled(true)
+                        }
+                    }}
+                >
+                    <View key="posts" style={styles.pageContainer}>
+                        {renderGridPage('posts')}
+                    </View>
+                    <View key="catches" style={styles.pageContainer}>
+                        {renderGridPage('catches')}
+                    </View>
+                    <View key="passport" style={styles.pageContainer}>
+                        <FlatList
+                            ref={(ref) => {
+                                listRefs.current.passport = ref
+                            }}
+                            data={[] as Post[]}
+                            renderItem={renderPost}
+                            keyExtractor={(item) => item.id}
+                            contentContainerStyle={styles.listContent}
+                            refreshControl={renderRefreshControl()}
+                            ListEmptyComponent={
+                                <PassportView
+                                    userId={userId}
+                                    isOwnProfile={isOwnProfile}
+                                />
+                            }
                         />
-                    }
-                    ListHeaderComponent={
-                        loading ? (
-                            <ProfileSkeleton />
-                        ) : (
-                            <View style={styles.profileInfo}>
-                                <View style={styles.statsContainer}>
-                                    {profilePicture ? (
-                                        <Image
-                                            source={{ uri: profilePicture }}
-                                            style={styles.avatar}
-                                            contentFit="cover"
-                                            accessibilityLabel={`@${username}'s profile picture`}
-                                        />
-                                    ) : (
-                                        <View style={styles.avatarPlaceholder}>
-                                            <Text style={styles.avatarInitial}>
-                                                {username
-                                                    ? username[0].toUpperCase()
-                                                    : '?'}
-                                            </Text>
-                                        </View>
-                                    )}
-                                    <Text
-                                        style={styles.username}
-                                        accessibilityRole="header"
-                                    >
-                                        @{username}
-                                    </Text>
-                                    {joinedText ? (
-                                        <Text style={styles.joinedText}>
-                                            Joined {joinedText}
-                                        </Text>
-                                    ) : null}
-                                    <View style={styles.statRow}>
-                                        <TouchableOpacity
-                                            style={styles.statItem}
-                                            // Activity feed is the viewer's
-                                            // own — only offer it on your own
-                                            // profile, never on someone
-                                            // else's stat
-                                            disabled={!isOwnProfile}
-                                            onPress={() =>
-                                                setShowActivityFeed(true)
-                                            }
-                                            accessibilityLabel={`${totalCatches} Catches`}
-                                            accessibilityRole={
-                                                isOwnProfile
-                                                    ? 'button'
-                                                    : 'text'
-                                            }
-                                            accessibilityHint={
-                                                isOwnProfile
-                                                    ? 'View activity feed'
-                                                    : undefined
-                                            }
-                                        >
-                                            <Text style={styles.statNumber}>
-                                                {totalCatches}
-                                            </Text>
-                                            <Text style={styles.statLabel}>
-                                                Catches
-                                            </Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={styles.statItem}
-                                            onPress={() =>
-                                                handleShowFollowList(
-                                                    'followers'
-                                                )
-                                            }
-                                            accessibilityLabel={`${followerCount} Followers`}
-                                            accessibilityRole="button"
-                                            accessibilityHint="View followers list"
-                                        >
-                                            <Text style={styles.statNumber}>
-                                                {followerCount}
-                                            </Text>
-                                            <Text style={styles.statLabel}>
-                                                Followers
-                                            </Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={styles.statItem}
-                                            onPress={() =>
-                                                handleShowFollowList(
-                                                    'following'
-                                                )
-                                            }
-                                            accessibilityLabel={`${followingCount} Following`}
-                                            accessibilityRole="button"
-                                            accessibilityHint="View following list"
-                                        >
-                                            <Text style={styles.statNumber}>
-                                                {followingCount}
-                                            </Text>
-                                            <Text style={styles.statLabel}>
-                                                Following
-                                            </Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-
-                                {!isOwnProfile && (
-                                    <AppButton
-                                        title={
-                                            isFollowing ? 'Following' : 'Follow'
-                                        }
-                                        onPress={handleFollowToggle}
-                                        variant={
-                                            isFollowing ? 'outline' : 'primary'
-                                        }
-                                        style={{
-                                            marginTop: 20,
-                                            alignSelf: 'center',
-                                            width: 140,
-                                        }}
-                                    />
-                                )}
-
-                                <View style={styles.tabContainer}>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.tab,
-                                            activeTab === 'posts' &&
-                                                styles.tabActive,
-                                        ]}
-                                        onPress={() => {
-                                            setActiveTab('posts')
-                                        }}
-                                        accessibilityLabel="Posts"
-                                        accessibilityRole="button"
-                                        accessibilityState={{
-                                            selected: activeTab === 'posts',
-                                        }}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.tabText,
-                                                activeTab === 'posts' &&
-                                                    styles.tabTextActive,
-                                            ]}
-                                        >
-                                            Posts
-                                        </Text>
-                                        {activeTab === 'posts' && (
-                                            <View
-                                                style={styles.activeIndicator}
-                                            />
-                                        )}
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.tab,
-                                            activeTab === 'catches' &&
-                                                styles.tabActive,
-                                        ]}
-                                        onPress={() => {
-                                            setActiveTab('catches')
-                                        }}
-                                        accessibilityLabel="Catches"
-                                        accessibilityRole="button"
-                                        accessibilityState={{
-                                            selected: activeTab === 'catches',
-                                        }}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.tabText,
-                                                activeTab === 'catches' &&
-                                                    styles.tabTextActive,
-                                            ]}
-                                        >
-                                            Catches
-                                        </Text>
-                                        {activeTab === 'catches' && (
-                                            <View
-                                                style={styles.activeIndicator}
-                                            />
-                                        )}
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.tab,
-                                            activeTab === 'passport' &&
-                                                styles.tabActive,
-                                        ]}
-                                        onPress={() => {
-                                            setActiveTab('passport')
-                                        }}
-                                        accessibilityLabel="Passport"
-                                        accessibilityRole="button"
-                                        accessibilityState={{
-                                            selected: activeTab === 'passport',
-                                        }}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.tabText,
-                                                activeTab === 'passport' &&
-                                                    styles.tabTextActive,
-                                            ]}
-                                        >
-                                            Passport
-                                        </Text>
-                                        {activeTab === 'passport' && (
-                                            <View
-                                                style={styles.activeIndicator}
-                                            />
-                                        )}
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        )
-                    }
-                    ListEmptyComponent={
-                        activeTab === 'passport' ? (
-                            <PassportView
-                                userId={userId}
-                                isOwnProfile={isOwnProfile}
-                            />
-                        ) : loading ? (
-                            <View>
-                                <CompactPostCardSkeleton />
-                                <CompactPostCardSkeleton />
-                                <CompactPostCardSkeleton />
-                            </View>
-                        ) : (
-                            <View style={styles.emptyContainer}>
-                                <Ionicons
-                                    name="images-outline"
-                                    size={80}
-                                    color={colors.textTertiary}
-                                />
-                                <Text style={styles.emptyText}>
-                                    {activeTab === 'posts'
-                                        ? 'No posts yet'
-                                        : 'No catches yet'}
-                                </Text>
-                            </View>
-                        )
-                    }
-                    onEndReached={handleEndReached}
-                    onEndReachedThreshold={0.5}
-                    ListFooterComponent={
-                        loadingMore ? (
-                            <View style={styles.footerLoader}>
-                                <ActivityIndicator
-                                    size="small"
-                                    color={colors.primary}
-                                />
-                            </View>
-                        ) : null
-                    }
-                />
+                    </View>
+                </PagerView>
 
                 <View
                     style={[styles.profileHeader, { paddingTop: insets.top }]}
                 >
                     {isOwnProfile ? (
                         <TouchableOpacity
-                            onPress={() => {
-                                setSearchVisible(true)
-                                requestAnimationFrame(() =>
-                                    searchInputRef.current?.focus()
-                                )
-                            }}
+                            onPress={() => setSearchVisible(true)}
                             style={styles.searchButton}
                             accessibilityLabel="Search users"
                             accessibilityRole="button"
@@ -1157,6 +1157,13 @@ export default function UnifiedProfileView({
                 visible={searchVisible}
                 animationType="fade"
                 transparent
+                // autoFocus on the input handles most cases (Modal
+                // remounts children on open); the delayed onShow focus
+                // covers platforms where autoFocus races the modal
+                // presentation and gets dropped
+                onShow={() =>
+                    setTimeout(() => searchInputRef.current?.focus(), 100)
+                }
                 onRequestClose={() => {
                     setSearchVisible(false)
                     setSearchQuery('')
@@ -1201,6 +1208,7 @@ export default function UnifiedProfileView({
                                 onChangeText={handleSearch}
                                 autoCapitalize="none"
                                 autoCorrect={false}
+                                autoFocus
                                 accessibilityLabel="Search users"
                                 accessibilityHint="Type a username to search"
                             />
@@ -1420,6 +1428,12 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
+    },
+    pagerView: {
+        flex: 1,
+    },
+    pageContainer: {
+        flex: 1,
     },
     centerContainer: {
         flex: 1,
