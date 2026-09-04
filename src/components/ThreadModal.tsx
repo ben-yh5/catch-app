@@ -61,6 +61,7 @@ import {
     ViewToken,
     useWindowDimensions,
 } from 'react-native'
+import Animated, { FadeIn } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ListSelectionBottomSheet from './ListSelectionBottomSheet'
 import UnifiedCameraView from './UnifiedCameraView'
@@ -171,9 +172,11 @@ export default function ThreadModal({
     // Scroll to initial post when thread first loads (once per open —
     // later threadPosts changes like delete/catch manage their own scrolling)
     const hasScrolledToInitial = useRef(false)
+    const navigatingToProfile = useRef(false)
     useEffect(() => {
         if (!visible) {
             hasScrolledToInitial.current = false
+            navigatingToProfile.current = false
         }
     }, [visible])
     useEffect(() => {
@@ -634,7 +637,7 @@ export default function ThreadModal({
         return (
             <Modal
                 visible={visible}
-                animationType="fade"
+                animationType="none"
                 transparent={true}
                 onRequestClose={() => {
                     handleCameraCancel()
@@ -657,7 +660,7 @@ export default function ThreadModal({
         return (
             <Modal
                 visible={visible}
-                animationType="fade"
+                animationType="none"
                 transparent={true}
                 onRequestClose={() => {
                     handlePreviewCancel()
@@ -685,14 +688,19 @@ export default function ThreadModal({
     return (
         <Modal
             visible={visible}
-            animationType="fade"
+            animationType="none"
             transparent={true}
             onRequestClose={() => {
                 setShowOptionsMenu(false)
                 onClose()
             }}
         >
-            <View style={styles.modalOverlay}>
+            {/* RN Modal's built-in fade is a fixed ~300ms; animate the content
+                ourselves so opening feels immediate */}
+            <Animated.View
+                entering={FadeIn.duration(150)}
+                style={styles.modalOverlay}
+            >
                 <View
                     style={[
                         styles.modalContent,
@@ -729,15 +737,26 @@ export default function ThreadModal({
                                         <TouchableOpacity
                                             onPress={() => {
                                                 setShowOptionsMenu(false)
-                                                if (currentPost) {
-                                                    router.push({
-                                                        pathname:
-                                                            '/user-profile',
-                                                        params: {
-                                                            userId: currentPost.authorId,
-                                                        },
-                                                    })
-                                                }
+                                                if (
+                                                    !currentPost ||
+                                                    navigatingToProfile.current
+                                                )
+                                                    return
+                                                navigatingToProfile.current =
+                                                    true
+                                                // Push first: the modal stays
+                                                // up covering the transition
+                                                // (closing immediately would
+                                                // flash the tab beneath), then
+                                                // closes once the profile has
+                                                // slid in under it
+                                                router.push({
+                                                    pathname: '/user-profile',
+                                                    params: {
+                                                        userId: currentPost.authorId,
+                                                    },
+                                                })
+                                                setTimeout(onClose, 400)
                                             }}
                                             accessibilityLabel={`@${currentPost?.authorUsername || 'unknown'}`}
                                             accessibilityRole="link"
@@ -1162,7 +1181,7 @@ export default function ThreadModal({
                         </View>
                     )}
                 </View>
-            </View>
+            </Animated.View>
 
             {/* List Selection Bottom Sheet */}
             {currentPost && (

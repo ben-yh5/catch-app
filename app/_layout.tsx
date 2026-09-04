@@ -120,37 +120,26 @@ function RootLayoutNav() {
         // the dark theme so its chrome (headers, sheets) can't render light
         // over dark screens when the device is in light mode.
         <ThemeProvider value={DarkTheme}>
-            <Stack>
-                <Stack.Screen name="login" options={{ headerShown: false }} />
-                <Stack.Screen
-                    name="username-setup"
-                    options={{ headerShown: false }}
-                />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen
-                    name="user-profile"
-                    options={{ headerShown: false }}
-                />
-                <Stack.Screen
-                    name="settings"
-                    options={{ headerShown: false }}
-                />
+            <Stack
+                screenOptions={{
+                    headerShown: false,
+                    // Platform default on Android is a slow cross-fade;
+                    // ios_from_right gives the native iOS push on both platforms
+                    animation: 'ios_from_right',
+                }}
+            >
+                <Stack.Screen name="login" />
+                <Stack.Screen name="username-setup" />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="user-profile" />
+                <Stack.Screen name="settings" />
                 <Stack.Screen
                     name="create-list"
-                    options={{ presentation: 'modal', headerShown: false }}
+                    options={{ presentation: 'modal' }}
                 />
-                <Stack.Screen
-                    name="list-detail"
-                    options={{ headerShown: false }}
-                />
-                <Stack.Screen
-                    name="blocked-users"
-                    options={{ headerShown: false }}
-                />
-                <Stack.Screen
-                    name="passport"
-                    options={{ headerShown: false }}
-                />
+                <Stack.Screen name="list-detail" />
+                <Stack.Screen name="blocked-users" />
+                <Stack.Screen name="passport" />
             </Stack>
             <StatusBar style="light" />
         </ThemeProvider>
