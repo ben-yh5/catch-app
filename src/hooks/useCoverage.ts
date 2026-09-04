@@ -4,18 +4,36 @@ import { usePostEvents } from '@/context/PostContext'
 import { MapBounds } from '@/utils/geospatialQueries'
 import {
     CoverageMode,
+    clusterCellsToGeoJSON,
     coverageCellsToGeoJSON,
     getGlobalCoverage,
     getUserCoverage,
+    invalidateGlobalCoverageCache,
     invalidateUserCoverageCache,
     userCoverageToGeoJSON,
 } from '@/utils/coverageQueries'
 
 export { CoverageMode } from '@/utils/coverageQueries'
 
+/**
+ * Below this zoom the map shows cluster bubbles, not pins. Zoom 11 ≈ a
+ * city district — pins appear as soon as you're looking at a city, bubbles
+ * only for regional/country views. (Was 13, which hid pins even at city
+ * zoom and made the default camera show a single bubble.)
+ */
+export const PIN_MIN_ZOOM = 11
+
+/**
+ * Below this zoom nothing loads. Zoom 3 covers a continent — "country
+ * level" (~3.5-4.5) must show bubbles or the map reads as empty/broken
+ * from exactly the view people zoom out to first. Only a whole-world
+ * sweep (zoom < 3) is skipped.
+ */
+const BUBBLE_MIN_ZOOM = 3
+
 function getPrecisionForZoom(zoom: number): number | null {
-    if (zoom < 10) return 5
-    if (zoom < 13) return 6
+    if (zoom < 9) return 5
+    if (zoom < PIN_MIN_ZOOM) return 6
     return null // show pins instead
 }
 
@@ -90,4 +108,60 @@ export function useCoverage(
     )
 
     return { coverageGeoJSON, isLoading, precision }
+}
+
+/**
+ * Cluster bubbles for zooms below the pin threshold: count-per-cell points
+ * derived from geohash_cells (originalCount), replacing the pin fetch that
+ * used to run there. Always on — unlike the coverage overlay, this isn't a
+ * mode the user toggles; it's how the map renders when zoomed out.
+ *
+ * Shares getGlobalCoverage's per-viewport cache with the coverage overlay.
+ */
+export function useClusterBubbles(
+    bounds: MapBounds | null,
+    zoomLevel: number
+): { bubblesGeoJSON: GeoJSON.FeatureCollection | null } {
+    const [bubblesGeoJSON, setBubblesGeoJSON] =
+        useState<GeoJSON.FeatureCollection | null>(null)
+    const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+    const precision =
+        zoomLevel < BUBBLE_MIN_ZOOM ? null : getPrecisionForZoom(zoomLevel)
+
+    const fetchBubbles = useCallback(async () => {
+        if (!bounds || precision === null) {
+            setBubblesGeoJSON(null)
+            return
+        }
+        try {
+            const cells = await getGlobalCoverage(bounds, precision)
+            setBubblesGeoJSON(clusterCellsToGeoJSON(cells))
+        } catch (error) {
+            console.error('Error fetching cluster bubbles:', error)
+        }
+    }, [bounds, precision])
+
+    useEffect(() => {
+        if (precision === null) {
+            setBubblesGeoJSON(null)
+            return
+        }
+        if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
+        fetchTimeoutRef.current = setTimeout(fetchBubbles, DEBOUNCE_MS)
+        return () => {
+            if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
+        }
+    }, [fetchBubbles, precision])
+
+    // New/deleted posts change cell counts — drop the cache and refetch
+    usePostEvents(
+        (event) => {
+            if (event.action !== 'create' && event.action !== 'delete') return
+            invalidateGlobalCoverageCache()
+            fetchBubbles()
+        },
+        [fetchBubbles]
+    )
+
+    return { bubblesGeoJSON }
 }

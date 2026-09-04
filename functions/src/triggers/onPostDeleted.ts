@@ -198,7 +198,11 @@ export const onPostDeleted = functions
                 const geohash = locationQuery.docs[0].data().geohash
                 await locationQuery.docs[0].ref.delete()
                 if (geohash) {
-                    await decrementCoverageCells(db, geohash)
+                    await decrementCoverageCells(
+                        db,
+                        geohash,
+                        postData.isOriginal === true
+                    )
                 }
                 functions.logger.info(
                     `Deleted location data for post ${postId}`

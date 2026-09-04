@@ -219,7 +219,12 @@ export const onPostCreated = functions
                     if (!catchLocationQuery.empty) {
                         const catchGeohash =
                             catchLocationQuery.docs[0].data().geohash
-                        await updateCoverageCells(db, catchGeohash, authorId)
+                        await updateCoverageCells(
+                            db,
+                            catchGeohash,
+                            authorId,
+                            false
+                        )
                         functions.logger.info(
                             `[onPostCreated] Updated coverage cells for catch ${postId}`
                         )
@@ -546,7 +551,12 @@ export const onPostCreated = functions
                     // Update coverage cells for original post
                     try {
                         const newPostGeohash = newPostLocation.geohash
-                        await updateCoverageCells(db, newPostGeohash, authorId)
+                        await updateCoverageCells(
+                            db,
+                            newPostGeohash,
+                            authorId,
+                            true
+                        )
                         functions.logger.info(
                             `[onPostCreated] Updated coverage cells for original post ${postId}`
                         )

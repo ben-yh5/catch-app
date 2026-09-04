@@ -16,6 +16,7 @@ export interface CoverageCell {
     geohash: string
     precision: number
     postCount: number
+    originalCount: number // originals only — drives cluster bubbles
     bbox: [number, number, number, number] // [minLat, minLon, maxLat, maxLon]
 }
 
@@ -77,6 +78,15 @@ function getCoverageCacheKey(bounds: MapBounds, precision: number): string {
 }
 
 let userCoverageCache: { data: UserCoverage; userId: string } | null = null
+
+/**
+ * Drop cached global coverage cells — called after a post is created or
+ * deleted so cluster bubbles pick up new counts on the next fetch instead
+ * of serving up-to-5-minute-old data.
+ */
+export function invalidateGlobalCoverageCache(): void {
+    coverageCache.clear()
+}
 
 // --- Global Coverage ---
 
@@ -150,6 +160,7 @@ export async function getGlobalCoverage(
                         geohash: data.geohash,
                         precision: data.precision,
                         postCount: data.postCount,
+                        originalCount: data.originalCount || 0,
                         bbox,
                     })
                 }
@@ -237,6 +248,40 @@ export function coverageCellsToGeoJSON(
                 coordinates: cellBBoxToPolygon(cell.bbox),
             },
         })),
+    }
+}
+
+/**
+ * Convert coverage cells to cluster-bubble points: one Point feature per
+ * cell with originals, positioned at the cell center, carrying the
+ * original-post count. Rendered at zooms below the pin threshold instead
+ * of fetching pins — the count matches what a player finds after zooming
+ * in (originals only, not catches).
+ */
+export function clusterCellsToGeoJSON(
+    cells: CoverageCell[]
+): GeoJSON.FeatureCollection {
+    return {
+        type: 'FeatureCollection',
+        features: cells
+            .filter((cell) => cell.originalCount > 0)
+            .map((cell) => {
+                const [minLat, minLon, maxLat, maxLon] = cell.bbox
+                return {
+                    type: 'Feature' as const,
+                    properties: {
+                        geohash: cell.geohash,
+                        count: cell.originalCount,
+                    },
+                    geometry: {
+                        type: 'Point' as const,
+                        coordinates: [
+                            (minLon + maxLon) / 2,
+                            (minLat + maxLat) / 2,
+                        ],
+                    },
+                }
+            }),
     }
 }
 

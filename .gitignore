@@ -59,3 +59,6 @@ firebase-debug.log
 
 # ML: tuned model variant not yet in use
 assets/models/view_encoder_tuned.tflite
+
+# Personal admin CLI (invokes admin-only Cloud Functions; not part of the app)
+scripts/catchctl.mjs

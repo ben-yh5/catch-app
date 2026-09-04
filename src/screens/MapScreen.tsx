@@ -15,8 +15,14 @@ import {
     invalidateAreaCache,
     MapBounds,
 } from '@/utils/geospatialQueries'
+import { decodeGeohashBBox } from '@/utils/coverageQueries'
 import { isLostPlace } from '@/utils/postClassification'
-import { useCoverage, CoverageMode } from '@/hooks/useCoverage'
+import {
+    useCoverage,
+    useClusterBubbles,
+    CoverageMode,
+    PIN_MIN_ZOOM,
+} from '@/hooks/useCoverage'
 import { Ionicons } from '@expo/vector-icons'
 import Mapbox, {
     Camera,
@@ -72,6 +78,7 @@ export default function MapScreen() {
     const mapRef = useRef<MapView>(null)
     const cameraRef = useRef<Camera>(null)
     const shapeSourceRef = useRef<ShapeSource>(null)
+    const bubblesSourceRef = useRef<ShapeSource>(null)
     const colorScheme = useColorScheme()
 
     // State
@@ -126,6 +133,7 @@ export default function MapScreen() {
     const [coverageMode, setCoverageMode] = useState<CoverageMode>('off')
     const [currentZoom, setCurrentZoom] = useState(12)
     const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null)
+    const { bubblesGeoJSON } = useClusterBubbles(currentBounds, currentZoom)
     const { coverageGeoJSON, precision: coveragePrecision } = useCoverage(
         currentBounds,
         currentZoom,
@@ -532,12 +540,15 @@ export default function MapScreen() {
     const loadVisiblePosts = useCallback(async () => {
         if (!mapRef.current || isListMode || isSearchModeRef.current) return
 
-        // Skip fetch at very low zoom — viewport too large for meaningful
-        // pin display. Track it so the bottom sheet can say "zoom in"
-        // instead of the misleading default "No shots in this area".
+        // Below the pin threshold the map renders cluster bubbles from
+        // geohash_cells instead — don't run the (radius-capped) pin query
+        // at all. Clear any pins left over from a higher zoom so they
+        // don't linger under the bubbles, and flag the state so the
+        // bottom sheet explains itself instead of claiming "no shots".
         const zoom = await mapRef.current.getZoom()
-        if (zoom < 5) {
+        if (zoom < PIN_MIN_ZOOM) {
             setZoomedTooFarOut(true)
+            setVisiblePosts((prev) => (prev.length ? [] : prev))
             setLoadingPosts(false)
             return
         }
@@ -700,10 +711,14 @@ export default function MapScreen() {
         })
     }, [])
 
-    // Handle map movement. onMapIdle fires once when ALL movement ends
-    // (gesture + momentum/fling) — no per-frame bridge events during pans
-    // like onCameraChanged, and no debounce timer needed. The event carries
-    // zoom and bounds, so no async getZoom/getVisibleBounds round-trips.
+    // Handle map movement (settle handler). Originally wired to onMapIdle,
+    // but that event never fires in @rnmapbox/maps 10.2.x on this setup —
+    // verified in production logs: after the switch to onMapIdle, every
+    // viewport fetch for three days came from the initial camera only, and
+    // pans/zooms never refetched. Now driven by debounced onCameraChanged
+    // (below): per-frame camera events only reset a timer, and this runs
+    // once ~400ms after movement stops — same idle semantics, and still no
+    // per-frame state updates or fetches.
     const handleMapIdle = useCallback(
         (state: MapState) => {
             if (isSearchModeRef.current) return
@@ -728,6 +743,30 @@ export default function MapScreen() {
         },
         [loadVisiblePosts]
     )
+
+    // Debounce camera events into a single settle call. Cleared on unmount.
+    const cameraSettleTimerRef = useRef<ReturnType<typeof setTimeout>>(
+        undefined
+    )
+    const handleCameraChanged = useCallback(
+        (state: MapState) => {
+            if (cameraSettleTimerRef.current) {
+                clearTimeout(cameraSettleTimerRef.current)
+            }
+            cameraSettleTimerRef.current = setTimeout(
+                () => handleMapIdle(state),
+                400
+            )
+        },
+        [handleMapIdle]
+    )
+    useEffect(() => {
+        return () => {
+            if (cameraSettleTimerRef.current) {
+                clearTimeout(cameraSettleTimerRef.current)
+            }
+        }
+    }, [])
 
     // onDidFinishLoadingMap callback
     const handleMapReady = useCallback(() => {
@@ -841,6 +880,44 @@ export default function MapScreen() {
 
     // Stable handler — an inline ShapeSource onPress is a new function each
     // render, which re-sends the prop across the bridge
+    // Tap a bubble. Merged bubbles (Mapbox cluster of several cells) zoom
+    // to their expansion level so they split apart; a single cell bubble
+    // zooms straight to the cell's extent so its contents separate into
+    // pins in one tap (AllTrails-style). A p5 cell (~4.9km) fits at
+    // ~zoom 12, p6 (~1.2km) at ~zoom 14 — both above PIN_MIN_ZOOM, so
+    // pins load immediately and native pin clustering handles the rest.
+    const handleBubblePress = useCallback(async (event: any) => {
+        const feature = event.features?.[0]
+        if (!feature || !cameraRef.current) return
+
+        if (feature.properties?.cluster) {
+            const expansionZoom =
+                await bubblesSourceRef.current?.getClusterExpansionZoom(
+                    feature
+                )
+            if (expansionZoom) {
+                cameraRef.current.setCamera({
+                    centerCoordinate: (feature.geometry as any).coordinates,
+                    zoomLevel: expansionZoom,
+                    animationDuration: 600,
+                })
+            }
+            return
+        }
+
+        const geohash = feature.properties?.geohash
+        if (geohash) {
+            const [minLat, minLon, maxLat, maxLon] =
+                decodeGeohashBBox(geohash)
+            cameraRef.current.fitBounds(
+                [maxLon, maxLat],
+                [minLon, minLat],
+                60,
+                600
+            )
+        }
+    }, [])
+
     const handleShapeSourcePress = useCallback(
         async (event: any) => {
             const feature = event.features?.[0]
@@ -1044,7 +1121,7 @@ export default function MapScreen() {
                     // Compass at top relative to map, BELOW HUD.
                     // HUD ~110px. Increasing spacing per user request.
                     compassViewMargins={{ x: 16, y: insets.top + 180 }}
-                    onMapIdle={handleMapIdle}
+                    onCameraChanged={handleCameraChanged}
                     onDidFinishLoadingMap={handleMapReady}
                 >
                     {/* defaultSettings applies once on mount only. Controlled
@@ -1105,6 +1182,70 @@ export default function MapScreen() {
                                         coverageMode === 'personal'
                                             ? 'rgba(207, 44, 246, 0.5)'
                                             : 'rgba(0, 122, 255, 0.3)',
+                                }}
+                            />
+                        </ShapeSource>
+                    )}
+
+                    {/* Cluster bubbles - counts from geohash_cells at zooms
+                        below the pin threshold (no pin fetch runs there).
+                        Mapbox-clustered so nearby cells merge into one
+                        bubble as you zoom out (totalCount sums their
+                        originals); singles keep their own count. */}
+                    {!isSearchMode && bubblesGeoJSON && (
+                        <ShapeSource
+                            id="bubbles-source"
+                            ref={bubblesSourceRef}
+                            shape={bubblesGeoJSON}
+                            onPress={handleBubblePress}
+                            cluster
+                            clusterRadius={50}
+                            clusterProperties={{
+                                totalCount: ['+', ['get', 'count']],
+                            }}
+                        >
+                            <CircleLayer
+                                id="bubbles-layer"
+                                style={{
+                                    circlePitchAlignment: 'map',
+                                    circleColor: MAP_COLORS.pin,
+                                    circleOpacity: 0.75,
+                                    circleRadius: [
+                                        'interpolate',
+                                        ['linear'],
+                                        [
+                                            'coalesce',
+                                            ['get', 'totalCount'],
+                                            ['get', 'count'],
+                                        ],
+                                        1,
+                                        14,
+                                        10,
+                                        18,
+                                        50,
+                                        22,
+                                        200,
+                                        26,
+                                    ],
+                                    circleStrokeWidth: 2,
+                                    circleStrokeColor: MAP_COLORS.stroke,
+                                }}
+                            />
+                            <SymbolLayer
+                                id="bubbles-count"
+                                style={{
+                                    textField: [
+                                        'to-string',
+                                        [
+                                            'coalesce',
+                                            ['get', 'totalCount'],
+                                            ['get', 'count'],
+                                        ],
+                                    ],
+                                    textSize: 13,
+                                    textColor: '#ffffff',
+                                    textPitchAlignment: 'map',
+                                    textAllowOverlap: true,
                                 }}
                             />
                         </ShapeSource>
@@ -1252,14 +1393,14 @@ export default function MapScreen() {
                         isSearchMode
                             ? `No shots match "${activeSearchQuery}"`
                             : zoomedTooFarOut
-                              ? 'Zoomed out too far'
+                              ? 'Viewing from above'
                               : undefined
                     }
                     emptySubtitle={
                         isSearchMode
                             ? 'Try different words, like "sunset viewpoint" or "street art"'
                             : zoomedTooFarOut
-                              ? 'Zoom in to load the shots in an area'
+                              ? 'Tap a cluster or zoom in to see shots'
                               : undefined
                     }
                     onClose={isSearchMode ? handleSearchClear : handleListClose}

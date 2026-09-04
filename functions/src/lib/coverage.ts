@@ -3,38 +3,42 @@ import * as admin from 'firebase-admin'
 /**
  * Increment coverage cell counts for a post's geohash and update user coverage.
  * Called during onPostCreated for both originals and catches.
+ *
+ * `postCount` counts every shot (originals + catches); `originalCount`
+ * counts originals only — it drives the map's cluster bubbles, which must
+ * match the number of pins a player finds after zooming in.
  */
 export async function updateCoverageCells(
     db: admin.firestore.Firestore,
     geohash: string,
-    authorId: string
+    authorId: string,
+    isOriginal: boolean
 ): Promise<void> {
     const gh5 = geohash.substring(0, 5)
     const gh6 = geohash.substring(0, 6)
 
+    const cellUpdate = (gh: string, precision: number) => {
+        const update: Record<string, unknown> = {
+            geohash: gh,
+            precision,
+            postCount: admin.firestore.FieldValue.increment(1),
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        }
+        if (isOriginal) {
+            update.originalCount = admin.firestore.FieldValue.increment(1)
+        }
+        return update
+    }
+
     const batch = db.batch()
 
-    batch.set(
-        db.collection('geohash_cells').doc(`p5_${gh5}`),
-        {
-            geohash: gh5,
-            precision: 5,
-            postCount: admin.firestore.FieldValue.increment(1),
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-    )
+    batch.set(db.collection('geohash_cells').doc(`p5_${gh5}`), cellUpdate(gh5, 5), {
+        merge: true,
+    })
 
-    batch.set(
-        db.collection('geohash_cells').doc(`p6_${gh6}`),
-        {
-            geohash: gh6,
-            precision: 6,
-            postCount: admin.firestore.FieldValue.increment(1),
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-    )
+    batch.set(db.collection('geohash_cells').doc(`p6_${gh6}`), cellUpdate(gh6, 6), {
+        merge: true,
+    })
 
     batch.set(
         db.collection('user_coverage').doc(authorId),
@@ -106,30 +110,29 @@ export async function recordPassportCity(
  */
 export async function decrementCoverageCells(
     db: admin.firestore.Firestore,
-    geohash: string
+    geohash: string,
+    wasOriginal: boolean
 ): Promise<void> {
     const gh5 = geohash.substring(0, 5)
     const gh6 = geohash.substring(0, 6)
 
+    const cellUpdate: Record<string, unknown> = {
+        postCount: admin.firestore.FieldValue.increment(-1),
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    }
+    if (wasOriginal) {
+        cellUpdate.originalCount = admin.firestore.FieldValue.increment(-1)
+    }
+
     const batch = db.batch()
 
-    batch.set(
-        db.collection('geohash_cells').doc(`p5_${gh5}`),
-        {
-            postCount: admin.firestore.FieldValue.increment(-1),
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-    )
+    batch.set(db.collection('geohash_cells').doc(`p5_${gh5}`), cellUpdate, {
+        merge: true,
+    })
 
-    batch.set(
-        db.collection('geohash_cells').doc(`p6_${gh6}`),
-        {
-            postCount: admin.firestore.FieldValue.increment(-1),
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-    )
+    batch.set(db.collection('geohash_cells').doc(`p6_${gh6}`), cellUpdate, {
+        merge: true,
+    })
 
     await batch.commit()
 }

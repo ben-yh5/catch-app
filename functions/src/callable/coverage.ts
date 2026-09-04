@@ -117,7 +117,12 @@ export const backfillCoverage = functions
             // Accumulate counts in memory before writing
             const cellCounts = new Map<
                 string,
-                { geohash: string; precision: number; count: number }
+                {
+                    geohash: string
+                    precision: number
+                    count: number
+                    originals: number
+                }
             >()
             const userCells = new Map<
                 string,
@@ -149,21 +154,27 @@ export const backfillCoverage = functions
                 const key5 = `p5_${gh5}`
                 const key6 = `p6_${gh6}`
 
+                const isOriginal = postMeta.get(postId)?.isOriginal === true
+
                 if (!cellCounts.has(key5))
                     cellCounts.set(key5, {
                         geohash: gh5,
                         precision: 5,
                         count: 0,
+                        originals: 0,
                     })
                 cellCounts.get(key5)!.count++
+                if (isOriginal) cellCounts.get(key5)!.originals++
 
                 if (!cellCounts.has(key6))
                     cellCounts.set(key6, {
                         geohash: gh6,
                         precision: 6,
                         count: 0,
+                        originals: 0,
                     })
                 cellCounts.get(key6)!.count++
+                if (isOriginal) cellCounts.get(key6)!.originals++
 
                 if (!userCells.has(authorId)) {
                     userCells.set(authorId, {
@@ -190,6 +201,10 @@ export const backfillCoverage = functions
                                 postCount: admin.firestore.FieldValue.increment(
                                     cell.count
                                 ),
+                                originalCount:
+                                    admin.firestore.FieldValue.increment(
+                                        cell.originals
+                                    ),
                                 lastUpdated:
                                     admin.firestore.FieldValue.serverTimestamp(),
                             },
