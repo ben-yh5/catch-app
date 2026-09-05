@@ -13,7 +13,11 @@ import { colors } from '@/theme/colors'
 import { List, Post, RecommendedPost } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
-import { useRouter } from 'expo-router'
+import {
+    useNavigation,
+    useNavigationContainerRef,
+    useRouter,
+} from 'expo-router'
 import {
     collection,
     doc,
@@ -24,7 +28,13 @@ import {
     query,
     where,
 } from 'firebase/firestore'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react'
 import {
     ActivityIndicator,
     FlatList,
@@ -43,8 +53,38 @@ const POSTS_LIMIT = 5
 export default function ExploreScreen() {
     const { user, unreadCount } = useAuth()
     const router = useRouter()
+    const navigation = useNavigation()
+    const rootNavigation = useNavigationContainerRef()
     const insets = useSafeAreaInsets()
     const tabBarInset = useTabBarInset()
+    const feedListRef = useRef<FlatList>(null)
+
+    // Re-tapping the Explore tab icon scrolls the feed to top. iOS gets
+    // this natively (repeatedTabSelection special effect), but Android's
+    // native tabs have no such implementation in this react-native-screens
+    // version — a re-tap just re-dispatches JUMP_TO to the active route.
+    // Listen for that: JUMP_TO to this route while it's already focused can
+    // only be a re-tap (the listener runs during dispatch, before a genuine
+    // tab switch flips isFocused).
+    useEffect(() => {
+        const unsubscribe = rootNavigation?.addListener(
+            '__unsafe_action__' as any,
+            (event: any) => {
+                const action = event?.data?.action
+                if (
+                    action?.type === 'JUMP_TO' &&
+                    action?.payload?.name === 'index' &&
+                    navigation.isFocused()
+                ) {
+                    feedListRef.current?.scrollToOffset({
+                        offset: 0,
+                        animated: true,
+                    })
+                }
+            }
+        )
+        return unsubscribe
+    }, [navigation, rootNavigation])
 
     // State
     const [featuredLists, setFeaturedLists] = useState<List[]>([])
@@ -538,6 +578,7 @@ export default function ExploreScreen() {
             />
 
             <FlatList
+                ref={feedListRef}
                 data={recommendedFeed.posts}
                 renderItem={renderRecommendedCard}
                 keyExtractor={(item) => `rec-${item.id}`}
