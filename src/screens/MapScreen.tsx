@@ -118,7 +118,26 @@ export default function MapScreen() {
         }>()
     const [activeList, setActiveList] = useState<any | null>(null)
     const [, setListPosts] = useState<Post[]>([])
-    const [isListMode, setIsListMode] = useState(false)
+
+    // Native-tabs quirk: the tab bar dispatches a params-less JUMP_TO on
+    // every focus change — including the programmatic one right after
+    // router.push('/(tabs)/map?listId=…') — and TabRouter REPLACES route
+    // params on JUMP_TO, wiping listId/postId moments after they arrive.
+    // That flipped the map back to normal mode ("Zoom in to see shots")
+    // over a just-opened list. Latch the ids so only an explicit close
+    // (which clears the latch) exits list mode. Render-phase state
+    // adjustment is React's sanctioned derived-state pattern.
+    const [stickyListId, setStickyListId] = useState('')
+    const [stickyPostId, setStickyPostId] = useState('')
+    if (listId && listId !== stickyListId) setStickyListId(listId)
+    if (postId && postId !== stickyPostId) setStickyPostId(postId)
+    const effectiveListId = listId || stickyListId
+    const effectivePostId = postId || stickyPostId
+
+    // List mode is DERIVED from the (latched) route params, never tracked
+    // as separate state — async state kept desyncing and let normal-mode
+    // logic take over the sheet while a list was open.
+    const isListMode = Boolean(effectiveListId) || Boolean(effectivePostId)
 
     // Thread modal state
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
@@ -127,6 +146,11 @@ export default function MapScreen() {
     // Search mode state
     const [isSearchMode, setIsSearchMode] = useState(false)
     const isSearchModeRef = useRef(false)
+    // Render-phase mirror of the derived isListMode: loadVisiblePosts runs
+    // from debounced timers whose closures can be stale, so it reads this
+    // ref at execution time instead
+    const isListModeRef = useRef(false)
+    isListModeRef.current = isListMode
     const [searchPostResults, setSearchPostResults] = useState<Post[]>([])
     const [searchLoading, setSearchLoading] = useState(false)
     const [activeSearchQuery, setActiveSearchQuery] = useState('')
@@ -144,102 +168,136 @@ export default function MapScreen() {
     const showCoverage =
         coverageMode !== 'off' && coverageGeoJSON && coveragePrecision !== null
 
+    // The single exit path from list mode: clears the params AND the latch
+    // they're mirrored into, then refetches the viewport so the list's pins
+    // don't linger. Used by the Close button, hardware back, and the fetch
+    // failure paths below.
+    const handleListClose = useCallback(() => {
+        router.setParams({ listId: '', postId: '' })
+        setStickyListId('')
+        setStickyPostId('')
+        // Flip the ref now so the refetch below isn't skipped (the state
+        // changes haven't committed yet; the render mirror re-asserts it)
+        isListModeRef.current = false
+        setActiveList(null)
+        setListPosts([])
+        // Resetting the throttle/bounds cache guarantees a real refetch (or
+        // the zoomed-out state if the list fit left the camera far out)
+        lastFetchRef.current = 0
+        lastFetchBoundsRef.current = null
+        loadVisiblePostsRef.current?.()
+    }, [router])
+
     // Wrap fetchListDetails in useCallback
     const fetchListDetails = useCallback(
         async (id: string) => {
             try {
+                // List mode itself is already active — it's derived from the
+                // listId param — so the sheet shows the list header (with a
+                // loading state) for the whole fetch
                 setLoadingPosts(true)
+                setVisiblePosts([])
                 const listDoc = await getDoc(doc(db, 'lists', id))
-                if (listDoc.exists()) {
-                    const listData = listDoc.data()
-                    setActiveList({ id: listDoc.id, ...listData })
-                    setIsListMode(true)
+                if (!listDoc.exists()) {
+                    throw new Error('List not found')
+                }
+                const listData = listDoc.data()
+                setActiveList({ id: listDoc.id, ...listData })
 
-                    // Fetch posts for the list
-                    if (listData.postIds && listData.postIds.length > 0) {
-                        const postIds = listData.postIds
+                // Fetch posts for the list
+                if (listData.postIds && listData.postIds.length > 0) {
+                    const postIds = listData.postIds
 
-                        // Fetch post documents and locations in parallel
-                        const [postDocs, locations] = await Promise.all([
-                            Promise.all(
-                                postIds.map((postId: string) =>
-                                    getDoc(doc(db, 'posts', postId))
-                                )
-                            ),
-                            getPostLocations(postIds),
-                        ])
+                    // Fetch post documents and locations in parallel
+                    const [postDocs, locations] = await Promise.all([
+                        Promise.all(
+                            postIds.map((postId: string) =>
+                                getDoc(doc(db, 'posts', postId))
+                            )
+                        ),
+                        getPostLocations(postIds),
+                    ])
 
-                        const posts = postDocs
-                            .filter((docSnap) => docSnap.exists())
-                            .map((docSnap) => {
-                                const data = docSnap.data()
-                                const location = locations.find(
-                                    (loc) => loc.postId === docSnap.id
-                                )
+                    const posts = postDocs
+                        .filter((docSnap) => docSnap.exists())
+                        .map((docSnap) => {
+                            const data = docSnap.data()
+                            const location = locations.find(
+                                (loc) => loc.postId === docSnap.id
+                            )
 
-                                return {
-                                    id: docSnap.id,
-                                    ...data,
-                                    latitude: location?.latitude,
-                                    longitude: location?.longitude,
-                                } as Post
-                            })
+                            return {
+                                id: docSnap.id,
+                                ...data,
+                                latitude: location?.latitude,
+                                longitude: location?.longitude,
+                            } as Post
+                        })
 
-                        console.log(
-                            `[ListMode] Loaded ${posts.length} posts for list ${listData.name}`
+                    console.log(
+                        `[ListMode] Loaded ${posts.length} posts for list ${listData.name}`
+                    )
+                    const postsWithLocation = posts.filter(
+                        (p) => p.latitude && p.longitude
+                    )
+                    console.log(
+                        `[ListMode] Posts with valid location: ${postsWithLocation.length}`
+                    )
+
+                    setListPosts(posts)
+                    setVisiblePosts(posts) // Show only list posts on map
+
+                    // Fit the camera to every post in the list — a real
+                    // bounds fit, not a fixed zoom centered on the first
+                    // post, which left far-apart lists mostly off-screen
+                    const coordinates = posts
+                        .filter((p) => p.longitude && p.latitude)
+                        .map(
+                            (p) =>
+                                [p.longitude!, p.latitude!] as [
+                                    number,
+                                    number,
+                                ]
                         )
-                        const postsWithLocation = posts.filter(
-                            (p) => p.latitude && p.longitude
-                        )
-                        console.log(
-                            `[ListMode] Posts with valid location: ${postsWithLocation.length}`
-                        )
 
-                        setListPosts(posts)
-                        setVisiblePosts(posts) // Show only list posts on map
-
-                        // Fit bounds to show all posts
-                        if (
-                            posts.length > 0 &&
-                            mapRef.current &&
-                            cameraRef.current
-                        ) {
-                            const coordinates = posts
-                                .filter((p) => p.longitude && p.latitude)
-                                .map((p) => [p.longitude!, p.latitude!])
-
-                            if (coordinates.length > 0) {
-                                const firstPost = posts[0]
-                                if (firstPost.latitude && firstPost.longitude) {
-                                    const panToList = () => {
-                                        cameraRef.current?.setCamera({
-                                            centerCoordinate: [
-                                                firstPost.longitude!,
-                                                firstPost.latitude!,
-                                            ],
-                                            zoomLevel: 10,
-                                            animationDuration: 1000,
-                                        })
-                                    }
-                                    if (isMapReadyRef.current) {
-                                        panToList()
-                                    } else {
-                                        pendingCameraActionRef.current =
-                                            panToList
-                                    }
-                                }
+                    if (coordinates.length > 0) {
+                        const fitToList = () => {
+                            if (coordinates.length === 1) {
+                                cameraRef.current?.setCamera({
+                                    centerCoordinate: coordinates[0],
+                                    zoomLevel: 14,
+                                    animationDuration: 1000,
+                                })
+                                return
                             }
+                            const lngs = coordinates.map((c) => c[0])
+                            const lats = coordinates.map((c) => c[1])
+                            cameraRef.current?.fitBounds(
+                                [Math.max(...lngs), Math.max(...lats)],
+                                [Math.min(...lngs), Math.min(...lats)],
+                                // [top, right, bottom, left] — extra
+                                // bottom keeps pins clear of the
+                                // half-open bottom sheet
+                                [100, 60, 320, 60],
+                                1000
+                            )
+                        }
+                        if (isMapReadyRef.current) {
+                            fitToList()
+                        } else {
+                            pendingCameraActionRef.current = fitToList
                         }
                     }
                 }
             } catch (error) {
                 console.error('Error fetching list details:', error)
                 showToast('error', 'Failed to load list details')
+                handleListClose()
             } finally {
                 setLoadingPosts(false)
             }
         },
-        [showToast]
+        [showToast, handleListClose]
     )
 
     // Wrap fetchPostForLocate in useCallback
@@ -247,69 +305,63 @@ export default function MapScreen() {
         async (id: string) => {
             try {
                 setLoadingPosts(true)
+                setVisiblePosts([])
                 // Fetch the post
                 const postDoc = await getDoc(doc(db, 'posts', id))
-                if (postDoc.exists()) {
-                    const postData = postDoc.data()
+                if (!postDoc.exists()) {
+                    throw new Error('Post not found')
+                }
+                const postData = postDoc.data()
 
-                    // Fetch location via cloud function
-                    const locations = await getPostLocations([id])
-                    const location = locations.find((loc) => loc.postId === id)
+                // Fetch location via cloud function
+                const locations = await getPostLocations([id])
+                const location = locations.find((loc) => loc.postId === id)
 
-                    const post = {
-                        id: postDoc.id,
-                        ...postData,
-                        latitude: location?.latitude,
-                        longitude: location?.longitude,
-                    } as Post
+                const post = {
+                    id: postDoc.id,
+                    ...postData,
+                    latitude: location?.latitude,
+                    longitude: location?.longitude,
+                } as Post
 
-                    // Set up "fake" list mode
-                    setActiveList({
-                        id: 'single-post-view',
-                        name: 'Post Location',
-                        creatorId: 'system',
-                        postIds: [id],
-                    })
-                    setIsListMode(true)
-                    setListPosts([post])
-                    setVisiblePosts([post])
+                // Set up "fake" list mode
+                setActiveList({
+                    id: 'single-post-view',
+                    name: 'Post Location',
+                    creatorId: 'system',
+                    postIds: [id],
+                })
+                setListPosts([post])
+                setVisiblePosts([post])
 
-                    // Focus camera
-                    if (post.latitude && post.longitude) {
-                        const panToPost = () => {
-                            cameraRef.current?.setCamera({
-                                centerCoordinate: [
-                                    post.longitude!,
-                                    post.latitude!,
-                                ],
-                                zoomLevel: 16,
-                                animationDuration: 1000,
-                            })
-                        }
-                        if (isMapReadyRef.current) {
-                            panToPost()
-                        } else {
-                            pendingCameraActionRef.current = panToPost
-                        }
+                // Focus camera
+                if (post.latitude && post.longitude) {
+                    const panToPost = () => {
+                        cameraRef.current?.setCamera({
+                            centerCoordinate: [
+                                post.longitude!,
+                                post.latitude!,
+                            ],
+                            zoomLevel: 16,
+                            animationDuration: 1000,
+                        })
+                    }
+                    if (isMapReadyRef.current) {
+                        panToPost()
+                    } else {
+                        pendingCameraActionRef.current = panToPost
                     }
                 }
             } catch (error) {
                 console.error('Error fetching post for locate:', error)
                 showToast('error', 'Failed to locate shot')
+                handleListClose()
             } finally {
                 setLoadingPosts(false)
             }
         },
-        [showToast]
+        [showToast, handleListClose]
     )
-
-    // Wrap handleListClose in useCallback
-    const handleListClose = useCallback(() => {
-        router.setParams({ listId: '', postId: '' }) // Clear params
-        setIsListMode(false)
-        setActiveList(null)
-        setListPosts([])
-    }, [router])
 
     const centerOnUserLocation = useCallback(() => {
         if (userLocation && cameraRef.current) {
@@ -481,25 +533,26 @@ export default function MapScreen() {
         }
     }, [searchQuery, locationLoading, handleSearch])
 
-    // Handle List Focus Mode
+    // Handle List Focus Mode. isListMode itself is derived from these
+    // (latched) ids — this effect only loads/clears the list DATA.
     useEffect(() => {
-        if (listId) {
-            fetchListDetails(listId)
-        } else if (postId) {
-            fetchPostForLocate(postId)
+        if (effectiveListId) {
+            fetchListDetails(effectiveListId)
+        } else if (effectivePostId) {
+            fetchPostForLocate(effectivePostId)
         } else {
-            setIsListMode(false)
             setActiveList(null)
             setListPosts([])
-            setActiveList(null)
-            setListPosts([])
-            // setViewMode('map')
         }
+    }, [effectiveListId, effectivePostId, fetchListDetails, fetchPostForLocate])
 
+    // Hardware back exits list mode (reads the ref so this effect never
+    // needs to re-register)
+    useEffect(() => {
         const backHandler = BackHandler.addEventListener(
             'hardwareBackPress',
             () => {
-                if (isListMode) {
+                if (isListModeRef.current) {
                     handleListClose()
                     return true
                 }
@@ -509,11 +562,6 @@ export default function MapScreen() {
 
         return () => backHandler.remove()
     }, [
-        listId,
-        postId,
-        isListMode,
-        fetchListDetails,
-        fetchPostForLocate,
         handleListClose,
     ])
 
@@ -540,7 +588,14 @@ export default function MapScreen() {
 
     // Fetch posts in current viewport
     const loadVisiblePosts = useCallback(async () => {
-        if (!mapRef.current || isListMode || isSearchModeRef.current) return
+        // Refs, not state closures: the camera-settle timer can invoke a
+        // version of this captured before a mode change committed
+        if (
+            !mapRef.current ||
+            isListModeRef.current ||
+            isSearchModeRef.current
+        )
+            return
 
         // Below the pin threshold the map renders cluster bubbles from
         // geohash_cells instead — don't run the (radius-capped) pin query
@@ -669,7 +724,7 @@ export default function MapScreen() {
             hasLoadedOnceRef.current = true
             setLoadingPosts(false)
         }
-    }, [cachePosts, isListMode])
+    }, [cachePosts])
 
     // Refresh the map when a post is created or deleted anywhere in the
     // app — otherwise the 5-minute area cache plus the same-bounds skip
@@ -779,12 +834,12 @@ export default function MapScreen() {
             pendingCameraActionRef.current = null
         }
         // Trigger initial fetch once the map is ready
-        if (!listId && !initialFetchDoneRef.current) {
+        if (!effectiveListId && !initialFetchDoneRef.current) {
             initialFetchDoneRef.current = true
             lastFetchRef.current = 0
             loadVisiblePosts()
         }
-    }, [listId, loadVisiblePosts])
+    }, [effectiveListId, loadVisiblePosts])
 
     // Hide blocked users' posts everywhere on the map (pins + bottom sheet).
     // Filtered reactively so a new block takes effect without a re-fetch.
@@ -1118,7 +1173,9 @@ export default function MapScreen() {
                     // and is harmless above a display's refresh rate
                     preferredFramesPerSecond={120}
                     compassEnabled={true}
-                    compassFadeWhenNorth={true}
+                    // Always visible (not just when rotated) so there's a
+                    // persistent tap target to reorient north-up
+                    compassFadeWhenNorth={false}
                     compassViewPosition={1} // 1 = Top Right
                     // Compass at top relative to map, BELOW HUD.
                     // HUD ~110px. Increasing spacing per user request.
@@ -1194,7 +1251,7 @@ export default function MapScreen() {
                         Mapbox-clustered so nearby cells merge into one
                         bubble as you zoom out (totalCount sums their
                         originals); singles keep their own count. */}
-                    {!isSearchMode && bubblesGeoJSON && (
+                    {!isSearchMode && !isListMode && bubblesGeoJSON && (
                         <ShapeSource
                             id="bubbles-source"
                             ref={bubblesSourceRef}
@@ -1394,20 +1451,26 @@ export default function MapScreen() {
                     emptyTitle={
                         isSearchMode
                             ? `No shots match "${activeSearchQuery}"`
-                            : zoomedTooFarOut
-                              ? 'Viewing from above'
-                              : undefined
+                            : isListMode
+                              ? 'No shots in this list'
+                              : zoomedTooFarOut
+                                ? 'Viewing from above'
+                                : undefined
                     }
                     emptySubtitle={
                         isSearchMode
                             ? 'Try different words, like "sunset viewpoint" or "street art"'
-                            : zoomedTooFarOut
-                              ? 'Tap a cluster or zoom in to see shots'
-                              : undefined
+                            : isListMode
+                              ? 'Shots added to this list will show up here'
+                              : zoomedTooFarOut
+                                ? 'Tap a cluster or zoom in to see shots'
+                                : undefined
                     }
                     onClose={isSearchMode ? handleSearchClear : handleListClose}
                     isListMode={isListMode || isSearchMode}
-                    zoomedOut={zoomedTooFarOut}
+                    // Belt to the derived isListMode: the zoomed-out header
+                    // must never surface while a list or search is open
+                    zoomedOut={!isListMode && !isSearchMode && zoomedTooFarOut}
                 />
             )}
 
