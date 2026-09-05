@@ -8,6 +8,12 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect, useRef, useState } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import 'react-native-reanimated'
+import { enableFreeze } from 'react-native-screens'
+
+// Suspend React rendering for screens that are not visible (paired with
+// freezeOnBlur on the tab navigator) so background tabs — the Mapbox map
+// especially — can't do JS-thread work while the user is on another tab.
+enableFreeze(true)
 
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { ToastProvider } from '@/components/ui/Toast'

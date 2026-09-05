@@ -27,6 +27,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
     ActivityIndicator,
     FlatList,
+    InteractionManager,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -163,9 +164,14 @@ export default function ExploreScreen() {
     }
 
     useEffect(() => {
-        fetchFeaturedLists()
-        fetchTrendingPosts()
-        fetchNewPosts()
+        // Let the tab-switch transition finish before kicking off the three
+        // Firestore fetches, so first mount doesn't jank the animation
+        const task = InteractionManager.runAfterInteractions(() => {
+            fetchFeaturedLists()
+            fetchTrendingPosts()
+            fetchNewPosts()
+        })
+        return () => task.cancel()
     }, [])
 
     const onRefresh = async () => {

@@ -1,40 +1,35 @@
-import { Tabs } from 'expo-router'
-import React from 'react'
 import { Ionicons } from '@expo/vector-icons'
-import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated'
+import React from 'react'
+import type { ColorValue } from 'react-native'
+import {
+    Badge,
+    Icon,
+    Label,
+    NativeTabs,
+    VectorIcon,
+} from 'expo-router/unstable-native-tabs'
 import OnboardingModal from '@/components/OnboardingModal'
 import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
 
-const AnimatedIcon = ({
-    name,
-    color,
-    focused,
-}: {
-    name: any
-    color: string
-    focused: boolean
-}) => {
-    const animatedStyle = useAnimatedStyle(() => {
-        return {
-            transform: [
-                {
-                    scale: withSpring(focused ? 1.1 : 1, {
-                        damping: 15,
-                        stiffness: 150,
-                    }),
-                },
-            ],
-        }
-    })
+const ICON_SIZE = 28
 
-    return (
-        <Animated.View style={animatedStyle} accessible={false}>
-            <Ionicons name={name} size={28} color={color} />
-        </Animated.View>
-    )
+// VectorIcon requests its family's image at a hardcoded 24px — wrap Ionicons
+// so every request comes back at ICON_SIZE instead. iOS renders the image at
+// intrinsic size; Android's Material bar clamps icons to 24dp regardless.
+const sizedIonicons = {
+    getImageSource: (
+        name: keyof typeof Ionicons.glyphMap,
+        _size: number,
+        color: ColorValue
+    ) => Ionicons.getImageSource(name, ICON_SIZE, color),
 }
 
+// Native UITabBarController / BottomNavigationView instead of the JS tab bar —
+// tab switches happen on the native side so they stay responsive even when the
+// JS thread is busy. Styled Instagram-style: icons only, no labels, no
+// selection indicator, so nothing shifts when a tab is pressed.
+// API is unstable in expo-router 6 (expo-router/unstable-native-tabs).
 export default function TabLayout() {
     const { unreadCount } = useAuth()
 
@@ -42,89 +37,66 @@ export default function TabLayout() {
         <>
             {/* First-run intro — shows once, over whichever tab loads first */}
             <OnboardingModal />
-            <Tabs
-            screenOptions={{
-                tabBarActiveTintColor: colors.primary,
-                headerShown: false,
-            }}
-        >
-            <Tabs.Screen
-                name="index"
-                options={{
-                    title: 'Explore',
-                    tabBarAccessibilityLabel:
-                        unreadCount > 0
-                            ? `Explore tab, ${unreadCount} unread notifications`
-                            : 'Explore tab',
-                    // Unread notifications are otherwise only visible inside
-                    // the Explore header
-                    tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-                    tabBarIcon: ({ color, focused }) => (
-                        <AnimatedIcon
-                            name="compass"
-                            color={color}
-                            focused={focused}
-                        />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="map"
-                options={{
-                    title: 'Map',
-                    tabBarAccessibilityLabel: 'Map tab',
-                    tabBarIcon: ({ color, focused }) => (
-                        <AnimatedIcon
-                            name="map"
-                            color={color}
-                            focused={focused}
-                        />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="post"
-                options={{
-                    title: 'Post',
-                    tabBarAccessibilityLabel: 'Post tab',
-                    tabBarIcon: ({ color, focused }) => (
-                        <AnimatedIcon
-                            name="add-circle"
-                            color={color}
-                            focused={focused}
-                        />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="lists"
-                options={{
-                    title: 'Lists',
-                    tabBarAccessibilityLabel: 'Lists tab',
-                    tabBarIcon: ({ color, focused }) => (
-                        <AnimatedIcon
-                            name="list"
-                            color={color}
-                            focused={focused}
-                        />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="profile"
-                options={{
-                    title: 'Profile',
-                    tabBarAccessibilityLabel: 'Profile tab',
-                    tabBarIcon: ({ color, focused }) => (
-                        <AnimatedIcon
-                            name="person"
-                            color={color}
-                            focused={focused}
-                        />
-                    ),
-                }}
-            />
-            </Tabs>
+            <NativeTabs
+                tintColor={colors.primary}
+                // App is dark-only but the native bar follows system
+                // appearance — pin it dark so it can't render light chrome
+                backgroundColor={colors.background}
+                // Android: icons stay centered with no label sliding in on
+                // select (the "moves upward when pressed" behavior)
+                labelVisibilityMode="unlabeled"
+                // Android: no Material pill behind the selected icon
+                disableIndicator
+            >
+                <NativeTabs.Trigger name="index">
+                    <Label hidden />
+                    <Icon
+                        src={
+                            <VectorIcon
+                                family={sizedIonicons}
+                                name="compass"
+                            />
+                        }
+                    />
+                    <Badge hidden={unreadCount === 0}>
+                        {unreadCount > 0 ? String(unreadCount) : undefined}
+                    </Badge>
+                </NativeTabs.Trigger>
+                <NativeTabs.Trigger name="map">
+                    <Label hidden />
+                    <Icon
+                        src={<VectorIcon family={sizedIonicons} name="map" />}
+                    />
+                </NativeTabs.Trigger>
+                <NativeTabs.Trigger name="post">
+                    <Label hidden />
+                    <Icon
+                        src={
+                            <VectorIcon
+                                family={sizedIonicons}
+                                name="add-circle"
+                            />
+                        }
+                    />
+                </NativeTabs.Trigger>
+                <NativeTabs.Trigger name="lists">
+                    <Label hidden />
+                    <Icon
+                        src={<VectorIcon family={sizedIonicons} name="list" />}
+                    />
+                </NativeTabs.Trigger>
+                <NativeTabs.Trigger name="profile">
+                    <Label hidden />
+                    <Icon
+                        src={
+                            <VectorIcon
+                                family={sizedIonicons}
+                                name="person"
+                            />
+                        }
+                    />
+                </NativeTabs.Trigger>
+            </NativeTabs>
         </>
     )
 }
