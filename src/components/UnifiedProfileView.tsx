@@ -31,6 +31,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     Alert,
+    BackHandler,
     FlatList,
     Modal,
     RefreshControl,
@@ -115,7 +116,6 @@ export default function UnifiedProfileView({
     const [refreshEnabled, setRefreshEnabled] = useState(true)
     const pagerRef = useRef<PagerView>(null)
     const listRefs = useRef<Partial<Record<ProfileTab, FlatList | null>>>({})
-    const searchInputRef = React.useRef<TextInput>(null)
 
     const fetchUserData = async () => {
         if (!userId) return
@@ -459,10 +459,26 @@ export default function UnifiedProfileView({
         }
     }
 
-    const handleUserSelect = (selectedUserId: string) => {
+    const closeSearch = () => {
         setSearchVisible(false)
         setSearchQuery('')
         setSearchResults([])
+    }
+
+    // The search overlay is a plain in-tree view (not a Modal) so it can
+    // appear the same frame the button is pressed — which means Android's
+    // hardware back needs wiring up by hand
+    useEffect(() => {
+        if (!searchVisible) return
+        const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+            closeSearch()
+            return true
+        })
+        return () => sub.remove()
+    }, [searchVisible])
+
+    const handleUserSelect = (selectedUserId: string) => {
+        closeSearch()
         if (selectedUserId === user?.uid) return
         router.push({
             pathname: '/user-profile',
@@ -1153,36 +1169,20 @@ export default function UnifiedProfileView({
                 onClose={() => setShowActivityFeed(false)}
             />
 
-            <Modal
-                visible={searchVisible}
-                animationType="fade"
-                transparent
-                // autoFocus on the input handles most cases (Modal
-                // remounts children on open); the delayed onShow focus
-                // covers platforms where autoFocus races the modal
-                // presentation and gets dropped
-                onShow={() =>
-                    setTimeout(() => searchInputRef.current?.focus(), 100)
-                }
-                onRequestClose={() => {
-                    setSearchVisible(false)
-                    setSearchQuery('')
-                    setSearchResults([])
-                }}
-            >
+            {/* In-tree overlay instead of a Modal: renders the same frame
+                the search button is pressed, and autoFocus fires on mount so
+                the keyboard rises immediately — no native modal presentation
+                or fade to wait through */}
+            {searchVisible && (
                 <View
                     style={[
-                        styles.searchModalOverlay,
+                        styles.searchOverlay,
                         { paddingTop: insets.top },
                     ]}
                 >
                     <View style={styles.searchHeader}>
                         <TouchableOpacity
-                            onPress={() => {
-                                setSearchVisible(false)
-                                setSearchQuery('')
-                                setSearchResults([])
-                            }}
+                            onPress={closeSearch}
                             style={styles.searchCloseButton}
                             accessibilityLabel="Close search"
                             accessibilityRole="button"
@@ -1200,7 +1200,6 @@ export default function UnifiedProfileView({
                                 color={colors.textTertiary}
                             />
                             <TextInput
-                                ref={searchInputRef}
                                 style={styles.searchInput}
                                 placeholder="Search users..."
                                 placeholderTextColor={colors.textTertiary}
@@ -1279,7 +1278,7 @@ export default function UnifiedProfileView({
                         )}
                     </View>
                 </View>
-            </Modal>
+            )}
 
             <Modal
                 visible={followListVisible}
@@ -1496,6 +1495,12 @@ const styles = StyleSheet.create({
     searchModalOverlay: {
         flex: 1,
         backgroundColor: colors.background,
+    },
+    searchOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: colors.background,
+        zIndex: 100,
+        elevation: 100,
     },
     searchHeader: {
         flexDirection: 'row',

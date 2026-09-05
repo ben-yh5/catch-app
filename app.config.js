@@ -32,6 +32,9 @@ export default {
             },
             edgeToEdgeEnabled: true,
             predictiveBackGestureEnabled: false,
+            // Pan instead of resize: the keyboard covers the native tab bar
+            // (Instagram-style) rather than pushing it up above the keyboard
+            softwareKeyboardLayoutMode: 'pan',
             config: {
                 googleMaps: {
                     apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
