@@ -1,4 +1,5 @@
 import { useAuth } from '@/context/AuthContext'
+import { useTabBarInset } from '@/hooks/useTabBarInset'
 import { colors } from '@/theme/colors'
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet'
 import React, { useMemo, useRef, useState } from 'react'
@@ -27,6 +28,9 @@ interface MapBottomSheetProps {
     emptySubtitle?: string
     onClose?: () => void
     isListMode?: boolean
+    /** Below pin zoom — no pin query runs, so a "0 shots" count would be a
+     *  lie; the header explains the zoom state instead */
+    zoomedOut?: boolean
 }
 
 function MapBottomSheet({
@@ -43,8 +47,12 @@ function MapBottomSheet({
     emptySubtitle,
     onClose,
     isListMode,
+    zoomedOut,
 }: MapBottomSheetProps) {
     const { user } = useAuth()
+    // Map tab only — raise the sheet above the Android native tab bar the
+    // screen extends behind (0 on iOS)
+    const tabBarInset = useTabBarInset()
     const bottomSheetRef = useRef<BottomSheet>(null)
     const snapPoints = useMemo(() => ['15%', '50%'], [])
     const [sheetIndex, setSheetIndex] = useState(1)
@@ -96,7 +104,9 @@ function MapBottomSheet({
                             ? 'Loading...'
                             : error && posts.length === 0
                               ? "Couldn't load shots"
-                              : `${posts.length} shot${posts.length !== 1 ? 's' : ''} in this area`}
+                              : zoomedOut
+                                ? 'Zoom in to see shots'
+                                : `${posts.length} shot${posts.length !== 1 ? 's' : ''} in this area`}
                     </Text>
                 </View>
             )}
@@ -149,6 +159,7 @@ function MapBottomSheet({
             onChange={setSheetIndex}
             enablePanDownToClose={false}
             enableDynamicSizing={false}
+            bottomInset={tabBarInset}
             backgroundStyle={styles.background}
             handleIndicatorStyle={styles.handleIndicator}
         >

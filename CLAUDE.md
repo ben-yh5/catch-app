@@ -102,7 +102,9 @@ The `unstable_settings.initialRouteName` ensures authenticated users land on tab
 - User but no Firestore doc → `/username-setup` (Google Sign-In new users)
 - Authenticated with doc → `/(tabs)`
 
-Methods: Email/Password and Google Sign-In (`@react-native-google-signin/google-signin`).
+Methods: Google Sign-In (`@react-native-google-signin/google-signin`), Sign in with Apple (iOS, `expo-apple-authentication`), and Email/Password (`/email-auth` screen: sign in, sign up, and password reset via `sendPasswordResetEmail`). All new users — regardless of provider — get their Firestore doc created via `/username-setup` → `setupUsername` Cloud Function.
+
+**Email verification**: password-provider accounts must verify their email (Google/Apple arrive pre-verified). Signup fire-and-forgets `sendEmailVerification`; the root layout routes unverified password users to `/verify-email` (polls `user.reload()`, resend + sign-out escape hatch) *before* username setup. Enforced server-side too: `setupUsername` rejects unverified password tokens (`failed-precondition`) and the posts `create` rule requires `email_verified` when `sign_in_provider == 'password'`. After verification the client force-refreshes the ID token (`getIdToken(true)`) so rules see the claim.
 
 ### Post Event System
 

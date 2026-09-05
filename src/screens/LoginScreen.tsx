@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import * as AppleAuthentication from 'expo-apple-authentication'
+import { useRouter } from 'expo-router'
 import React, { useEffect, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -72,6 +73,7 @@ export default function LoginScreen() {
     const { loginWithGoogle, loginWithApple } = useAuth()
     const { showToast } = useToast()
     const insets = useSafeAreaInsets()
+    const router = useRouter()
 
     useEffect(() => {
         if (Platform.OS === 'ios') {
@@ -210,6 +212,25 @@ export default function LoginScreen() {
                         </View>
                     )}
 
+                    <AppButton
+                        title="Continue with Email"
+                        onPress={() => router.push('/email-auth')}
+                        disabled={loading}
+                        variant="ghost"
+                        block
+                        style={styles.emailButton}
+                        icon={
+                            <Ionicons
+                                name="mail-outline"
+                                size={18}
+                                color={colors.primary}
+                            />
+                        }
+                        accessibilityLabel="Continue with Email"
+                        accessibilityHint="Sign in or sign up with an email and password"
+                        accessibilityState={{ disabled: loading }}
+                    />
+
                     <Text style={styles.legal}>
                         By continuing, you agree to our{' '}
                         <Text
@@ -289,6 +310,9 @@ const styles = StyleSheet.create({
     appleButton: {
         width: '100%',
         height: 48,
+    },
+    emailButton: {
+        marginTop: 12,
     },
     legal: {
         fontSize: 12,

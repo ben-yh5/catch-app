@@ -37,7 +37,7 @@ export const unstable_settings = {
 }
 
 function RootLayoutNav() {
-    const { user, loading } = useAuth()
+    const { user, loading, needsEmailVerification } = useAuth()
     const segments = useSegments()
     const router = useRouter()
     const [hasUserDoc, setHasUserDoc] = useState<boolean | null>(null)
@@ -103,15 +103,29 @@ function RootLayoutNav() {
             segments[0] === 'blocked-users' ||
             segments[0] === 'passport'
         const inUsernameSetup = segments[0] === 'username-setup'
+        const inVerifyEmail = segments[0] === 'verify-email'
 
-        if (!user && (inAuthGroup || inProtectedRoute || inUsernameSetup)) {
+        if (
+            !user &&
+            (inAuthGroup || inProtectedRoute || inUsernameSetup || inVerifyEmail)
+        ) {
             // Redirect to login if user is not authenticated
             router.replace('/login')
-        } else if (user && hasUserDoc === false && !inUsernameSetup) {
+        } else if (user && needsEmailVerification && !inVerifyEmail) {
+            // Unverified email/password accounts must verify before anything
+            // else — including claiming a (permanent, unique) username
+            router.replace('/verify-email')
+        } else if (
+            user &&
+            !needsEmailVerification &&
+            hasUserDoc === false &&
+            !inUsernameSetup
+        ) {
             // Redirect to username setup if user is authenticated but has no user document
             router.replace('/username-setup')
         } else if (
             user &&
+            !needsEmailVerification &&
             hasUserDoc === true &&
             !inAuthGroup &&
             !inProtectedRoute
@@ -119,7 +133,7 @@ function RootLayoutNav() {
             // Redirect to tabs if user is authenticated, has user doc, and not in a protected route
             router.replace('/(tabs)')
         }
-    }, [user, loading, segments, hasUserDoc, router])
+    }, [user, loading, segments, hasUserDoc, needsEmailVerification, router])
 
     return (
         // The app's screens are designed dark-only — always hand navigation
@@ -135,6 +149,8 @@ function RootLayoutNav() {
                 }}
             >
                 <Stack.Screen name="login" />
+                <Stack.Screen name="email-auth" />
+                <Stack.Screen name="verify-email" />
                 <Stack.Screen name="username-setup" />
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="user-profile" />

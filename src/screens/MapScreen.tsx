@@ -1407,6 +1407,7 @@ export default function MapScreen() {
                     }
                     onClose={isSearchMode ? handleSearchClear : handleListClose}
                     isListMode={isListMode || isSearchMode}
+                    zoomedOut={zoomedTooFarOut}
                 />
             )}
 

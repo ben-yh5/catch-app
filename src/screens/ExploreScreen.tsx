@@ -7,6 +7,7 @@ import ErrorState from '@/components/ui/ErrorState'
 import { ExploreSkeleton } from '@/components/ui/Skeleton'
 import { useAuth } from '@/context/AuthContext'
 import { useRecommendedFeed } from '@/hooks/useRecommendedFeed'
+import { useTabBarInset } from '@/hooks/useTabBarInset'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { List, Post, RecommendedPost } from '@/types'
@@ -43,6 +44,7 @@ export default function ExploreScreen() {
     const { user, unreadCount } = useAuth()
     const router = useRouter()
     const insets = useSafeAreaInsets()
+    const tabBarInset = useTabBarInset()
 
     // State
     const [featuredLists, setFeaturedLists] = useState<List[]>([])
@@ -539,6 +541,10 @@ export default function ExploreScreen() {
                 data={recommendedFeed.posts}
                 renderItem={renderRecommendedCard}
                 keyExtractor={(item) => `rec-${item.id}`}
+                // Keep the last card clear of the native tab bar: iOS insets
+                // natively, Android needs explicit padding (useTabBarInset)
+                contentInsetAdjustmentBehavior="automatic"
+                contentContainerStyle={{ paddingBottom: tabBarInset }}
                 ListHeaderComponent={listHeaderComponent}
                 ListFooterComponent={
                     recommendedFeed.loadingMore ? (

@@ -5,6 +5,7 @@ import UnifiedPreviewScreen from '@/components/UnifiedPreviewScreen'
 import { useAuth } from '@/context/AuthContext'
 import { usePost } from '@/context/PostContext'
 import { useDeviceSensors } from '@/hooks/useDeviceSensors'
+import { useTabBarInset } from '@/hooks/useTabBarInset'
 import { db, storage } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
@@ -71,6 +72,7 @@ const LOCATION_ERROR_ISSUE: CatchIssue = {
 }
 
 export default function PostScreen() {
+    const tabBarInset = useTabBarInset()
     const [permission, requestPermission] = useCameraPermissions()
     const [status, requestLocationPermission] =
         Location.useForegroundPermissions()
@@ -693,6 +695,7 @@ export default function PostScreen() {
                 <UnifiedCameraView
                     onPhotoTaken={handlePhotoTaken}
                     onCancel={handleCameraCancel}
+                    bottomInset={tabBarInset}
                 />
             </View>
         )
@@ -714,6 +717,7 @@ export default function PostScreen() {
                 issues={previewIssues}
                 onRetake={handleRetake}
                 uploadProgress={uploadProgress}
+                bottomInset={tabBarInset}
             />
         )
     }
@@ -736,6 +740,7 @@ export default function PostScreen() {
                 issues={previewIssues}
                 onRetake={handleRetake}
                 uploadProgress={uploadProgress}
+                bottomInset={tabBarInset}
             />
         )
     }

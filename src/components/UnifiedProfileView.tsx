@@ -6,6 +6,7 @@ import AppButton from '@/components/ui/AppButton'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { PostEvent, usePost, usePostEvents } from '@/context/PostContext'
+import { useTabBarInset } from '@/hooks/useTabBarInset'
 import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
@@ -49,6 +50,9 @@ import { CompactPostCardSkeleton, ProfileSkeleton } from './ui/Skeleton'
 interface ProfileViewProps {
     userId: string
     isOwnProfile: boolean
+    /** True when rendered inside the (tabs) navigator — content then needs
+     *  bottom clearance for the native tab bar (see useTabBarInset) */
+    withinTabBar?: boolean
 }
 
 const POSTS_PER_PAGE = 20
@@ -59,6 +63,7 @@ type ProfileTab = (typeof TAB_ORDER)[number]
 export default function UnifiedProfileView({
     userId,
     isOwnProfile,
+    withinTabBar = false,
 }: ProfileViewProps) {
     const { user, updateStats, blockedUserIds, blockUser, unblockUser } =
         useAuth()
@@ -68,6 +73,8 @@ export default function UnifiedProfileView({
     const navigation = useNavigation()
     const isFocused = useIsFocused()
     const insets = useSafeAreaInsets()
+    const tabBarInset = useTabBarInset()
+    const listBottomInset = withinTabBar ? tabBarInset : 0
     const [username, setUsername] = useState<string>('')
     const [totalCatches, setTotalCatches] = useState<number>(0)
     const [profilePicture, setProfilePicture] = useState<string | null>(null)
@@ -937,7 +944,13 @@ export default function UnifiedProfileView({
             data={loading ? [] : tab === 'posts' ? posts : catches}
             renderItem={renderPost}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+                styles.listContent,
+                { paddingBottom: 20 + listBottomInset },
+            ]}
+            // Keep content clear of the native tab bar: iOS insets
+            // natively, Android needs explicit padding (useTabBarInset)
+            contentInsetAdjustmentBehavior="automatic"
             refreshControl={renderRefreshControl()}
             ListEmptyComponent={
                 loading ? (
@@ -1012,7 +1025,13 @@ export default function UnifiedProfileView({
                             data={[] as Post[]}
                             renderItem={renderPost}
                             keyExtractor={(item) => item.id}
-                            contentContainerStyle={styles.listContent}
+                            contentContainerStyle={[
+                                styles.listContent,
+                                { paddingBottom: 20 + listBottomInset },
+                            ]}
+                            // Keep content clear of the native tab bar (see
+                            // grid pages above)
+                            contentInsetAdjustmentBehavior="automatic"
                             refreshControl={renderRefreshControl()}
                             ListEmptyComponent={
                                 <PassportView

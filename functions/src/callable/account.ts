@@ -22,6 +22,19 @@ export const setupUsername = functions
             )
         }
 
+        // Server-side mirror of the client's verify-email gate: password
+        // accounts must verify their email before claiming a (permanent,
+        // unique) username. Google/Apple tokens arrive pre-verified.
+        if (
+            context.auth.token.firebase?.sign_in_provider === 'password' &&
+            context.auth.token.email_verified !== true
+        ) {
+            throw new functions.https.HttpsError(
+                'failed-precondition',
+                'Verify your email address before setting up your account'
+            )
+        }
+
         const { username } = data
 
         if (!username || typeof username !== 'string') {

@@ -7,6 +7,7 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import ErrorState from '@/components/ui/ErrorState'
 import { ListsTabSkeleton } from '@/components/ui/Skeleton'
+import { useTabBarInset } from '@/hooks/useTabBarInset'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     FlatList,
@@ -25,6 +26,7 @@ const TAB_ORDER: ListsTab[] = ['my', 'community']
 export default function ListsScreen() {
     const { user } = useAuth()
     const insets = useSafeAreaInsets()
+    const tabBarInset = useTabBarInset()
     const router = useRouter()
     const pagerRef = useRef<PagerView>(null)
     // Per-tab data so the two pager pages never share state — while a
@@ -240,7 +242,13 @@ export default function ListsScreen() {
                 data={data}
                 renderItem={({ item }) => renderListItem(item, tab)}
                 keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContainer}
+                contentContainerStyle={[
+                    styles.listContainer,
+                    { paddingBottom: 16 + tabBarInset },
+                ]}
+                // Keep content clear of the native tab bar: iOS insets
+                // natively, Android needs explicit padding (useTabBarInset)
+                contentInsetAdjustmentBehavior="automatic"
                 refreshControl={
                     // Always mounted — unmounting mid-swipe causes a
                     // relayout flash when the pager settles. `enabled` is
@@ -330,7 +338,16 @@ export default function ListsScreen() {
             {/* FAB - only show on "My Lists" tab */}
             {activeTab === 'my' && (
                 <TouchableOpacity
-                    style={[styles.fab, { bottom: insets.bottom + 80 }]}
+                    style={[
+                        styles.fab,
+                        // Android: clear the tab bar the screen extends
+                        // behind; iOS: original tuning above the native bar
+                        {
+                            bottom: tabBarInset
+                                ? tabBarInset + 16
+                                : insets.bottom + 80,
+                        },
+                    ]}
                     onPress={() => router.push('/create-list')}
                     accessibilityLabel="Create new list"
                     accessibilityRole="button"

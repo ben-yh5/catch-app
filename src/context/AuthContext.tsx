@@ -4,6 +4,7 @@
  * Provides Firebase authentication functionality including:
  * - Google Sign-In via OAuth
  * - Sign in with Apple (iOS)
+ * - Email/password (sign in, sign up, password reset)
  * - User session management
  *
  * New users (no Firestore doc yet) are routed to the username-setup screen by
@@ -20,10 +21,14 @@ import {
 import * as AppleAuthentication from 'expo-apple-authentication'
 import * as Crypto from 'expo-crypto'
 import {
+    createUserWithEmailAndPassword,
     GoogleAuthProvider,
     OAuthProvider,
     onAuthStateChanged,
+    sendEmailVerification,
+    sendPasswordResetEmail,
     signInWithCredential,
+    signInWithEmailAndPassword,
     signOut,
     User,
 } from 'firebase/auth'
@@ -45,6 +50,12 @@ interface AuthContextType {
     loading: boolean
     loginWithGoogle: () => Promise<void>
     loginWithApple: () => Promise<void>
+    loginWithEmail: (email: string, password: string) => Promise<void>
+    signupWithEmail: (email: string, password: string) => Promise<void>
+    resetPassword: (email: string) => Promise<void>
+    needsEmailVerification: boolean
+    resendVerificationEmail: () => Promise<void>
+    refreshEmailVerification: () => Promise<boolean>
     logout: () => Promise<void>
     deleteAccount: () => Promise<void>
     dataContributionEnabled: boolean
@@ -80,11 +91,20 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+/**
+ * Password-provider accounts must verify their email; Google and Apple
+ * accounts arrive with emailVerified already true.
+ */
+const isUnverifiedPasswordUser = (user: User): boolean =>
+    user.providerData.some((p) => p.providerId === 'password') &&
+    !user.emailVerified
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     children,
 }) => {
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
+    const [needsEmailVerification, setNeedsEmailVerification] = useState(false)
     const [dataContributionEnabled, setDataContributionEnabled] =
         useState(false)
     // Default public — only an explicit false makes a passport private
@@ -115,6 +135,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // Listen for auth state changes
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setUser(user)
+            setNeedsEmailVerification(
+                user ? isUnverifiedPasswordUser(user) : false
+            )
             if (user) {
                 // Fetch user settings
                 try {
@@ -399,6 +422,132 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     /**
+     * Translate Firebase Auth error codes into user-facing messages.
+     * Never surface raw SDK strings to users; anything unmapped gets a
+     * generic message (the original error is logged by the caller).
+     *
+     * Note: sign-in with a wrong password and sign-in against an email that
+     * only has a Google/Apple account both surface as auth/invalid-credential
+     * (Firebase deliberately doesn't distinguish, to prevent enumeration),
+     * so that message mentions the other providers.
+     */
+    const emailAuthErrorMessage = (code: string | undefined): string => {
+        switch (code) {
+            case 'auth/invalid-credential':
+            case 'auth/user-not-found':
+            case 'auth/wrong-password':
+                return 'Incorrect email or password. If you signed up with Google or Apple, use that button instead.'
+            case 'auth/invalid-email':
+                return 'Enter a valid email address.'
+            case 'auth/email-already-in-use':
+                return 'An account with this email already exists. Try signing in — or use Google or Apple if you signed up with those.'
+            case 'auth/weak-password':
+                return 'Password must be at least 6 characters.'
+            case 'auth/too-many-requests':
+                return 'Too many attempts. Wait a bit and try again.'
+            case 'auth/user-disabled':
+                return 'This account has been disabled.'
+            case 'auth/network-request-failed':
+                return 'Network error. Check your connection and try again.'
+            default:
+                return 'Something went wrong. Please try again.'
+        }
+    }
+
+    /**
+     * Sign in an existing user with email and password
+     */
+    const loginWithEmail = async (email: string, password: string) => {
+        try {
+            await signInWithEmailAndPassword(auth, email.trim(), password)
+        } catch (error: any) {
+            console.error('Email Sign-In Error:', error)
+            throw new Error(emailAuthErrorMessage(error.code))
+        }
+    }
+
+    /**
+     * Create a new account with email and password.
+     *
+     * Deliberately does NOT create the Firestore user doc here — like the
+     * OAuth flows, the root layout routes doc-less users to /username-setup,
+     * where the setupUsername Cloud Function atomically claims the username
+     * and creates the doc.
+     */
+    const signupWithEmail = async (email: string, password: string) => {
+        try {
+            const credential = await createUserWithEmailAndPassword(
+                auth,
+                email.trim(),
+                password
+            )
+            // Fire-and-forget: the verify-email screen has a resend button,
+            // so a failed initial send isn't fatal to the signup
+            sendEmailVerification(credential.user).catch((err) =>
+                console.error('Error sending verification email:', err)
+            )
+        } catch (error: any) {
+            console.error('Email Sign-Up Error:', error)
+            throw new Error(emailAuthErrorMessage(error.code))
+        }
+    }
+
+    /**
+     * Send a password-reset email (Firebase hosts the reset page).
+     * With email enumeration protection on, Firebase reports success even
+     * for unknown emails — callers should phrase the confirmation as
+     * "if an account exists, a link was sent".
+     */
+    const resetPassword = async (email: string) => {
+        try {
+            await sendPasswordResetEmail(auth, email.trim())
+        } catch (error: any) {
+            console.error('Password Reset Error:', error)
+            throw new Error(emailAuthErrorMessage(error.code))
+        }
+    }
+
+    /**
+     * Re-send the verification email to the signed-in user
+     */
+    const resendVerificationEmail = async () => {
+        const current = auth.currentUser
+        if (!current) return
+        try {
+            await sendEmailVerification(current)
+        } catch (error: any) {
+            console.error('Verification Email Error:', error)
+            throw new Error(emailAuthErrorMessage(error.code))
+        }
+    }
+
+    /**
+     * Re-check whether the user has clicked the verification link.
+     *
+     * emailVerified is cached on the client — clicking the link updates the
+     * server only, so this must reload the user. Once verified, the ID token
+     * is force-refreshed so security rules (which check email_verified on
+     * the token) see the new claim immediately. Returns whether the email
+     * is now verified.
+     */
+    const refreshEmailVerification = async (): Promise<boolean> => {
+        const current = auth.currentUser
+        if (!current) return false
+        try {
+            await current.reload()
+            const stillUnverified = isUnverifiedPasswordUser(current)
+            if (!stillUnverified) {
+                await current.getIdToken(true)
+            }
+            setNeedsEmailVerification(stillUnverified)
+            return !stillUnverified
+        } catch (error: any) {
+            console.error('Verification Refresh Error:', error)
+            throw new Error(emailAuthErrorMessage(error.code))
+        }
+    }
+
+    /**
      * Sign out current user from both Firebase and Google
      */
     const logout = async () => {
@@ -507,6 +656,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 loading,
                 loginWithGoogle,
                 loginWithApple,
+                loginWithEmail,
+                signupWithEmail,
+                resetPassword,
+                needsEmailVerification,
+                resendVerificationEmail,
+                refreshEmailVerification,
                 logout,
                 deleteAccount,
                 dataContributionEnabled,

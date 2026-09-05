@@ -52,6 +52,12 @@ interface UnifiedPreviewScreenProps {
      * tapping away.
      */
     uploadProgress?: number | null
+    /**
+     * Clearance for the confirm button / nudge overlay when rendered inside
+     * the (tabs) navigator (pass useTabBarInset()). Omit in modals — they
+     * get their own full-height window.
+     */
+    bottomInset?: number
 }
 
 export default function UnifiedPreviewScreen({
@@ -70,6 +76,7 @@ export default function UnifiedPreviewScreen({
     issues = [],
     onRetake,
     uploadProgress = null,
+    bottomInset = 0,
 }: UnifiedPreviewScreenProps) {
     const [caption, setCaption] = useState('')
     const [showListSelection, setShowListSelection] = useState(false)
@@ -116,7 +123,10 @@ export default function UnifiedPreviewScreen({
             <ScrollView
                 contentContainerStyle={[
                     styles.scrollContent,
-                    { paddingTop: insets.top + 10 },
+                    {
+                        paddingTop: insets.top + 10,
+                        paddingBottom: 40 + bottomInset,
+                    },
                 ]}
                 keyboardShouldPersistTaps="handled"
             >
@@ -154,7 +164,9 @@ export default function UnifiedPreviewScreen({
                 <View
                     style={[
                         styles.nudgeOverlay,
-                        { bottom: insets.bottom + 10 },
+                        // bottomInset already includes the system inset
+                        // when set (tab bar clearance), so don't add both
+                        { bottom: (bottomInset || insets.bottom) + 10 },
                     ]}
                 >
                     {issues.length > 0 && (

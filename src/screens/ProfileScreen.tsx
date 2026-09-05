@@ -15,7 +15,13 @@ export default function ProfileScreen() {
         )
     }
 
-    return <UnifiedProfileView userId={user.uid} isOwnProfile={true} />
+    return (
+        <UnifiedProfileView
+            userId={user.uid}
+            isOwnProfile={true}
+            withinTabBar
+        />
+    )
 }
 
 const styles = StyleSheet.create({

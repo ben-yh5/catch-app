@@ -425,6 +425,26 @@ describe('posts collection', () => {
         )
     })
 
+    test('password user with UNVERIFIED email CANNOT create post', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID, {
+            email_verified: false,
+            firebase: { sign_in_provider: 'password' },
+        })
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'posts', 'post1'), validPost)
+        )
+    })
+
+    test('password user with verified email CAN create post', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID, {
+            email_verified: true,
+            firebase: { sign_in_provider: 'password' },
+        })
+        await assertSucceeds(
+            setDoc(doc(authed.firestore(), 'posts', 'post1'), validPost)
+        )
+    })
+
     test('CANNOT create original post claiming thread membership', async () => {
         const authed = testEnv.authenticatedContext(USER_ID)
         await assertFails(

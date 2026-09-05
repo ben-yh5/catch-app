@@ -44,6 +44,12 @@ interface UnifiedCameraViewProps {
      * whether the user is within catch range BEFORE they commit to a photo.
      */
     targetLocation?: { latitude: number; longitude: number } | null
+    /**
+     * Clearance for the bottom controls when the camera renders inside the
+     * (tabs) navigator (pass useTabBarInset()). Omit in modals — they get
+     * their own full-height window.
+     */
+    bottomInset?: number
 }
 
 export default function UnifiedCameraView({
@@ -51,6 +57,7 @@ export default function UnifiedCameraView({
     onCancel,
     originalPhotoUrl,
     targetLocation,
+    bottomInset = 0,
 }: UnifiedCameraViewProps) {
     const [facing, setFacing] = useState<CameraType>('back')
     const [isCameraReady, setIsCameraReady] = useState(false)
@@ -277,11 +284,12 @@ export default function UnifiedCameraView({
                 )}
             </View>
 
-            {/* Bottom Controls */}
+            {/* Bottom Controls — bottomInset already includes the system
+                inset when set (tab bar clearance), so don't add both */}
             <View
                 style={[
                     styles.bottomControls,
-                    { paddingBottom: insets.bottom + 20 },
+                    { paddingBottom: (bottomInset || insets.bottom) + 20 },
                 ]}
             >
                 <TouchableOpacity

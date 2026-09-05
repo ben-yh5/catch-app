@@ -38,11 +38,15 @@ service cloud.firestore {
       allow read: if true;
 
       // Only authenticated users can create posts, must set authorId to own uid.
-      // Originals must not claim thread membership; catches require a live
-      // permit issued by the validateCatch Cloud Function (proximity passed),
-      // so a scripted client can't mint catches without being there.
+      // Password-provider accounts must have a verified email (Google/Apple
+      // arrive pre-verified). Originals must not claim thread membership;
+      // catches require a live permit issued by the validateCatch Cloud
+      // Function (proximity passed), so a scripted client can't mint catches
+      // without being there.
       allow create: if request.auth != null &&
                        request.auth.uid == request.resource.data.authorId &&
+                       (request.auth.token.firebase.sign_in_provider != 'password' ||
+                        request.auth.token.email_verified == true) &&
                        (
                          (request.resource.data.isOriginal == true &&
                           request.resource.data.get('parentPostId', null) == null &&

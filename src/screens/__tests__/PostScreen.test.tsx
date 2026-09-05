@@ -29,6 +29,10 @@ jest.mock('../../context/PostContext', () => ({
     usePost: () => ({ notifyPostEvent: jest.fn() }),
 }))
 
+jest.mock('../../hooks/useTabBarInset', () => ({
+    useTabBarInset: () => 0,
+}))
+
 jest.mock('../../hooks/useDeviceSensors', () => ({
     useDeviceSensors: () => ({
         startSensors: jest.fn(),

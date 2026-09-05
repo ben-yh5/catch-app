@@ -44,6 +44,48 @@ describe('setupUsername', () => {
         ).rejects.toMatchObject({ code: 'unauthenticated' })
     })
 
+    it('rejects password accounts with unverified email', async () => {
+        await expect(
+            run(
+                { username: 'testuser' },
+                makeContext('user1', {
+                    auth: {
+                        uid: 'user1',
+                        token: {
+                            email: 'user1@test.com',
+                            email_verified: false,
+                            firebase: { sign_in_provider: 'password' },
+                        },
+                    },
+                })
+            )
+        ).rejects.toMatchObject({ code: 'failed-precondition' })
+    })
+
+    it('allows password accounts with verified email', async () => {
+        const userRef = { id: 'users/user1' }
+        const usernameRef = { id: 'usernames/testuser' }
+        mockDoc.mockImplementation((id: string) =>
+            id === 'user1' ? userRef : usernameRef
+        )
+        mockTransactionGet.mockResolvedValue({ exists: false })
+
+        const result = await run(
+            { username: 'testuser' },
+            makeContext('user1', {
+                auth: {
+                    uid: 'user1',
+                    token: {
+                        email: 'user1@test.com',
+                        email_verified: true,
+                        firebase: { sign_in_provider: 'password' },
+                    },
+                },
+            })
+        )
+        expect(result).toEqual({ success: true })
+    })
+
     it('rejects missing username', async () => {
         await expect(run({}, makeContext('user1'))).rejects.toMatchObject({
             code: 'invalid-argument',
