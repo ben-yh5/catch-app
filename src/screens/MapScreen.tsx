@@ -1357,8 +1357,8 @@ export default function MapScreen() {
                                         MAP_COLORS.selectedPin,
                                         ['get', 'isCaught'],
                                         MAP_COLORS.pinCaught,
-                                        ['get', 'isLostPlace'],
-                                        MAP_COLORS.pinLostPlace,
+                                        // Gold "lost place" pins disabled for now — re-enable by
+                                        // adding back: ['get', 'isLostPlace'], MAP_COLORS.pinLostPlace,
                                         MAP_COLORS.pin,
                                     ],
                                     circleRadius: [

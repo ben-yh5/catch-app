@@ -20,7 +20,7 @@ import { useToast } from '@/components/ui/Toast'
 import { Ionicons } from '@expo/vector-icons'
 import { useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import {
     addDoc,
     collection,
@@ -34,9 +34,10 @@ import {
 import { ref } from 'firebase/storage'
 import { uploadImageWithProgress } from '@/utils/uploadImage'
 import { geohashForLocation } from 'geofire-common'
-import React, { useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import {
     Alert,
+    BackHandler,
     Linking,
     StyleSheet,
     Text,
@@ -107,9 +108,11 @@ export default function PostScreen() {
     } = useDeviceSensors()
 
     const handleOpenCamera = async () => {
-        if (!permission) return
-
-        if (!permission.granted) {
+        // permission is null until useCameraPermissions resolves — on the
+        // first focus that happens after the auto-open below has already
+        // fired, so ask directly: requestPermission() resolves immediately
+        // with the current status when it's already determined
+        if (!permission?.granted) {
             const result = await requestPermission()
             if (!result.granted) {
                 openSettingsAlert(
@@ -135,6 +138,52 @@ export default function PostScreen() {
         setShowCamera(true)
         startSensors()
     }
+
+    // The plus tab IS the camera — open it as soon as the tab gains focus.
+    // Ref indirection keeps the focus callback stable so this fires once per
+    // focus (never on state changes while focused): cancelling the camera or
+    // a preview lands on the fallback screen instead of bouncing back in.
+    const autoOpenRef = useRef<() => void>(() => {})
+    autoOpenRef.current = () => {
+        if (!showCamera && !capturedImage && !revealData && !uploading) {
+            handleOpenCamera()
+        }
+    }
+    // Blur closes what focus opened, so the camera session and sensors don't
+    // keep running behind another tab. A captured preview survives tab
+    // switches — only the live camera is torn down.
+    const blurCloseRef = useRef<() => void>(() => {})
+    blurCloseRef.current = () => {
+        if (showCamera) {
+            handleCameraCancel()
+        }
+    }
+    // Android hardware back mirrors the on-screen cancel instead of popping
+    // to the home tab: catch preview → post preview → camera. Unhandled cases
+    // (camera, fallback screen, mid-upload) fall through to the navigator.
+    const backPressRef = useRef<() => boolean>(() => false)
+    backPressRef.current = () => {
+        if (!capturedImage || uploading) return false
+        if (catchTarget) {
+            handleCatchCancel()
+        } else {
+            handleCancel()
+        }
+        return true
+    }
+    useFocusEffect(
+        useCallback(() => {
+            const backSub = BackHandler.addEventListener(
+                'hardwareBackPress',
+                () => backPressRef.current()
+            )
+            autoOpenRef.current()
+            return () => {
+                backSub.remove()
+                blurCloseRef.current()
+            }
+        }, [])
+    )
 
     const getDeviceLocation = async (): Promise<
         LocationData | 'denied' | 'error'
@@ -665,6 +714,8 @@ export default function PostScreen() {
         }
     }
 
+    // Back from the preview returns to the camera (dropping the shot and any
+    // catch mode) — the tab is the camera; leaving it is what exits the flow
     const handleCancel = () => {
         processingRef.current = false
         setCapturedImage(null)
@@ -673,6 +724,8 @@ export default function PostScreen() {
         setCatchTarget(null)
         setPreviewIssues([])
         setLoadingLocation(false)
+        setShowCamera(true)
+        startSensors()
     }
 
     // Back to the camera without abandoning the flow (keeps catch mode if

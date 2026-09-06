@@ -6,6 +6,12 @@ import PostScreen from '../PostScreen'
 // Mocks
 jest.mock('expo-router', () => ({
     useRouter: () => ({ push: jest.fn() }),
+    // Behave like the real hook on an always-focused screen: run the
+    // callback as an effect (cleanup on unmount = blur)
+    useFocusEffect: (cb: () => void) => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require('react').useEffect(cb, [cb])
+    },
 }))
 
 jest.mock('expo-camera', () => ({
@@ -176,8 +182,10 @@ describe('PostScreen', () => {
 
         const { getByText } = render(<PostScreen />)
 
-        // Open Camera
-        fireEvent.press(getByText('Open Camera'))
+        // Camera auto-opens on tab focus — no Open Camera tap needed
+        await waitFor(() => {
+            expect(getByText('Camera View')).toBeTruthy()
+        })
 
         // Take Photo
         fireEvent.press(getByText('Take Photo'))
