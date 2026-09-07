@@ -114,14 +114,9 @@ export default function CreateListModal() {
         }
     }
 
-    if (isLoadingList) {
-        return (
-            <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
-                <ActivityIndicator size="large" color={colors.primary} />
-            </View>
-        )
-    }
-
+    // While an existing list loads, render the form shell (fields disabled)
+    // instead of a bare spinner — the modal slides up over real UI the same
+    // frame instead of a blank screen
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -139,10 +134,10 @@ export default function CreateListModal() {
                 </Text>
                 <TouchableOpacity
                     onPress={handleSave}
-                    disabled={loading}
+                    disabled={loading || isLoadingList}
                     style={styles.saveButton}
                 >
-                    {loading ? (
+                    {loading || isLoadingList ? (
                         <ActivityIndicator
                             size="small"
                             color={colors.primary}
@@ -164,6 +159,7 @@ export default function CreateListModal() {
                         onChangeText={setName}
                         maxLength={50}
                         autoFocus={!isEditing}
+                        editable={!isLoadingList}
                     />
                     <Text style={styles.charCount}>{name.length}/50</Text>
                 </View>
@@ -180,6 +176,7 @@ export default function CreateListModal() {
                         multiline
                         numberOfLines={4}
                         textAlignVertical="top"
+                        editable={!isLoadingList}
                     />
                     <Text style={styles.charCount}>
                         {description.length}/200
@@ -204,12 +201,6 @@ export default function CreateListModal() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
         backgroundColor: colors.background,
     },
     header: {

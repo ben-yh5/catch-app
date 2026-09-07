@@ -34,7 +34,6 @@ import {
     Alert,
     BackHandler,
     FlatList,
-    Modal,
     RefreshControl,
     StyleSheet,
     Text,
@@ -483,6 +482,16 @@ export default function UnifiedProfileView({
         })
         return () => sub.remove()
     }, [searchVisible])
+
+    // Same hand-wired Android back for the in-tree follow list overlay
+    useEffect(() => {
+        if (!followListVisible) return
+        const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+            setFollowListVisible(false)
+            return true
+        })
+        return () => sub.remove()
+    }, [followListVisible])
 
     const handleUserSelect = (selectedUserId: string) => {
         closeSearch()
@@ -1299,17 +1308,13 @@ export default function UnifiedProfileView({
                 </View>
             )}
 
-            <Modal
-                visible={followListVisible}
-                animationType="slide"
-                transparent
-                onRequestClose={() => setFollowListVisible(false)}
-            >
+            {/* In-tree overlay instead of a Modal (same reasoning as the
+                search overlay above): renders the same frame the
+                followers/following stat is pressed — the native slide
+                Modal it replaced lagged visibly behind the tap */}
+            {followListVisible && (
                 <View
-                    style={[
-                        styles.searchModalOverlay,
-                        { paddingTop: insets.top },
-                    ]}
+                    style={[styles.searchOverlay, { paddingTop: insets.top }]}
                 >
                     <View style={styles.searchHeader}>
                         <TouchableOpacity
@@ -1430,7 +1435,7 @@ export default function UnifiedProfileView({
                         )}
                     </View>
                 </View>
-            </Modal>
+            )}
 
             <ReportBottomSheet
                 visible={reportVisible}
@@ -1510,10 +1515,6 @@ const styles = StyleSheet.create({
     },
     searchButton: {
         padding: 4,
-    },
-    searchModalOverlay: {
-        flex: 1,
-        backgroundColor: colors.background,
     },
     searchOverlay: {
         ...StyleSheet.absoluteFillObject,

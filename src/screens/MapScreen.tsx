@@ -2,7 +2,6 @@ import { FilterType } from '@/components/FilterPills'
 import MapBottomSheet from '@/components/MapBottomSheet'
 import MapHUD from '@/components/MapHUD'
 import ThreadModal from '@/components/ThreadModal'
-import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { usePost, usePostEvents } from '@/context/PostContext'
@@ -24,6 +23,8 @@ import {
     PIN_MIN_ZOOM,
 } from '@/hooks/useCoverage'
 import { Ionicons } from '@expo/vector-icons'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { distanceBetween } from 'geofire-common'
 import Mapbox, {
     Camera,
     CircleLayer,
@@ -70,6 +71,16 @@ const MAP_COLORS = {
     stroke: colors.white,
 }
 
+// Last session's camera, persisted on every settle. Lets the map mount
+// where the user left it on frame one instead of blocking behind the
+// location fix. Display-layer only — safe to lose or ignore.
+const STORED_CAMERA_KEY = '@map_last_camera'
+// If the user's actual position is further than this from the stored
+// camera (they traveled since last session), correct to where they are
+const STORED_CAMERA_STALE_KM = 100
+
+type StoredCamera = { lng: number; lat: number; zoom: number }
+
 export default function MapScreen() {
     const { user, blockedUserIds } = useAuth()
     const { showToast } = useToast()
@@ -94,8 +105,10 @@ export default function MapScreen() {
     const [locationDenied, setLocationDenied] = useState(false)
     const [browseWithoutLocation, setBrowseWithoutLocation] = useState(false)
     const [viewportError, setViewportError] = useState(false)
-    const [initialLocation, setInitialLocation] =
-        useState<Location.LocationObject | null>(null)
+    // undefined = still reading AsyncStorage (a few ms), null = nothing stored
+    const [storedCamera, setStoredCamera] = useState<
+        StoredCamera | null | undefined
+    >(undefined)
     const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
     const { cachePosts, caughtThreadIds } = usePost()
     const lastFetchRef = useRef<number>(0)
@@ -486,7 +499,6 @@ export default function MapScreen() {
             const lastKnown = await Location.getLastKnownPositionAsync({})
             if (lastKnown) {
                 setUserLocation(lastKnown)
-                setInitialLocation(lastKnown)
                 setLocationLoading(false)
             }
 
@@ -496,7 +508,6 @@ export default function MapScreen() {
             })
             setUserLocation(location)
             if (!lastKnown) {
-                setInitialLocation(location)
                 setLocationLoading(false)
             }
         } catch (error) {
@@ -508,6 +519,76 @@ export default function MapScreen() {
     useEffect(() => {
         requestLocation()
     }, [requestLocation])
+
+    // Load last session's camera. The map mounts as soon as this resolves
+    // (milliseconds) — it does NOT wait for the location fix above.
+    useEffect(() => {
+        let cancelled = false
+        AsyncStorage.getItem(STORED_CAMERA_KEY)
+            .then((raw) => {
+                if (cancelled) return
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw)
+                        if (
+                            Number.isFinite(parsed?.lng) &&
+                            Number.isFinite(parsed?.lat) &&
+                            Number.isFinite(parsed?.zoom)
+                        ) {
+                            setStoredCamera(parsed as StoredCamera)
+                            return
+                        }
+                    } catch {
+                        // Corrupt entry — fall through to the world view
+                    }
+                }
+                setStoredCamera(null)
+            })
+            .catch(() => {
+                if (!cancelled) setStoredCamera(null)
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    // One-time camera correction once the user's real position is known:
+    // no stored camera (first run) → fly in from the world view; stored
+    // camera far from the user (traveled since last session) → correct to
+    // where they are now. Deep-linked list/post focus owns the camera, so
+    // skip entirely in those modes.
+    const cameraCorrectedRef = useRef(false)
+    useEffect(() => {
+        if (cameraCorrectedRef.current) return
+        if (storedCamera === undefined || !userLocation) return
+        if (effectiveListId || effectivePostId) return
+
+        cameraCorrectedRef.current = true
+
+        const { latitude, longitude } = userLocation.coords
+        if (
+            storedCamera &&
+            distanceBetween(
+                [storedCamera.lat, storedCamera.lng],
+                [latitude, longitude]
+            ) <= STORED_CAMERA_STALE_KM
+        ) {
+            return
+        }
+
+        const flyToUser = () =>
+            cameraRef.current?.setCamera({
+                centerCoordinate: [longitude, latitude],
+                zoomLevel: 12,
+                animationDuration: 1000,
+            })
+        if (isMapReadyRef.current) {
+            flyToUser()
+        } else if (!pendingCameraActionRef.current) {
+            // Don't clobber a queued list/post camera fit — those win
+            pendingCameraActionRef.current = flyToUser
+        }
+    }, [storedCamera, userLocation, effectiveListId, effectivePostId])
 
     // Handle Deep Links (Filter & Location)
     useEffect(() => {
@@ -782,9 +863,19 @@ export default function MapScreen() {
             if (!isMapReadyRef.current) return
 
             // Track zoom level for coverage precision switching
-            const { zoom, bounds } = state.properties
+            const { zoom, bounds, center } = state.properties
             if (zoom !== undefined) {
                 setCurrentZoom(zoom)
+            }
+
+            // Remember where the user left the map — the next launch mounts
+            // here instead of waiting on a location fix. Fire-and-forget:
+            // display-layer only.
+            if (center && zoom !== undefined) {
+                AsyncStorage.setItem(
+                    STORED_CAMERA_KEY,
+                    JSON.stringify({ lng: center[0], lat: center[1], zoom })
+                ).catch(() => {})
             }
 
             // Update bounds for coverage queries
@@ -1057,21 +1148,7 @@ export default function MapScreen() {
                 onFilterChange={handleFilterChange}
             />
 
-            {locationLoading ? (
-                <View style={styles.map}>
-                    <View style={styles.locationLoadingOverlay}>
-                        <Skeleton
-                            width={200}
-                            height={200}
-                            borderRadius={100}
-                            style={{ opacity: 0.3 }}
-                        />
-                        <Text style={styles.loadingText}>
-                            Getting your location...
-                        </Text>
-                    </View>
-                </View>
-            ) : locationDenied && !browseWithoutLocation ? (
+            {locationDenied && !browseWithoutLocation ? (
                 // Location denied: explain and offer recovery instead of
                 // silently dropping the user onto a default city
                 <View style={styles.map}>
@@ -1133,6 +1210,11 @@ export default function MapScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
+            ) : storedCamera === undefined ? (
+                // AsyncStorage read is a few ms — blank placeholder for that
+                // flash only, so Camera defaultSettings (mount-once) sees the
+                // resolved value
+                <View style={styles.map} />
             ) : (
                 <MapView
                     ref={mapRef}
@@ -1190,14 +1272,13 @@ export default function MapScreen() {
                     <Camera
                         ref={cameraRef}
                         defaultSettings={{
-                            // Without a location, start on a world view
-                            // rather than implying a specific place
-                            zoomLevel: initialLocation ? 12 : 1.5,
-                            centerCoordinate: initialLocation
-                                ? [
-                                      initialLocation.coords.longitude,
-                                      initialLocation.coords.latitude,
-                                  ]
+                            // Last session's camera when we have it; without
+                            // one, start on a world view rather than implying
+                            // a specific place. The one-time correction
+                            // effect flies to the user once located.
+                            zoomLevel: storedCamera ? storedCamera.zoom : 1.5,
+                            centerCoordinate: storedCamera
+                                ? [storedCamera.lng, storedCamera.lat]
                                 : [0, 20],
                         }}
                     />
@@ -1425,7 +1506,7 @@ export default function MapScreen() {
             )}
 
             {/* Bottom Sheet */}
-            {!locationLoading && (!locationDenied || browseWithoutLocation) && (
+            {(!locationDenied || browseWithoutLocation) && (
                 <MapBottomSheet
                     posts={
                         isSearchMode
@@ -1586,12 +1667,6 @@ const styles = StyleSheet.create({
     map: {
         flex: 1,
     },
-    locationLoadingOverlay: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: colors.background,
-    },
     locationDeniedContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -1648,11 +1723,6 @@ const styles = StyleSheet.create({
         color: colors.textTertiary,
         textDecorationLine: 'underline',
         marginTop: 8,
-    },
-    loadingText: {
-        marginTop: 12,
-        fontSize: 16,
-        color: colors.textSecondary,
     },
     centerButton: {
         position: 'absolute',

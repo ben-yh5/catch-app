@@ -22,6 +22,7 @@ import * as Location from 'expo-location'
 import { distanceBetween } from 'geofire-common'
 import React, { useEffect, useRef, useState } from 'react'
 import {
+    ActivityIndicator,
     Dimensions,
     StatusBar,
     StyleSheet,
@@ -36,7 +37,7 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window')
 const CAPTURE_SIZE = screenWidth
 
 interface UnifiedCameraViewProps {
-    onPhotoTaken: (uri: string) => void
+    onPhotoTaken: (uri: string) => void | Promise<void>
     onCancel: () => void
     originalPhotoUrl?: string
     /**
@@ -61,6 +62,7 @@ export default function UnifiedCameraView({
 }: UnifiedCameraViewProps) {
     const [facing, setFacing] = useState<CameraType>('back')
     const [isCameraReady, setIsCameraReady] = useState(false)
+    const [capturing, setCapturing] = useState(false)
     const [ghostOpacity] = useState(0.5)
     const [showGhost, setShowGhost] = useState(true)
     const [liveDistance, setLiveDistance] = useState<number | null>(null)
@@ -110,8 +112,12 @@ export default function UnifiedCameraView({
     }
 
     const handleTakePhoto = async () => {
-        if (!isCameraReady || !cameraRef.current) return
+        if (!isCameraReady || !cameraRef.current || capturing) return
 
+        // Flip the overlay on BEFORE any await — capture + the parent's
+        // square-crop take long enough that a frozen viewfinder with no
+        // feedback reads as a dead shutter button
+        setCapturing(true)
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
         try {
             // Take the full picture
@@ -122,8 +128,10 @@ export default function UnifiedCameraView({
 
             if (photo) {
                 // The PostScreen handlePhotoTaken will handle cropping to square
-                // based on the fact that we center-frame the subject
-                onPhotoTaken(photo.uri)
+                // based on the fact that we center-frame the subject.
+                // Await it so the overlay also covers the crop; normally the
+                // parent unmounts this view when the preview takes over.
+                await onPhotoTaken(photo.uri)
             }
         } catch (error) {
             // Fail loud: a silent failure here makes the shutter button feel
@@ -134,6 +142,8 @@ export default function UnifiedCameraView({
                 'Could not capture photo',
                 'Something went wrong with the camera — please try again.'
             )
+        } finally {
+            setCapturing(false)
         }
     }
 
@@ -308,13 +318,16 @@ export default function UnifiedCameraView({
                 <TouchableOpacity
                     style={[
                         styles.captureButton,
-                        !isCameraReady && styles.captureButtonDisabled,
+                        (!isCameraReady || capturing) &&
+                            styles.captureButtonDisabled,
                     ]}
                     onPress={handleTakePhoto}
-                    disabled={!isCameraReady}
+                    disabled={!isCameraReady || capturing}
                     accessibilityLabel="Take photo"
                     accessibilityRole="button"
-                    accessibilityState={{ disabled: !isCameraReady }}
+                    accessibilityState={{
+                        disabled: !isCameraReady || capturing,
+                    }}
                 >
                     <View style={styles.captureButtonInner} />
                 </TouchableOpacity>
@@ -327,6 +340,15 @@ export default function UnifiedCameraView({
             {!isCameraReady && (
                 <View style={styles.loadingOverlay}>
                     <Text style={styles.loadingText}>Starting Camera...</Text>
+                </View>
+            )}
+
+            {/* Capture-in-progress overlay. pointerEvents="none" keeps the
+                cancel button reachable if processing hangs */}
+            {capturing && (
+                <View style={styles.capturingOverlay} pointerEvents="none">
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={styles.loadingText}>Processing photo...</Text>
                 </View>
             )}
         </View>
@@ -459,6 +481,15 @@ const styles = StyleSheet.create({
         height: 64,
         borderRadius: 32,
         backgroundColor: 'white',
+    },
+
+    capturingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
+        zIndex: 20,
     },
 
     // Loading

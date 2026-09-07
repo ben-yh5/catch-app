@@ -190,14 +190,24 @@ export default function ReportBottomSheet({
     return (
         <Modal
             visible={visible}
-            animationType="fade"
+            animationType="none"
             transparent={true}
             onRequestClose={onClose}
         >
+            {/* animationType="none" + self-driven backdrop: the native fade
+                presentation held the whole sheet back ~300ms and fought the
+                spring slide-up. Backdrop opacity rides the same spring. */}
             <KeyboardAvoidingView
                 style={styles.overlay}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
+                <Animated.View
+                    style={[
+                        StyleSheet.absoluteFill,
+                        styles.backdrop,
+                        { opacity: slideAnim },
+                    ]}
+                />
                 <TouchableOpacity
                     style={StyleSheet.absoluteFill}
                     activeOpacity={1}
@@ -353,8 +363,10 @@ export default function ReportBottomSheet({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'flex-end',
+    },
+    backdrop: {
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     bottomSheetContainer: {
         backgroundColor: colors.card,

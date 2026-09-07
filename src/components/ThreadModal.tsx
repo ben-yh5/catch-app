@@ -247,6 +247,18 @@ export default function ThreadModal({
                 }
             }
 
+            // Callers may pass a bare { id } stub so the modal can open the
+            // same frame the row is tapped (e.g. notification rows). If the
+            // doc we landed on is itself a catch, follow its root pointer so
+            // the full thread loads.
+            if (rootDoc.exists()) {
+                const fetchedRootId = (rootDoc.data() as Post).rootPostId
+                if (fetchedRootId && fetchedRootId !== rootDoc.id) {
+                    rootId = fetchedRootId
+                    rootDoc = await getDoc(doc(db, 'posts', rootId))
+                }
+            }
+
             if (!rootDoc.exists()) {
                 showToast('error', 'This shot is no longer available')
                 onClose()
@@ -691,7 +703,12 @@ export default function ThreadModal({
             animationType="none"
             transparent={true}
             onRequestClose={() => {
-                setShowOptionsMenu(false)
+                // Hardware back closes the options menu first (it used to be
+                // its own nested Modal with its own back handling)
+                if (showOptionsMenu) {
+                    setShowOptionsMenu(false)
+                    return
+                }
                 onClose()
             }}
         >
@@ -821,134 +838,6 @@ export default function ThreadModal({
                                                 />
                                             </TouchableOpacity>
 
-                                            {showOptionsMenu && (
-                                                <Modal
-                                                    transparent
-                                                    visible
-                                                    animationType="fade"
-                                                    onRequestClose={() =>
-                                                        setShowOptionsMenu(
-                                                            false
-                                                        )
-                                                    }
-                                                >
-                                                    {/* Scrim: tapping
-                                                        anywhere outside the
-                                                        menu dismisses it */}
-                                                    <TouchableOpacity
-                                                        style={
-                                                            styles.optionsMenuScrim
-                                                        }
-                                                        activeOpacity={1}
-                                                        onPress={() =>
-                                                            setShowOptionsMenu(
-                                                                false
-                                                            )
-                                                        }
-                                                        accessibilityLabel="Dismiss menu"
-                                                    />
-                                                    <View
-                                                        style={[
-                                                            styles.optionsMenuInCard,
-                                                            styles.optionsMenuFloating,
-                                                            {
-                                                                top:
-                                                                    insets.top +
-                                                                    64,
-                                                            },
-                                                        ]}
-                                                    >
-                                                    <TouchableOpacity
-                                                        style={
-                                                            styles.optionsMenuItem
-                                                        }
-                                                        onPress={() => {
-                                                            setShowOptionsMenu(
-                                                                false
-                                                            )
-                                                            setShowAddToListModal(
-                                                                true
-                                                            )
-                                                        }}
-                                                        accessibilityRole="menuitem"
-                                                        accessibilityLabel="Add to List"
-                                                    >
-                                                        <Text
-                                                            style={
-                                                                styles.optionsMenuText
-                                                            }
-                                                        >
-                                                            Add to List
-                                                        </Text>
-                                                    </TouchableOpacity>
-                                                    <TouchableOpacity
-                                                        style={
-                                                            styles.optionsMenuItem
-                                                        }
-                                                        onPress={handleShare}
-                                                        accessibilityRole="menuitem"
-                                                        accessibilityLabel="Share"
-                                                    >
-                                                        <Text
-                                                            style={
-                                                                styles.optionsMenuText
-                                                            }
-                                                        >
-                                                            Share
-                                                        </Text>
-                                                    </TouchableOpacity>
-                                                    {currentPost?.authorId ===
-                                                    user?.uid ? (
-                                                        <TouchableOpacity
-                                                            style={[
-                                                                styles.optionsMenuItem,
-                                                                styles.optionsMenuItemLast,
-                                                            ]}
-                                                            onPress={
-                                                                handleDeletePost
-                                                            }
-                                                            accessibilityRole="menuitem"
-                                                            accessibilityLabel="Delete shot"
-                                                        >
-                                                            <Text
-                                                                style={[
-                                                                    styles.optionsMenuText,
-                                                                    styles.optionsMenuTextDanger,
-                                                                ]}
-                                                            >
-                                                                Delete
-                                                            </Text>
-                                                        </TouchableOpacity>
-                                                    ) : (
-                                                        <TouchableOpacity
-                                                            style={[
-                                                                styles.optionsMenuItem,
-                                                                styles.optionsMenuItemLast,
-                                                            ]}
-                                                            onPress={() => {
-                                                                setShowOptionsMenu(
-                                                                    false
-                                                                )
-                                                                setShowReportSheet(
-                                                                    true
-                                                                )
-                                                            }}
-                                                            accessibilityRole="menuitem"
-                                                            accessibilityLabel="Report shot"
-                                                        >
-                                                            <Text
-                                                                style={[
-                                                                    styles.optionsMenuText,
-                                                                    styles.optionsMenuTextDanger,
-                                                                ]}
-                                                            >
-                                                                Report
-                                                            </Text>
-                                                        </TouchableOpacity>
-                                                    )}
-                                                    </View>
-                                                </Modal>
-                                            )}
                                         </View>
                                     </View>
                                 </View>
@@ -1181,6 +1070,97 @@ export default function ThreadModal({
                         </View>
                     )}
                 </View>
+
+                {/* Options dropdown — in-tree overlay instead of a nested
+                    Modal so it appears the same frame the ⋯ button is
+                    tapped (a nested RN Modal's native fade presentation
+                    takes ~300ms). Rendered at the overlay root so the
+                    scrim covers the whole screen. */}
+                {showOptionsMenu && (
+                    <>
+                        {/* Scrim: tapping anywhere outside the menu
+                            dismisses it */}
+                        <TouchableOpacity
+                            style={styles.optionsMenuScrim}
+                            activeOpacity={1}
+                            onPress={() => setShowOptionsMenu(false)}
+                            accessibilityLabel="Dismiss menu"
+                        />
+                        <View
+                            style={[
+                                styles.optionsMenuInCard,
+                                styles.optionsMenuFloating,
+                                { top: insets.top + 64 },
+                            ]}
+                        >
+                            <TouchableOpacity
+                                style={styles.optionsMenuItem}
+                                onPress={() => {
+                                    setShowOptionsMenu(false)
+                                    setShowAddToListModal(true)
+                                }}
+                                accessibilityRole="menuitem"
+                                accessibilityLabel="Add to List"
+                            >
+                                <Text style={styles.optionsMenuText}>
+                                    Add to List
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.optionsMenuItem}
+                                onPress={handleShare}
+                                accessibilityRole="menuitem"
+                                accessibilityLabel="Share"
+                            >
+                                <Text style={styles.optionsMenuText}>
+                                    Share
+                                </Text>
+                            </TouchableOpacity>
+                            {currentPost?.authorId === user?.uid ? (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.optionsMenuItem,
+                                        styles.optionsMenuItemLast,
+                                    ]}
+                                    onPress={handleDeletePost}
+                                    accessibilityRole="menuitem"
+                                    accessibilityLabel="Delete shot"
+                                >
+                                    <Text
+                                        style={[
+                                            styles.optionsMenuText,
+                                            styles.optionsMenuTextDanger,
+                                        ]}
+                                    >
+                                        Delete
+                                    </Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.optionsMenuItem,
+                                        styles.optionsMenuItemLast,
+                                    ]}
+                                    onPress={() => {
+                                        setShowOptionsMenu(false)
+                                        setShowReportSheet(true)
+                                    }}
+                                    accessibilityRole="menuitem"
+                                    accessibilityLabel="Report shot"
+                                >
+                                    <Text
+                                        style={[
+                                            styles.optionsMenuText,
+                                            styles.optionsMenuTextDanger,
+                                        ]}
+                                    >
+                                        Report
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </>
+                )}
             </Animated.View>
 
             {/* List Selection Bottom Sheet */}

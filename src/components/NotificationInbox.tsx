@@ -1,4 +1,3 @@
-import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
@@ -19,6 +18,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
+import Animated, { FadeIn } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ThreadModal from './ThreadModal'
 
@@ -39,7 +39,6 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
     } = useAuth()
     const router = useRouter()
     const insets = useSafeAreaInsets()
-    const { showToast } = useToast()
     const [hydratedNotifications, setHydratedNotifications] = useState<
         Notification[]
     >([])
@@ -157,7 +156,7 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
         )
     }, [hydratedNotifications, activeFilter])
 
-    const handleNotificationPress = async (notification: Notification) => {
+    const handleNotificationPress = (notification: Notification) => {
         if (notification.type === 'follow' && notification.fromUserId) {
             onClose()
             router.push({
@@ -167,34 +166,13 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
             return
         }
 
-        // For post-related notifications, open the ThreadModal
+        // Post-related notifications: open the ThreadModal the same frame
+        // with a bare {id} stub — ThreadModal shows its skeleton and fetches
+        // the thread itself (and toasts + closes if the shot was deleted).
+        // Fetching here first left the row feeling dead on slow connections.
         if (notification.postId) {
-            try {
-                const postDoc = await getDoc(
-                    doc(db, 'posts', notification.postId)
-                )
-                if (postDoc.exists()) {
-                    setSelectedPost({
-                        id: postDoc.id,
-                        ...postDoc.data(),
-                    } as Post)
-                    setThreadModalVisible(true)
-                } else {
-                    // Deleted post — say so instead of a dead tap
-                    showToast(
-                        'info',
-                        'Shot unavailable',
-                        'This shot has been deleted.'
-                    )
-                }
-            } catch (e) {
-                console.warn('Error fetching post:', e)
-                showToast(
-                    'error',
-                    "Couldn't open shot",
-                    'Check your connection and try again.'
-                )
-            }
+            setSelectedPost({ id: notification.postId } as Post)
+            setThreadModalVisible(true)
         }
     }
 
@@ -300,11 +278,18 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
     return (
         <Modal
             visible={visible}
-            animationType="slide"
-            presentationStyle="pageSheet"
+            animationType="none"
+            transparent
             onRequestClose={onClose}
         >
-            <View style={styles.container}>
+            {/* RN Modal's built-in slide waits on the native presentation
+                (~300ms with the full inbox mounted behind it); animate the
+                content ourselves so opening feels immediate — same pattern
+                as ThreadModal */}
+            <Animated.View
+                entering={FadeIn.duration(150)}
+                style={styles.container}
+            >
                 <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
                     <TouchableOpacity
                         onPress={onClose}
@@ -452,7 +437,7 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
                         </View>
                     </ScrollView>
                 )}
-            </View>
+            </Animated.View>
 
             <ThreadModal
                 visible={threadModalVisible}
