@@ -1,4 +1,5 @@
 import { CatchIssue } from '@/components/CatchIssuesPanel'
+import { StampPlace } from '@/components/PassportStamp'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { useDeviceSensors } from '@/hooks/useDeviceSensors'
@@ -9,6 +10,7 @@ import { validateCatch } from '@/utils/catchValidation'
 import { cropToSquare } from '@/utils/imageProcessing'
 import { checkBlur, checkBrightness } from '@/utils/imageValidation'
 import { addPostToList } from '@/utils/listUtils'
+import { reverseGeocodeForStamp } from '@/utils/reverseGeocode'
 import { verifyViewSimilarity } from '@/utils/visualMatcher'
 import { useCameraPermissions } from 'expo-camera'
 import * as Haptics from 'expo-haptics'
@@ -76,6 +78,7 @@ export function useCatchFlow({
     const [revealData, setRevealData] = useState<{
         originalPost: Post
         catchPhotoUri: string
+        place: StampPlace | null
     } | null>(null)
 
     const [statusMessage, setStatusMessage] = useState<string>('')
@@ -275,6 +278,14 @@ export function useCatchFlow({
         setUploading(true)
         setIssues([])
         setStatusMessage('Checking your shot...')
+
+        // Display-only place lookup for the stamp — resolves while
+        // validation and upload run; failure just means a stamp without
+        // a place line
+        const placePromise = reverseGeocodeForStamp(
+            catchLocation.latitude,
+            catchLocation.longitude
+        )
 
         try {
             // Single validation pass: collect EVERY failed check so the user
@@ -512,6 +523,7 @@ export function useCatchFlow({
             setRevealData({
                 originalPost: rootPost,
                 catchPhotoUri: catchImageUri,
+                place: await placePromise,
             })
             onSuccess({ id: docRef.id, ...postData } as Post)
             setStatusMessage('')

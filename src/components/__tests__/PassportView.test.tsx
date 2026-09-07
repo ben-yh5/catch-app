@@ -48,36 +48,58 @@ describe('PassportView', () => {
         jest.clearAllMocks()
     })
 
-    it('renders stats and the city list from the direct doc read', async () => {
+    it('renders stats and the passport cover from the direct doc read', async () => {
         mockUserDoc()
         mockGetPassportData.mockResolvedValue(lisbonPassport)
 
-        const { getByText } = render(
+        const { getByText, getByLabelText } = render(
             <PassportView userId="me" isOwnProfile={true} />
         )
 
         await waitFor(() => {
-            expect(getByText('Lisbon')).toBeTruthy()
+            expect(getByLabelText('Open passport cover')).toBeTruthy()
         })
-        expect(getByText('Portugal')).toBeTruthy()
-        expect(getByText('12 catches · 3 posted')).toBeTruthy()
+        expect(getByText('PASSPORT')).toBeTruthy()
         expect(getByText('Countries')).toBeTruthy()
-        expect(getByText('42')).toBeTruthy()
-        expect(getByText('CITIES')).toBeTruthy()
+        await waitFor(() => {
+            expect(getByText('42')).toBeTruthy()
+        })
         expect(mockGetPassportData).toHaveBeenCalledWith('me')
         expect(mockGetPublicPassportData).not.toHaveBeenCalled()
     })
 
-    it("renders another user's passport via the callable", async () => {
+    it('opens the book inline when the cover is tapped', async () => {
+        mockUserDoc()
+        mockGetPassportData.mockResolvedValue(lisbonPassport)
+
+        const { getByLabelText, getByText, queryByLabelText } = render(
+            <PassportView userId="me" isOwnProfile={true} />
+        )
+
+        await waitFor(() => {
+            expect(getByLabelText('Open passport cover')).toBeTruthy()
+        })
+        // Closed at rest — the book mounts once the cover is tapped open
+        expect(queryByLabelText('Passport pages')).toBeNull()
+
+        fireEvent.press(getByLabelText('Open passport cover'))
+        await waitFor(() => {
+            expect(getByLabelText('Passport pages')).toBeTruthy()
+        })
+        expect(getByText('LISBON')).toBeTruthy()
+        expect(getByText('PORTUGAL')).toBeTruthy()
+    })
+
+    it("renders another user's cover via the callable", async () => {
         mockUserDoc()
         mockGetPublicPassportData.mockResolvedValue(lisbonPassport)
 
-        const { getByText } = render(
+        const { getByLabelText } = render(
             <PassportView userId="other" isOwnProfile={false} />
         )
 
         await waitFor(() => {
-            expect(getByText('Lisbon')).toBeTruthy()
+            expect(getByLabelText('Open passport cover')).toBeTruthy()
         })
         expect(mockGetPublicPassportData).toHaveBeenCalledWith('other')
         expect(mockGetPassportData).not.toHaveBeenCalled()
@@ -107,21 +129,21 @@ describe('PassportView', () => {
             pioneerCount: 0,
         })
 
-        const { getByText, queryByText } = render(
+        const { getByText, queryByLabelText } = render(
             <PassportView userId="me" isOwnProfile={true} />
         )
 
         await waitFor(() => {
             expect(getByText('No cities yet')).toBeTruthy()
         })
-        expect(queryByText('CITIES')).toBeNull()
+        expect(queryByLabelText('Open passport cover')).toBeNull()
     })
 
     it('shows an error state and retries on demand', async () => {
         mockUserDoc()
         mockGetPassportData.mockRejectedValueOnce(new Error('offline'))
 
-        const { getByText } = render(
+        const { getByText, getByLabelText } = render(
             <PassportView userId="me" isOwnProfile={true} />
         )
 
@@ -133,7 +155,7 @@ describe('PassportView', () => {
         fireEvent.press(getByText('Try Again'))
 
         await waitFor(() => {
-            expect(getByText('Lisbon')).toBeTruthy()
+            expect(getByLabelText('Open passport cover')).toBeTruthy()
         })
     })
 })

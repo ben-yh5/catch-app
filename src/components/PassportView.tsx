@@ -2,30 +2,26 @@
  * PassportView - Travel summary for any user
  *
  * Rendered as the Passport tab in UnifiedProfileView (own and other
- * profiles) and by the standalone /passport route. Plain View content —
- * the parent provides scrolling (profile FlatList / screen ScrollView).
+ * profiles). Plain View content — the parent provides scrolling.
  *
- * Stat tiles plus the list of cities the user has posted or caught in,
- * ordered by activity (most caught+posted first — sorted in
- * passportQueries). Pioneer counts appear per city and in the stat row.
+ * Stat tiles (Countries / Cities / Catches) plus the passport itself
+ * (PassportBooklet), inline: closed cover, tap to swing open, swipe or
+ * tap inside the spread to turn pages. Gesture arbitration with the
+ * profile pager happens by responder claim — touches starting inside
+ * the spread belong to the book; swipes outside it switch tabs.
  *
- * Data paths differ by ownership: your own passport reads user_coverage
- * directly; other users' go through the getPassport callable, which strips
- * the fine-grained geohash cells and honors their passportPublic setting.
+ * Pioneer counts are deliberately not surfaced — status flows through
+ * catches, not through being first.
  */
 
+import PassportBooklet from '@/components/PassportBooklet'
+import { usePassportData } from '@/hooks/usePassportData'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { radii, spacing, typography } from '@/theme/tokens'
-import {
-    CityStamp,
-    getPassportData,
-    getPublicPassportData,
-    PassportData,
-} from '@/utils/passportQueries'
 import { Ionicons } from '@expo/vector-icons'
 import { doc, getDoc } from 'firebase/firestore'
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
     ActivityIndicator,
     StyleSheet,
@@ -43,84 +39,20 @@ export default function PassportView({
     userId,
     isOwnProfile,
 }: PassportViewProps) {
-    const [passport, setPassport] = useState<PassportData | null>(null)
+    const { passport, loading, loadError, isPrivate, reload } =
+        usePassportData(userId, isOwnProfile)
     const [totalCatches, setTotalCatches] = useState<number>(0)
-    const [loading, setLoading] = useState(true)
-    const [loadError, setLoadError] = useState(false)
-    const [isPrivate, setIsPrivate] = useState(false)
-
-    const load = useCallback(async () => {
-        if (!userId) return
-        setLoading(true)
-        setLoadError(false)
-        setIsPrivate(false)
-        try {
-            const [passportData, userSnap] = await Promise.all([
-                isOwnProfile
-                    ? getPassportData(userId)
-                    : getPublicPassportData(userId),
-                getDoc(doc(db, 'users', userId)),
-            ])
-            setPassport(passportData)
-            if (userSnap.exists()) {
-                setTotalCatches(userSnap.data().totalCatches || 0)
-            }
-        } catch (e: any) {
-            if (e?.code === 'functions/permission-denied') {
-                setIsPrivate(true)
-            } else {
-                console.error('Error loading passport:', e)
-                setLoadError(true)
-            }
-        } finally {
-            setLoading(false)
-        }
-    }, [userId, isOwnProfile])
 
     useEffect(() => {
-        load()
-    }, [load])
-
-    const renderCityRow = (city: CityStamp) => {
-        const parts: string[] = []
-        if (city.caught > 0) {
-            parts.push(
-                `${city.caught} ${city.caught === 1 ? 'catch' : 'catches'}`
-            )
-        }
-        if (city.posted > 0) {
-            parts.push(`${city.posted} posted`)
-        }
-        return (
-            <View key={city.key} style={styles.cityRow}>
-                <View style={styles.cityInfo}>
-                    <Text style={styles.cityName} numberOfLines={1}>
-                        {city.city}
-                    </Text>
-                    <Text style={styles.cityCountry} numberOfLines={1}>
-                        {city.country}
-                    </Text>
-                </View>
-                <View style={styles.cityCounts}>
-                    <Text style={styles.cityCountsText}>
-                        {parts.join(' · ')}
-                    </Text>
-                    {city.pioneers > 0 && (
-                        <View style={styles.pioneerChip}>
-                            <Ionicons
-                                name="flag"
-                                size={11}
-                                color={colors.pinLostPlace}
-                            />
-                            <Text style={styles.pioneerChipText}>
-                                {city.pioneers}
-                            </Text>
-                        </View>
-                    )}
-                </View>
-            </View>
-        )
-    }
+        if (!userId) return
+        getDoc(doc(db, 'users', userId))
+            .then((snap) => {
+                if (snap.exists()) {
+                    setTotalCatches(snap.data().totalCatches || 0)
+                }
+            })
+            .catch((e) => console.error('Error loading user stats:', e))
+    }, [userId])
 
     if (loading) {
         return (
@@ -154,7 +86,7 @@ export default function PassportView({
                 </Text>
                 <TouchableOpacity
                     style={styles.retryButton}
-                    onPress={load}
+                    onPress={reload}
                     accessibilityRole="button"
                     accessibilityLabel="Retry"
                 >
@@ -198,12 +130,6 @@ export default function PassportView({
                     <Text style={styles.statLabel}>Cities</Text>
                 </View>
                 <View style={styles.statTile}>
-                    <Text style={[styles.statNumber, styles.statNumberPioneer]}>
-                        {passport?.pioneerCount ?? 0}
-                    </Text>
-                    <Text style={styles.statLabel}>Pioneers</Text>
-                </View>
-                <View style={styles.statTile}>
                     <Text style={[styles.statNumber, styles.statNumberCatches]}>
                         {totalCatches}
                     </Text>
@@ -211,8 +137,7 @@ export default function PassportView({
                 </View>
             </View>
 
-            <Text style={styles.sectionTitle}>CITIES</Text>
-            {passport?.cities.map(renderCityRow)}
+            {passport && <PassportBooklet cities={passport.cities} />}
         </View>
     )
 }
@@ -269,9 +194,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: colors.textPrimary,
     },
-    statNumberPioneer: {
-        color: colors.pinLostPlace,
-    },
     statNumberCatches: {
         color: colors.secondary,
     },
@@ -279,55 +201,5 @@ const styles = StyleSheet.create({
         fontSize: typography.caption,
         color: colors.textTertiary,
         marginTop: 2,
-    },
-    sectionTitle: {
-        fontSize: typography.small,
-        fontWeight: '600',
-        letterSpacing: 1,
-        color: colors.textTertiary,
-        marginBottom: spacing.md,
-    },
-    cityRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: spacing.md,
-        backgroundColor: colors.card,
-        borderRadius: radii.md,
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.lg,
-        marginBottom: spacing.sm,
-    },
-    cityInfo: {
-        flex: 1,
-        minWidth: 0,
-    },
-    cityName: {
-        fontSize: typography.bodyLarge,
-        fontWeight: '600',
-        color: colors.textPrimary,
-    },
-    cityCountry: {
-        fontSize: typography.small,
-        color: colors.textTertiary,
-        marginTop: 1,
-    },
-    cityCounts: {
-        alignItems: 'flex-end',
-        gap: 2,
-    },
-    cityCountsText: {
-        fontSize: typography.small,
-        color: colors.textSecondary,
-    },
-    pioneerChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-    },
-    pioneerChipText: {
-        fontSize: typography.small,
-        fontWeight: '600',
-        color: colors.pinLostPlace,
     },
 })

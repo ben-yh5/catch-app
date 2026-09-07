@@ -1,5 +1,7 @@
 import { CatchIssue } from '@/components/CatchIssuesPanel'
 import CatchRevealModal from '@/components/CatchRevealModal'
+import { StampPlace } from '@/components/PassportStamp'
+import PostStampModal from '@/components/PostStampModal'
 import UnifiedCameraView from '@/components/UnifiedCameraView'
 import UnifiedPreviewScreen from '@/components/UnifiedPreviewScreen'
 import { useAuth } from '@/context/AuthContext'
@@ -13,6 +15,7 @@ import { validateCatch } from '@/utils/catchValidation'
 import { getPostsInRadius } from '@/utils/geospatialQueries'
 import { uploadTrainingPair } from '@/services/trainingData'
 import { cropToSquare } from '@/utils/imageProcessing'
+import { reverseGeocodeForStamp } from '@/utils/reverseGeocode'
 import { checkBlur, checkBrightness } from '@/utils/imageValidation'
 import { addPostToList } from '@/utils/listUtils'
 import { findMostSimilar } from '@/utils/visualMatcher'
@@ -88,6 +91,13 @@ export default function PostScreen() {
     const [revealData, setRevealData] = useState<{
         originalPost: Post
         catchPhotoUri: string
+        place: StampPlace | null
+    } | null>(null)
+    // Set after posting an original — drives the PostStampModal (the
+    // passport-stamp payoff screen that replaced the success toast)
+    const [postStamp, setPostStamp] = useState<{
+        photoUri: string
+        place: StampPlace | null
     } | null>(null)
     // Validation problems shown persistently on the preview screen
     const [previewIssues, setPreviewIssues] = useState<CatchIssue[]>([])
@@ -145,7 +155,13 @@ export default function PostScreen() {
     // a preview lands on the fallback screen instead of bouncing back in.
     const autoOpenRef = useRef<() => void>(() => {})
     autoOpenRef.current = () => {
-        if (!showCamera && !capturedImage && !revealData && !uploading) {
+        if (
+            !showCamera &&
+            !capturedImage &&
+            !revealData &&
+            !postStamp &&
+            !uploading
+        ) {
             handleOpenCamera()
         }
     }
@@ -438,6 +454,13 @@ export default function PostScreen() {
         setUploading(true)
         setPreviewIssues([])
 
+        // Display-only place lookup for the stamp — resolves while the
+        // upload runs; failure just means a stamp without a place line
+        const placePromise = reverseGeocodeForStamp(
+            location.latitude,
+            location.longitude
+        )
+
         try {
             // 1. Validate catch (proximity, self-catch, duplicate) —
             // quality was already checked at capture time
@@ -540,6 +563,7 @@ export default function PostScreen() {
             setRevealData({
                 originalPost: catchTarget,
                 catchPhotoUri: capturedImage,
+                place: await placePromise,
             })
 
             // Reset state
@@ -595,6 +619,13 @@ export default function PostScreen() {
 
         setUploading(true)
 
+        // Display-only place lookup for the stamp — resolves while the
+        // upload runs; failure just means a stamp without a place line
+        const placePromise = reverseGeocodeForStamp(
+            location.latitude,
+            location.longitude
+        )
+
         try {
             // Get user's username from Firestore.
             // Fail fast: never persist a placeholder author on a post
@@ -646,14 +677,6 @@ export default function PostScreen() {
 
             const docRef = await addDoc(collection(db, 'posts'), postData)
 
-            // Check nearby posts BEFORE writing location to estimate pioneer status
-            const nearbyPosts = await getPostsInRadius({
-                centerLat: location.latitude,
-                centerLng: location.longitude,
-                radiusInMeters: 50,
-            })
-            const isPioneer = nearbyPosts.length === 0
-
             // Store actual location in separate private collection with geohash
             const geohash = geohashForLocation([
                 location.latitude,
@@ -688,12 +711,13 @@ export default function PostScreen() {
                 }
             }
 
-            const alertTitle = isPioneer ? 'Pioneer!' : 'Shared!'
-            const alertMsg = isPioneer
-                ? "You're the first to map this spot."
-                : 'You added to the map! Nice shot.'
-
-            showToast('success', alertTitle, alertMsg)
+            // The stamp modal is the success feedback — no toast. Capture
+            // stamp data before resetting state; navigation happens when
+            // the user dismisses the stamp.
+            setPostStamp({
+                photoUri: capturedImage,
+                place: await placePromise,
+            })
 
             // Reset state
             setCapturedImage(null)
@@ -703,9 +727,6 @@ export default function PostScreen() {
 
             // Notify subscribers of new post creation
             notifyPostEvent('create', docRef.id, user.uid)
-
-            // Navigate to profile
-            router.push('/(tabs)/profile')
         } catch (error: any) {
             console.error('Error posting:', error)
             setUploading(false)
@@ -806,8 +827,19 @@ export default function PostScreen() {
                 visible={!!revealData}
                 originalPost={revealData?.originalPost ?? null}
                 catchPhotoUri={revealData?.catchPhotoUri ?? null}
+                place={revealData?.place ?? null}
                 onClose={() => {
                     setRevealData(null)
+                    router.push('/(tabs)/profile')
+                }}
+            />
+            {/* Post stamp — passport-page payoff after sharing an original */}
+            <PostStampModal
+                visible={!!postStamp}
+                photoUri={postStamp?.photoUri ?? null}
+                place={postStamp?.place ?? null}
+                onClose={() => {
+                    setPostStamp(null)
                     router.push('/(tabs)/profile')
                 }}
             />

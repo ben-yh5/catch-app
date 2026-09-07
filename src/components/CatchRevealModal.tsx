@@ -2,13 +2,14 @@
  * CatchRevealModal - The payoff moment after a successful catch.
  *
  * Shows the original photo ("then") and the freshly taken catch ("now")
- * stacked as a mini time-lapse: your photo just joined this place's timeline.
- * This reveal IS the reward for catching — there is no point economy.
+ * side by side on a passport-page card, then slams a CAUGHT stamp across
+ * the pair: your photo just joined this place's timeline. This reveal IS
+ * the reward for catching — there is no point economy.
  */
 
+import PassportStamp, { StampPlace } from '@/components/PassportStamp'
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
-import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import React from 'react'
 import {
@@ -28,6 +29,8 @@ interface CatchRevealModalProps {
     originalPost: Post | null
     /** Local URI (or URL) of the photo the user just took */
     catchPhotoUri: string | null
+    /** Display-only reverse-geocoded place — stamp omits the line if null */
+    place?: StampPlace | null
     onClose: () => void
 }
 
@@ -49,6 +52,7 @@ export default function CatchRevealModal({
     visible,
     originalPost,
     catchPhotoUri,
+    place,
     onClose,
 }: CatchRevealModalProps) {
     const insets = useSafeAreaInsets()
@@ -88,62 +92,78 @@ export default function CatchRevealModal({
 
                     <Animated.View
                         entering={FadeInDown.duration(500).delay(200)}
-                        style={styles.photoCard}
+                        style={styles.pageCard}
                     >
-                        <View style={styles.photoLabelRow}>
-                            <Text style={styles.photoLabel}>THEN</Text>
-                            <Text style={styles.photoDate}>
-                                {monthYear(originalPost.createdAt)}
-                            </Text>
-                        </View>
-                        <Image
-                            source={{ uri: originalPost.photoURL }}
-                            style={styles.photo}
-                            contentFit="cover"
-                            accessibilityLabel={`Original photo by @${originalPost.authorUsername}`}
-                        />
-                    </Animated.View>
+                        <View style={styles.photoRow}>
+                            <Animated.View
+                                entering={FadeIn.duration(400).delay(400)}
+                                style={styles.photoCol}
+                            >
+                                <View style={styles.photoLabelRow}>
+                                    <Text style={styles.photoLabel}>THEN</Text>
+                                    <Text
+                                        style={styles.photoDate}
+                                        numberOfLines={1}
+                                    >
+                                        {monthYear(originalPost.createdAt)}
+                                    </Text>
+                                </View>
+                                <Image
+                                    source={{ uri: originalPost.photoURL }}
+                                    style={styles.photo}
+                                    contentFit="cover"
+                                    accessibilityLabel={`Original photo by @${originalPost.authorUsername}`}
+                                />
+                            </Animated.View>
 
-                    <Animated.View
-                        entering={FadeIn.duration(300).delay(500)}
-                        style={styles.connector}
-                    >
-                        <Ionicons
-                            name="arrow-down"
-                            size={20}
-                            color={colors.textTertiary}
-                        />
-                    </Animated.View>
-
-                    <Animated.View
-                        entering={FadeInDown.duration(500).delay(700)}
-                        style={styles.photoCard}
-                    >
-                        <View style={styles.photoLabelRow}>
-                            <Text style={[styles.photoLabel, styles.nowLabel]}>
-                                NOW
-                            </Text>
-                            <Text style={styles.photoDate}>
-                                {monthYear(new Date())}
-                            </Text>
+                            <Animated.View
+                                entering={FadeIn.duration(400).delay(800)}
+                                style={styles.photoCol}
+                            >
+                                <View style={styles.photoLabelRow}>
+                                    <Text
+                                        style={[
+                                            styles.photoLabel,
+                                            styles.nowLabel,
+                                        ]}
+                                    >
+                                        NOW
+                                    </Text>
+                                    <Text
+                                        style={styles.photoDate}
+                                        numberOfLines={1}
+                                    >
+                                        {monthYear(new Date())}
+                                    </Text>
+                                </View>
+                                <Image
+                                    source={{ uri: catchPhotoUri }}
+                                    style={styles.photo}
+                                    contentFit="cover"
+                                    accessibilityLabel="Your catch photo"
+                                />
+                            </Animated.View>
                         </View>
-                        <Image
-                            source={{ uri: catchPhotoUri }}
-                            style={styles.photo}
-                            contentFit="cover"
-                            accessibilityLabel="Your catch photo"
-                        />
+
+                        <View style={styles.stampWrap} pointerEvents="none">
+                            <PassportStamp
+                                variant="caught"
+                                place={place}
+                                delay={1300}
+                                size={130}
+                            />
+                        </View>
                     </Animated.View>
 
                     <Animated.Text
-                        entering={FadeIn.duration(400).delay(1100)}
+                        entering={FadeIn.duration(400).delay(1800)}
                         style={styles.timelineNote}
                     >
                         This place&apos;s timeline now has {timelineCount}{' '}
                         photos.
                     </Animated.Text>
 
-                    <Animated.View entering={FadeIn.duration(400).delay(1100)}>
+                    <Animated.View entering={FadeIn.duration(400).delay(1800)}>
                         <TouchableOpacity
                             style={styles.doneButton}
                             onPress={onClose}
@@ -181,18 +201,27 @@ const styles = StyleSheet.create({
         marginTop: 6,
         marginBottom: 24,
     },
-    photoCard: {
+    pageCard: {
         width: '100%',
         backgroundColor: colors.cardElevated,
         borderRadius: 16,
         padding: 10,
+        paddingBottom: 22,
+    },
+    photoRow: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    photoCol: {
+        flex: 1,
     },
     photoLabelRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 4,
-        paddingBottom: 8,
+        alignItems: 'baseline',
+        paddingHorizontal: 2,
+        paddingBottom: 6,
+        gap: 4,
     },
     photoLabel: {
         fontSize: 12,
@@ -201,11 +230,12 @@ const styles = StyleSheet.create({
         color: colors.textTertiary,
     },
     nowLabel: {
-        color: colors.primary,
+        color: colors.secondary,
     },
     photoDate: {
-        fontSize: 12,
+        fontSize: 11,
         color: colors.textTertiary,
+        flexShrink: 1,
     },
     photo: {
         width: '100%',
@@ -213,8 +243,10 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         backgroundColor: colors.imageBackground,
     },
-    connector: {
-        paddingVertical: 8,
+    // Overlaps the bottom of the photo pair like ink over the page
+    stampWrap: {
+        alignSelf: 'center',
+        marginTop: -88,
     },
     timelineNote: {
         fontSize: 14,

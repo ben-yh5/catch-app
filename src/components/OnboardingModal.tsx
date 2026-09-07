@@ -40,7 +40,7 @@ const STEPS: {
     {
         icon: 'earth',
         title: 'Build your travel passport',
-        body: 'Share new spots to put them on the map — be first somewhere and you’re its pioneer. When someone catches your shot, you’ll know they stood right where you stood.',
+        body: 'Share new spots to put them on the map — every shot is an invitation. When someone catches yours, you’ll know they stood right where you stood.',
     },
 ]
 

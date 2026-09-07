@@ -63,8 +63,12 @@ jest.mock('../../components/ui/Toast', () => ({
     useToast: () => ({ showToast: jest.fn() }),
 }))
 
-// Uses useSafeAreaInsets; irrelevant to these tests (only shows post-catch)
+// Use useSafeAreaInsets; irrelevant to these tests (only show post-success)
 jest.mock('../../components/CatchRevealModal', () => ({
+    __esModule: true,
+    default: () => null,
+}))
+jest.mock('../../components/PostStampModal', () => ({
     __esModule: true,
     default: () => null,
 }))

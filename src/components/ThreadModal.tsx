@@ -1211,6 +1211,7 @@ export default function ThreadModal({
                 visible={!!revealData}
                 originalPost={revealData?.originalPost ?? null}
                 catchPhotoUri={revealData?.catchPhotoUri ?? null}
+                place={revealData?.place ?? null}
                 onClose={dismissReveal}
             />
         </Modal>
