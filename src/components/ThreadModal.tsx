@@ -5,7 +5,9 @@
  * - Horizontal swipeable gallery of all posts in a thread (original + catches)
  * - Interactive timeline visualization with progress dots
  * - Post metadata (author, caption, date, catch count)
- * - Actions: Catch, Add to List, Share, Delete (own posts only)
+ * - Actions: fixed three-slot row — wide bar (Catch if you have no post
+ *   in the thread, Share of the root if you do) + map + directions
+ *   squares; Add to List / Delete live in the options menu
  *
  * Key Features:
  * - Starts at initialPostId if provided, otherwise shows root post
@@ -176,10 +178,13 @@ export default function ThreadModal({
     // Get the currently displayed post
     const currentPost = threadPosts[currentIndex] || null
 
-    // Catching always targets the ROOT post; your own root gets no dead
-    // disabled catch bar — just the location actions (or nothing)
-    const isOwnRoot = threadPosts[0]?.authorId === user?.uid
-    const showActions = !isOwnRoot || !!threadPosts[0]?.hasLocation
+    // The wide action slot answers "have you stood here?" — any post of
+    // yours in the thread (root OR catch) counts. Owning the root would
+    // miss threads you've caught and offer a Catch bar that dead-ends at
+    // validateCatch's duplicate check after the whole camera trip.
+    const hasPostedInThread = threadPosts.some(
+        (p) => p.authorId === user?.uid
+    )
 
     // Fetch all posts in the thread
     useEffect(() => {
@@ -485,21 +490,24 @@ export default function ThreadModal({
         setShowOptionsMenu(false)
     }
 
-    const handleShare = async () => {
+    const sharePost = async (target: Post | undefined) => {
         setShowOptionsMenu(false)
-        if (!currentPost) return
+        if (!target) return
         try {
-            const caption = currentPost.caption
-                ? `"${currentPost.caption}" — `
-                : ''
+            const caption = target.caption ? `"${target.caption}" — ` : ''
             await Share.share({
-                message: `${caption}a shot by @${currentPost.authorUsername} on Catch\n${currentPost.photoURL}`,
+                message: `${caption}a shot by @${target.authorUsername} on Catch\n${target.photoURL}`,
             })
         } catch (error) {
             console.error('Error sharing post:', error)
             showToast('error', "Couldn't share", 'Please try again.')
         }
     }
+
+    // ⋯ menu shares the slide you're looking at; the wide bar is
+    // thread-level, so it always shares the place's original shot
+    const handleShare = () => sharePost(currentPost ?? undefined)
+    const handleShareThread = () => sharePost(threadPosts[0])
 
     const handleDeletePost = async () => {
         if (!user || !currentPost) return
@@ -1106,95 +1114,97 @@ export default function ThreadModal({
                                         </View>
                                     </View>
 
-                                    {/* Divider + actions: one toolbar row —
-                                        the catch bar plus square location
-                                        buttons (labeled chips on your own
-                                        post, where there's no catch bar) */}
-                                    {showActions && (
-                                        <>
-                                            <View
-                                                style={styles.footerDivider}
-                                            />
-                                            <View
-                                                style={styles.actionsSection}
+                                    {/* Divider + actions: a FIXED three-slot
+                                        row — [wide bar][map][directions] in
+                                        the same positions on every post.
+                                        Only the wide bar's role changes:
+                                        Catch if you haven't stood here,
+                                        Share if you have (root or catch —
+                                        your invitation act).
+                                        Squares key off hasLocation alone —
+                                        gating directions on the async
+                                        postLocation made the third button
+                                        pop in late (or never, on a failed
+                                        fetch); pressed too early it toasts. */}
+                                    <View style={styles.footerDivider} />
+                                    <View style={styles.actionsSection}>
+                                        {hasPostedInThread ? (
+                                            <TouchableOpacity
+                                                style={styles.shareBarButton}
+                                                onPress={handleShareThread}
+                                                accessibilityLabel="Share This Shot"
+                                                accessibilityRole="button"
+                                                accessibilityHint="Opens the share sheet"
                                             >
-                                                {!isOwnRoot && (
-                                                    <TouchableOpacity
-                                                        style={
-                                                            styles.catchButton
-                                                        }
-                                                        onPress={
-                                                            handleCatchPress
-                                                        }
-                                                        accessibilityLabel="Catch This Shot"
-                                                        accessibilityRole="button"
-                                                        accessibilityHint="Take a photo at this location"
-                                                    >
-                                                        <Ionicons
-                                                            name="camera"
-                                                            size={18}
-                                                            color={
-                                                                colors.inverseTextPrimary
-                                                            }
-                                                        />
-                                                        <Text
-                                                            style={
-                                                                styles.catchButtonText
-                                                            }
-                                                        >
-                                                            Catch This Shot
-                                                        </Text>
-                                                    </TouchableOpacity>
-                                                )}
+                                                <Ionicons
+                                                    name="share-outline"
+                                                    size={18}
+                                                    color={colors.primary}
+                                                />
+                                                <Text
+                                                    style={
+                                                        styles.shareBarButtonText
+                                                    }
+                                                >
+                                                    Share This Shot
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <TouchableOpacity
+                                                style={styles.catchButton}
+                                                onPress={handleCatchPress}
+                                                accessibilityLabel="Catch This Shot"
+                                                accessibilityRole="button"
+                                                accessibilityHint="Take a photo at this location"
+                                            >
+                                                <Ionicons
+                                                    name="camera"
+                                                    size={18}
+                                                    color={
+                                                        colors.inverseTextPrimary
+                                                    }
+                                                />
+                                                <Text
+                                                    style={
+                                                        styles.catchButtonText
+                                                    }
+                                                >
+                                                    Catch This Shot
+                                                </Text>
+                                            </TouchableOpacity>
+                                        )}
 
-                                                {threadPosts[0]
-                                                    ?.hasLocation && (
-                                                    <TouchableOpacity
-                                                        style={
-                                                            styles.iconAction
-                                                        }
-                                                        onPress={
-                                                            handleLocateOnMap
-                                                        }
-                                                        accessibilityLabel="Locate on Map"
-                                                        accessibilityRole="button"
-                                                    >
-                                                        <Ionicons
-                                                            name="map-outline"
-                                                            size={20}
-                                                            color={
-                                                                colors.primary
-                                                            }
-                                                        />
-                                                    </TouchableOpacity>
-                                                )}
+                                        {threadPosts[0]?.hasLocation && (
+                                            <TouchableOpacity
+                                                style={styles.iconAction}
+                                                onPress={handleLocateOnMap}
+                                                accessibilityLabel="Locate on Map"
+                                                accessibilityRole="button"
+                                            >
+                                                <Ionicons
+                                                    name="map-outline"
+                                                    size={20}
+                                                    color={colors.primary}
+                                                />
+                                            </TouchableOpacity>
+                                        )}
 
-                                                {threadPosts[0]
-                                                    ?.hasLocation &&
-                                                    postLocation && (
-                                                        <TouchableOpacity
-                                                            style={
-                                                                styles.iconAction
-                                                            }
-                                                            onPress={
-                                                                handleGetDirections
-                                                            }
-                                                            accessibilityLabel="Get directions"
-                                                            accessibilityRole="button"
-                                                            accessibilityHint="Opens maps application"
-                                                        >
-                                                            <Ionicons
-                                                                name="navigate-outline"
-                                                                size={20}
-                                                                color={
-                                                                    colors.primary
-                                                                }
-                                                            />
-                                                        </TouchableOpacity>
-                                                    )}
-                                            </View>
-                                        </>
-                                    )}
+                                        {threadPosts[0]?.hasLocation && (
+                                            <TouchableOpacity
+                                                style={styles.iconAction}
+                                                onPress={handleGetDirections}
+                                                accessibilityLabel="Get directions"
+                                                accessibilityRole="button"
+                                                accessibilityHint="Opens maps application"
+                                            >
+                                                <Ionicons
+                                                    name="navigate-outline"
+                                                    size={20}
+                                                    color={colors.primary}
+                                                />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
                                 </View>
                             </View>
                         </View>
@@ -1575,6 +1585,25 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '600',
         color: colors.inverseTextPrimary,
+    },
+    // Own-post counterpart to the catch bar — identical geometry, ghost
+    // weight (hairline, not filled): catching stays the only white-bar act
+    shareBarButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 13,
+        paddingHorizontal: 12,
+        borderWidth: HAIRLINE,
+        borderColor: 'rgba(255, 255, 255, 0.35)',
+        borderRadius: 2,
+        gap: 8,
+    },
+    shareBarButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: colors.textPrimary,
     },
     // Square icon-only button — beside the catch bar, or standing alone
     // on your own post (explicit height: with no catch bar in the row
