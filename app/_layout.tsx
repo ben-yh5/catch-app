@@ -77,14 +77,31 @@ function RootLayoutNav() {
         }
 
         const userDocRef = doc(db, 'users', user.uid)
+        // includeMetadataChanges so the cache→server transition fires an
+        // event even when the doc data itself didn't change — otherwise a
+        // deferred cache-negative below might never get its server answer
         const unsubscribe = onSnapshot(
             userDocRef,
+            { includeMetadataChanges: true },
             (docSnap) => {
-                setHasUserDoc(docSnap.exists())
+                if (docSnap.exists()) {
+                    // A cached positive is trustworthy — the doc being in
+                    // cache means it exists
+                    setHasUserDoc(true)
+                } else if (!docSnap.metadata.fromCache) {
+                    // Only a server-confirmed absence may conclude "no
+                    // doc". Offline with a cold cache Firestore reports an
+                    // absence it can't verify — routing on it sent users
+                    // to username-setup (a screen that offers to CLAIM a
+                    // new username) over a mere network blip
+                    setHasUserDoc(false)
+                }
             },
             (error) => {
+                // A listener error is not an answer either — leave the
+                // state unknown so routing waits instead of deriving a
+                // fact from a failure
                 console.error('Error listening to user document:', error)
-                setHasUserDoc(false)
             }
         )
 

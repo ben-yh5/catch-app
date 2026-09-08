@@ -20,6 +20,7 @@ import {
 } from 'react-native'
 import Animated, { FadeIn } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import CatchPostcardModal from './CatchPostcardModal'
 import ThreadModal from './ThreadModal'
 
 type FilterType = 'all' | 'catches' | 'social'
@@ -46,6 +47,8 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
     const [activeFilter, setActiveFilter] = useState<FilterType>('all')
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [threadModalVisible, setThreadModalVisible] = useState(false)
+    const [postcardNotification, setPostcardNotification] =
+        useState<Notification | null>(null)
 
     // Hydrate notifications with user/post data
     // Mark-all-read happens on CLOSE, not open — so unread styling stays
@@ -93,10 +96,13 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
                     .filter((id): id is string => Boolean(id))
             ),
         ]
+        // catchPostIds ride the same batch: the catcher's photo turns a
+        // caught row into a postcard (older docs without one fall back to
+        // the plain thread path)
         const postIds = [
             ...new Set(
                 renderable
-                    .map((n) => n.postId)
+                    .flatMap((n) => [n.postId, n.catchPostId])
                     .filter((id): id is string => Boolean(id))
             ),
         ]
@@ -139,6 +145,16 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
             if (note.postId) {
                 note.postThumbnail = posts.get(note.postId)?.photoURL
             }
+            if (note.catchPostId) {
+                const catchPost = posts.get(note.catchPostId)
+                note.catchPhotoURL = catchPost?.photoURL
+                note.catchCreatedAt = catchPost?.createdAt
+                // The catcher's shot is the thing that happened — show it
+                // in the row rather than the root's photo
+                if (catchPost?.photoURL) {
+                    note.postThumbnail = catchPost.photoURL
+                }
+            }
             return note
         })
         setHydratedNotifications(hydrated)
@@ -163,6 +179,18 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
                 pathname: '/user-profile',
                 params: { userId: notification.fromUserId },
             })
+            return
+        }
+
+        // A hydrated caught notification opens as a postcard — the
+        // catcher's photo, postmarked. Old docs (no catchPostId) and
+        // deleted catch posts (no hydrated photo) take the thread path.
+        if (
+            notification.type === 'caught' &&
+            notification.catchPostId &&
+            notification.catchPhotoURL
+        ) {
+            setPostcardNotification(notification)
             return
         }
 
@@ -439,6 +467,19 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
                 )}
             </Animated.View>
 
+            <CatchPostcardModal
+                visible={postcardNotification !== null}
+                notification={postcardNotification}
+                onOpenThread={(catchPostId) => {
+                    // The bare stub lands the thread pager on the catch
+                    // frame — ThreadModal follows the root pointer itself
+                    setPostcardNotification(null)
+                    setSelectedPost({ id: catchPostId } as Post)
+                    setThreadModalVisible(true)
+                }}
+                onClose={() => setPostcardNotification(null)}
+            />
+
             <ThreadModal
                 visible={threadModalVisible}
                 post={selectedPost}
@@ -554,7 +595,7 @@ const styles = StyleSheet.create({
         color: colors.textTertiary,
     },
     filterTabTextActive: {
-        color: '#fff',
+        color: colors.inverseTextPrimary,
     },
 
     // Activity List
@@ -597,7 +638,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     avatarInitial: {
-        color: '#fff',
+        color: colors.inverseTextPrimary,
         fontSize: 18,
         fontWeight: 'bold',
     },
@@ -621,7 +662,7 @@ const styles = StyleSheet.create({
     postThumbnail: {
         width: 44,
         height: 44,
-        borderRadius: 4,
+        borderRadius: 2,
         backgroundColor: colors.imageBackground,
     },
 })

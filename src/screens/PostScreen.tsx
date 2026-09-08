@@ -863,7 +863,11 @@ export default function PostScreen() {
                 accessibilityRole="button"
                 accessibilityHint="Open the camera to take a photo"
             >
-                <Ionicons name="camera" size={24} color="#fff" />
+                <Ionicons
+                    name="camera"
+                    size={24}
+                    color={colors.inverseTextPrimary}
+                />
                 <Text style={styles.openCameraButtonText}>Open Camera</Text>
             </TouchableOpacity>
         </View>
@@ -904,7 +908,7 @@ const styles = StyleSheet.create({
         marginBottom: 15,
     },
     openCameraButtonText: {
-        color: colors.textPrimary,
+        color: colors.inverseTextPrimary,
         fontSize: 18,
         fontWeight: '600',
     },

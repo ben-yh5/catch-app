@@ -124,7 +124,7 @@ export default function OnboardingModal() {
                             <Ionicons
                                 name="arrow-forward"
                                 size={18}
-                                color={colors.white}
+                                color={colors.inverseTextPrimary}
                             />
                         )}
                     </TouchableOpacity>
@@ -215,6 +215,6 @@ const styles = StyleSheet.create({
     nextButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: colors.white,
+        color: colors.inverseTextPrimary,
     },
 })

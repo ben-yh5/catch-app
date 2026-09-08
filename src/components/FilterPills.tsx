@@ -79,6 +79,6 @@ const styles = StyleSheet.create({
         color: colors.textPrimary,
     },
     labelActive: {
-        color: '#fff',
+        color: colors.inverseTextPrimary,
     },
 })

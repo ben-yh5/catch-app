@@ -2,7 +2,7 @@
  * PassportBook - True-book passport: page faces and leaf page turns.
  *
  * The open book is one spread — two page-sized faces meeting at the
- * white center crease, each face with a white dotted guide line and up
+ * center crease, each face with a faint dotted guide line and up
  * to two city stamps (2×2 per spread). Turning a page animates a real
  * leaf pivoting at the crease: front = outgoing page, back = incoming
  * page, faces swapping at edge-on. Swipe (drag follows the finger,
@@ -31,12 +31,14 @@
 
 import { StampFace, STAMP_INK, stampDate } from '@/components/PassportStamp'
 import { colors } from '@/theme/colors'
-import { spacing } from '@/theme/tokens'
+import { INK_OPACITY, paper } from '@/theme/document'
+import { radii, spacing } from '@/theme/tokens'
 import { CityStamp } from '@/utils/passportQueries'
 import React, { useMemo, useRef, useState } from 'react'
 import { PanResponder, StyleSheet, View } from 'react-native'
 import Animated, {
     Easing,
+    ReduceMotion,
     runOnJS,
     SharedValue,
     useAnimatedStyle,
@@ -90,7 +92,7 @@ interface PageFaceProps {
 
 /** One page face: paper, dotted guide line, stamps. Blank when no face. */
 function PageFace({ face, pageWidth, pageHeight }: PageFaceProps) {
-    const stampSize = Math.min(140, pageWidth - 16)
+    const stampSize = Math.min(124, pageWidth - 24)
     const half = stampSize / 2
     return (
         <View
@@ -100,13 +102,13 @@ function PageFace({ face, pageWidth, pageHeight }: PageFaceProps) {
             {face?.map((city, slot) => {
                 const h = hashKey(city.key)
                 const cx = clamp(
-                    pageWidth / 2 + ((h % 33) - 16),
+                    pageWidth / 2 + ((h % 21) - 10),
                     half + EDGE_PAD,
                     pageWidth - half - EDGE_PAD
                 )
                 const cy = clamp(
                     ROW_FRACTIONS[slot % ROW_FRACTIONS.length] * pageHeight +
-                        (((h >> 5) % 61) - 30),
+                        (((h >> 5) % 37) - 18),
                     half + EDGE_PAD,
                     pageHeight - half - EDGE_PAD
                 )
@@ -120,7 +122,7 @@ function PageFace({ face, pageWidth, pageHeight }: PageFaceProps) {
                                 top: cy - half,
                                 transform: [
                                     {
-                                        rotate: `${((h >> 10) % 21) - 10}deg`,
+                                        rotate: `${((h >> 10) % 9) - 4}deg`,
                                     },
                                 ],
                             },
@@ -128,8 +130,7 @@ function PageFace({ face, pageWidth, pageHeight }: PageFaceProps) {
                     >
                         <StampFace
                             ink={inkFor(city)}
-                            word={city.city.toUpperCase()}
-                            topLine={city.country.toUpperCase()}
+                            city={city.city.toUpperCase()}
                             dateText={
                                 city.lastActivity
                                     ? stampDate(city.lastActivity)
@@ -306,7 +307,11 @@ export default function PassportBook({
         const duration = Math.max(120, TURN_MS * remaining)
         progress.value = withTiming(
             commit ? 1 : 0,
-            { duration, easing: Easing.out(Easing.cubic) },
+            {
+                duration,
+                easing: Easing.out(Easing.cubic),
+                reduceMotion: ReduceMotion.System,
+            },
             () => {
                 runOnJS(completeTurn)(commit)
             }
@@ -478,15 +483,15 @@ export default function PassportBook({
 
 const styles = StyleSheet.create({
     spread: {
-        borderRadius: 10,
+        borderRadius: radii.md,
         overflow: 'hidden',
-        backgroundColor: colors.cardElevated,
+        backgroundColor: paper.surface,
     },
     pagesRow: {
         flexDirection: 'row',
     },
     pageFace: {
-        backgroundColor: colors.cardElevated,
+        backgroundColor: paper.surface,
         overflow: 'hidden',
     },
     leaf: {
@@ -503,7 +508,7 @@ const styles = StyleSheet.create({
         bottom: 0,
         width: 1,
         marginLeft: -0.5,
-        backgroundColor: colors.white,
+        backgroundColor: paper.crease,
         zIndex: 4,
     },
     dottedLine: {
@@ -514,11 +519,11 @@ const styles = StyleSheet.create({
         height: 1,
         borderWidth: 1,
         borderStyle: 'dashed',
-        borderColor: colors.white,
+        borderColor: paper.guide,
     },
     stampAnchor: {
         position: 'absolute',
-        opacity: 0.94,
+        opacity: INK_OPACITY,
     },
     dots: {
         flexDirection: 'row',

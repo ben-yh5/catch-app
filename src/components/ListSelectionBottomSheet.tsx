@@ -269,7 +269,7 @@ export default function ListSelectionBottomSheet({
                             <Ionicons
                                 name="checkmark"
                                 size={18}
-                                color={colors.white}
+                                color={colors.inverseTextPrimary}
                             />
                         )}
                     </View>

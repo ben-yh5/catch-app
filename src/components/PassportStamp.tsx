@@ -1,21 +1,23 @@
 /**
  * PassportStamp - circular passport ink stamps.
  *
- * StampFace is the static face: double ring, top place line, ★ dividers,
- * a big word, date, optional bottom line. PassportBook lays static faces
- * onto pages; the default export wraps a face in the slam animation
- * (spring scale-in with a heavy haptic thud) for the post/catch payoff
- * screens (PostStampModal, CatchRevealModal).
+ * StampFace is the static face: one hairline ring, the city, a short
+ * rule, the date — nothing else. PassportBook lays static faces onto
+ * pages; the default export wraps a face in the slam animation (spring
+ * scale-in with a heavy haptic thud) for the post/catch payoff screens
+ * (PostStampModal, CatchRevealModal).
  *
  * Display-layer only: place/date lines are omitted when unknown — never
  * filled with a placeholder.
  */
 
-import { colors } from '@/theme/colors'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
+import { documentInk, documentType, HAIRLINE, INK_OPACITY } from '@/theme/document'
 import * as Haptics from 'expo-haptics'
 import React, { useEffect } from 'react'
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native'
 import Animated, {
+    ReduceMotion,
     useAnimatedStyle,
     useSharedValue,
     withDelay,
@@ -35,10 +37,12 @@ export interface StampPlace {
 }
 
 export const STAMP_INK: Record<StampVariant, string> = {
-    posted: colors.primary,
-    caught: colors.secondary,
+    posted: documentInk.posted,
+    caught: documentInk.caught,
 }
 
+// Fallback center word when no place is known — the act is otherwise
+// already told by ink color and the surrounding screen
 const VARIANT_WORD: Record<StampVariant, string> = {
     posted: 'POSTED',
     caught: 'CAUGHT',
@@ -64,28 +68,19 @@ export const stampDate = (date: Date): string =>
 
 export interface StampFaceProps {
     ink: string
-    /** Big center word (act on payoff stamps, city name in the book) */
-    word: string
-    topLine?: string
-    bottomLine?: string
+    /** City name, already uppercased by the caller */
+    city: string
     dateText?: string
     /** Diameter in px */
     size?: number
 }
 
-export function StampFace({
-    ink,
-    word,
-    topLine,
-    bottomLine,
-    dateText,
-    size = 150,
-}: StampFaceProps) {
-    const textMaxWidth = size - 44
+export function StampFace({ ink, city, dateText, size = 150 }: StampFaceProps) {
+    const textMaxWidth = size - 32
     return (
         <View
             style={[
-                styles.outer,
+                styles.ring,
                 {
                     width: size,
                     height: size,
@@ -93,51 +88,20 @@ export function StampFace({
                     borderColor: ink,
                 },
             ]}
-            accessibilityLabel={`${word} stamp${topLine ? `, ${[topLine, bottomLine].filter(Boolean).join(', ')}` : ''}`}
+            accessibilityLabel={`${city} stamp${dateText ? `, ${dateText}` : ''}`}
         >
-            <View style={[styles.inner, { borderColor: ink }]}>
-                {topLine && (
-                    <Text
-                        style={[
-                            styles.placeLine,
-                            { color: ink, maxWidth: textMaxWidth },
-                        ]}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                    >
-                        {topLine}
-                    </Text>
-                )}
-                <Text style={[styles.divider, { color: ink }]}>★ ★ ★</Text>
-                <Text
-                    style={[
-                        styles.word,
-                        { color: ink, maxWidth: textMaxWidth },
-                    ]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                >
-                    {word}
-                </Text>
-                {dateText && (
-                    <Text style={[styles.date, { color: ink }]}>
-                        {dateText}
-                    </Text>
-                )}
-                <Text style={[styles.divider, { color: ink }]}>★ ★ ★</Text>
-                {bottomLine && (
-                    <Text
-                        style={[
-                            styles.placeLine,
-                            { color: ink, maxWidth: textMaxWidth },
-                        ]}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                    >
-                        {bottomLine}
-                    </Text>
-                )}
-            </View>
+            <Text
+                style={[styles.city, { color: ink, maxWidth: textMaxWidth }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+            >
+                {city}
+            </Text>
+            <View style={[styles.rule, { backgroundColor: ink }]} />
+            {dateText && (
+                <Text style={[styles.date, { color: ink }]}>{dateText}</Text>
+            )}
         </View>
     )
 }
@@ -158,44 +122,59 @@ export default function PassportStamp({
     place,
     date,
     delay = 0,
-    size = 150,
+    size = 140,
     style,
 }: PassportStampProps) {
     const scale = useSharedValue(2.4)
     const opacity = useSharedValue(0)
+    const reducedMotion = useReducedMotion()
 
     useEffect(() => {
-        opacity.value = withDelay(delay, withTiming(0.94, { duration: 140 }))
+        opacity.value = withDelay(
+            delay,
+            withTiming(INK_OPACITY, {
+                duration: 140,
+                reduceMotion: ReduceMotion.System,
+            })
+        )
         scale.value = withDelay(
             delay,
-            withSpring(1, { damping: 15, stiffness: 320, mass: 0.7 })
+            withSpring(1, {
+                damping: 15,
+                stiffness: 320,
+                mass: 0.7,
+                reduceMotion: ReduceMotion.System,
+            })
         )
-        // Thud lands as the spring hits scale ≈ 1
-        const timer = setTimeout(() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(
-                () => {}
-            )
-        }, delay + 140)
+        // Thud lands as the spring hits scale ≈ 1; with motion reduced
+        // the stamp appears at once, so the thud fires with it
+        const timer = setTimeout(
+            () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(
+                    () => {}
+                )
+            },
+            reducedMotion ? delay : delay + 140
+        )
         return () => clearTimeout(timer)
-    }, [delay, opacity, scale])
+    }, [delay, opacity, scale, reducedMotion])
 
     const animatedStyle = useAnimatedStyle(() => ({
         opacity: opacity.value,
-        transform: [{ rotate: '-8deg' }, { scale: scale.value }],
+        transform: [{ rotate: '-4deg' }, { scale: scale.value }],
     }))
 
-    // City rides the top position, country the bottom; with only one
-    // known, it takes the top and the bottom line is omitted
-    const topLine = (place?.city ?? place?.country)?.toUpperCase()
-    const bottomLine = place?.city ? place?.country?.toUpperCase() : undefined
+    const city = (
+        place?.city ??
+        place?.country ??
+        VARIANT_WORD[variant]
+    ).toUpperCase()
 
     return (
         <Animated.View style={[animatedStyle, style]}>
             <StampFace
                 ink={STAMP_INK[variant]}
-                word={VARIANT_WORD[variant]}
-                topLine={topLine}
-                bottomLine={bottomLine}
+                city={city}
                 dateText={stampDate(date ?? new Date())}
                 size={size}
             />
@@ -204,38 +183,18 @@ export default function PassportStamp({
 }
 
 const styles = StyleSheet.create({
-    outer: {
-        borderWidth: 2.5,
-        padding: 3,
+    ring: {
+        borderWidth: HAIRLINE,
         backgroundColor: 'transparent',
-    },
-    inner: {
-        flex: 1,
-        borderWidth: 1,
-        borderRadius: 999,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 12,
     },
-    placeLine: {
-        fontSize: 10,
-        fontWeight: '700',
-        letterSpacing: 1.5,
+    city: documentType.stampCity,
+    rule: {
+        width: 18,
+        height: 1,
+        marginVertical: 6,
     },
-    divider: {
-        fontSize: 7,
-        letterSpacing: 3,
-        marginVertical: 2,
-    },
-    word: {
-        fontSize: 20,
-        fontWeight: '900',
-        letterSpacing: 3,
-    },
-    date: {
-        fontSize: 11,
-        fontWeight: '700',
-        letterSpacing: 2,
-        marginTop: 1,
-    },
+    date: documentType.stampDate,
 })

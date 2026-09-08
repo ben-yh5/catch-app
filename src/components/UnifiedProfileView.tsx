@@ -1617,7 +1617,7 @@ const styles = StyleSheet.create({
     followListButtonText: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: colors.inverseTextPrimary,
     },
     followListButtonTextFollowing: {
         color: colors.textPrimary,
@@ -1700,7 +1700,7 @@ const styles = StyleSheet.create({
     followButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: colors.inverseTextPrimary,
     },
     followingButtonText: {
         color: colors.textPrimary,

@@ -75,17 +75,18 @@ export default function AppButton({
     const getTextColor = () => {
         if (disabled) return colors.textTertiary
         switch (variant) {
+            // Primary is white ink now — text inverts to black
             case 'primary':
+            case 'white':
+                return colors.inverseTextPrimary
             case 'secondary':
             case 'danger':
                 return '#FFFFFF'
-            case 'white':
-                return colors.inverseTextPrimary
             case 'outline':
             case 'ghost':
                 return colors.primary
             default:
-                return '#FFFFFF'
+                return colors.inverseTextPrimary
         }
     }
 
@@ -127,7 +128,7 @@ export default function AppButton({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 12,
+        borderRadius: 2,
         backgroundColor: getBackgroundColor(),
         borderColor: getBorderColor(),
         borderWidth: variant === 'outline' ? 1.5 : 0,

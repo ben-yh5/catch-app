@@ -112,6 +112,6 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
     },
     textActive: {
-        color: '#fff',
+        color: colors.inverseTextPrimary,
     },
 })

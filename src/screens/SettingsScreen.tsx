@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.secondary,
+        backgroundColor: colors.cardElevated,
         paddingVertical: 14,
         paddingHorizontal: 20,
         borderRadius: 10,

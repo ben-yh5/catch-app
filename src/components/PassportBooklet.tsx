@@ -32,6 +32,7 @@ import Animated, {
     Easing,
     Extrapolation,
     interpolate,
+    ReduceMotion,
     useAnimatedStyle,
     useSharedValue,
     withTiming,
@@ -76,6 +77,7 @@ export default function PassportBooklet({ cities }: PassportBookletProps) {
         coverAngle.value = withTiming(-180, {
             duration: OPEN_DURATION_MS,
             easing: Easing.inOut(Easing.cubic),
+            reduceMotion: ReduceMotion.System,
         })
         openTimer.current = setTimeout(
             () => setCoverOpened(true),
@@ -92,6 +94,7 @@ export default function PassportBooklet({ cities }: PassportBookletProps) {
         coverAngle.value = withTiming(0, {
             duration: CLOSE_DURATION_MS,
             easing: Easing.inOut(Easing.cubic),
+            reduceMotion: ReduceMotion.System,
         })
         closeTimer.current = setTimeout(() => {
             closingRef.current = false

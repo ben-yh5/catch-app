@@ -28,9 +28,11 @@ import { usePost } from '@/context/PostContext'
 import { useCatchFlow } from '@/hooks/useCatchFlow'
 import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
-import { formatPostDate } from '@/utils/dateUtils'
+import { HAIRLINE } from '@/theme/document'
+import { formatPostDate, monthYear } from '@/utils/dateUtils'
 import { Post } from '@/types'
 import { isPostSaved } from '@/utils/listUtils'
+import { LOST_PLACE_INACTIVITY_DAYS } from '@/utils/postClassification'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import * as Linking from 'expo-linking'
@@ -61,7 +63,16 @@ import {
     ViewToken,
     useWindowDimensions,
 } from 'react-native'
-import Animated, { FadeIn } from 'react-native-reanimated'
+import {
+    Gesture,
+    GestureDetector,
+    GestureHandlerRootView,
+} from 'react-native-gesture-handler'
+import Animated, {
+    FadeIn,
+    runOnJS,
+    useSharedValue,
+} from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import ListSelectionBottomSheet from './ListSelectionBottomSheet'
 import UnifiedCameraView from './UnifiedCameraView'
@@ -160,6 +171,11 @@ export default function ThreadModal({
 
     // Get the currently displayed post
     const currentPost = threadPosts[currentIndex] || null
+
+    // Catching always targets the ROOT post; your own root gets no dead
+    // disabled catch bar — just the location actions (or nothing)
+    const isOwnRoot = threadPosts[0]?.authorId === user?.uid
+    const showActions = !isOwnRoot || !!threadPosts[0]?.hasLocation
 
     // Fetch all posts in the thread
     useEffect(() => {
@@ -614,6 +630,65 @@ export default function ThreadModal({
         [cardWidth]
     )
 
+    // Timeline scrubbing: dragging along the track swaps frames instantly
+    // (flipbook feel — offsets are exact page multiples, so releasing
+    // needs no snap). onViewableItemsChanged keeps dots/caption/date in
+    // sync through the existing path. Dot taps and swipe paging survive:
+    // the pan only activates after 5px of horizontal travel.
+    const [trackWidth, setTrackWidth] = useState(0)
+    const scrubIndexSV = useSharedValue(-1)
+    const threadLength = threadPosts.length
+
+    const scrubTo = React.useCallback(
+        (index: number) => {
+            flatListRef.current?.scrollToOffset({
+                offset: index * cardWidth,
+                animated: false,
+            })
+        },
+        [cardWidth]
+    )
+
+    const scrubPan = React.useMemo(
+        () =>
+            Gesture.Pan()
+                .activeOffsetX([-5, 5])
+                .failOffsetY([-10, 10])
+                .onUpdate((e) => {
+                    'worklet'
+                    if (trackWidth <= 0 || threadLength < 2) return
+                    const fraction = Math.min(
+                        Math.max(e.x / trackWidth, 0),
+                        1
+                    )
+                    const index = Math.round(fraction * (threadLength - 1))
+                    if (index !== scrubIndexSV.value) {
+                        scrubIndexSV.value = index
+                        runOnJS(scrubTo)(index)
+                    }
+                })
+                .onFinalize(() => {
+                    'worklet'
+                    scrubIndexSV.value = -1
+                }),
+        [trackWidth, threadLength, scrubTo, scrubIndexSV]
+    )
+
+    // A place whose photographic record has gone quiet — shown as one
+    // quiet line on the thread's last frame. Deliberately not raw
+    // isLostPlace(): a day-old post with 0 catches isn't a gap, it's new.
+    const lastShot = threadPosts[threadLength - 1]
+    const lastShotMs = React.useMemo(() => {
+        const ts: any = lastShot?.createdAt
+        if (!ts) return null
+        const d = ts.toDate ? ts.toDate() : new Date(ts)
+        const ms = d.getTime()
+        return isNaN(ms) ? null : ms
+    }, [lastShot?.createdAt])
+    const threadIsStale =
+        lastShotMs !== null &&
+        Date.now() - lastShotMs > LOST_PLACE_INACTIVITY_DAYS * 86400000
+
     const renderGalleryItem = React.useCallback(
         ({ item }: { item: Post }) => (
             <View
@@ -712,6 +787,9 @@ export default function ThreadModal({
                 onClose()
             }}
         >
+            {/* RN Modal hosts a separate native root — gesture-handler needs
+                its own root view inside it for the timeline scrubber */}
+            <GestureHandlerRootView style={styles.gestureRoot}>
             {/* RN Modal's built-in fade is a fixed ~300ms; animate the content
                 ourselves so opening feels immediate */}
             <Animated.View
@@ -874,60 +952,97 @@ export default function ThreadModal({
                                     }
                                 />
 
-                                {/* Thread Timeline - dots with connecting line */}
+                                {/* Thread Timeline - a scrubbable track:
+                                    drag to flip through the place's
+                                    frames, dates ticking as you go */}
                                 {threadPosts.length > 1 && (
                                     <View style={styles.timelineContainer}>
-                                        <View style={styles.timeline}>
-                                            {/* Connecting line */}
-                                            <View style={styles.timelineLine} />
-                                            {/* Filled portion of line */}
+                                        <GestureDetector gesture={scrubPan}>
                                             <View
-                                                style={[
-                                                    styles.timelineLineFilled,
-                                                    {
-                                                        width: `${(currentIndex / (threadPosts.length - 1)) * 100}%`,
-                                                    },
-                                                ]}
-                                            />
-                                            {/* Dots */}
-                                            {threadPosts.map((_, index) => (
-                                                <TouchableOpacity
-                                                    key={index}
-                                                    style={[
-                                                        styles.timelineDot,
-                                                        {
-                                                            left: `${(index / (threadPosts.length - 1)) * 100}%`,
-                                                        },
-                                                        index <= currentIndex &&
-                                                            styles.timelineDotFilled,
-                                                        index ===
-                                                            currentIndex &&
-                                                            styles.timelineDotActive,
-                                                    ]}
-                                                    onPress={() => {
-                                                        flatListRef.current?.scrollToIndex(
-                                                            {
-                                                                index,
-                                                                animated: true,
-                                                            }
-                                                        )
-                                                    }}
-                                                    accessibilityLabel={`Go to photo ${index + 1} of ${threadPosts.length}`}
-                                                    accessibilityRole="button"
-                                                    accessibilityState={{
-                                                        selected:
-                                                            index ===
-                                                            currentIndex,
-                                                    }}
+                                                style={styles.timeline}
+                                                onLayout={(e) =>
+                                                    setTrackWidth(
+                                                        e.nativeEvent.layout
+                                                            .width
+                                                    )
+                                                }
+                                            >
+                                                {/* Connecting line */}
+                                                <View
+                                                    style={styles.timelineLine}
                                                 />
-                                            ))}
-                                        </View>
+                                                {/* Filled portion of line */}
+                                                <View
+                                                    style={[
+                                                        styles.timelineLineFilled,
+                                                        {
+                                                            width: `${(currentIndex / (threadPosts.length - 1)) * 100}%`,
+                                                        },
+                                                    ]}
+                                                />
+                                                {/* Dots */}
+                                                {threadPosts.map(
+                                                    (_, index) => (
+                                                        <TouchableOpacity
+                                                            key={index}
+                                                            style={[
+                                                                styles.timelineDot,
+                                                                {
+                                                                    left: `${(index / (threadPosts.length - 1)) * 100}%`,
+                                                                },
+                                                                index <=
+                                                                    currentIndex &&
+                                                                    styles.timelineDotFilled,
+                                                                index ===
+                                                                    currentIndex &&
+                                                                    styles.timelineDotActive,
+                                                            ]}
+                                                            onPress={() => {
+                                                                flatListRef.current?.scrollToIndex(
+                                                                    {
+                                                                        index,
+                                                                        animated:
+                                                                            true,
+                                                                    }
+                                                                )
+                                                            }}
+                                                            accessibilityLabel={`Go to photo ${index + 1} of ${threadPosts.length}`}
+                                                            accessibilityRole="button"
+                                                            accessibilityState={{
+                                                                selected:
+                                                                    index ===
+                                                                    currentIndex,
+                                                            }}
+                                                        />
+                                                    )
+                                                )}
+                                            </View>
+                                        </GestureDetector>
+                                        {/* The date is the noticing version
+                                            of "N of M" — when, not how far */}
                                         <Text style={styles.progressText}>
-                                            {currentIndex + 1} of{' '}
-                                            {threadPosts.length}
+                                            {monthYear(
+                                                threadPosts[currentIndex]
+                                                    ?.createdAt
+                                            )}
                                         </Text>
                                     </View>
                                 )}
+
+                                {/* The record here has gone quiet — shown
+                                    on the last frame only, no badge, no
+                                    urgency (a stale single-photo thread
+                                    gets it too) */}
+                                {threadIsStale &&
+                                    currentIndex === threadPosts.length - 1 && (
+                                        <Animated.Text
+                                            entering={FadeIn.duration(400)}
+                                            style={styles.gapNote}
+                                        >
+                                            No one has stood here since{' '}
+                                            {monthYear(lastShot?.createdAt)}.
+                                        </Animated.Text>
+                                    )}
 
                                 {/* Card Footer */}
                                 <View style={styles.cardFooter}>
@@ -975,96 +1090,95 @@ export default function ThreadModal({
                                         </View>
                                     </View>
 
-                                    {/* Divider */}
-                                    <View style={styles.footerDivider} />
-
-                                    {/* Catch Button */}
-                                    <View style={styles.actionsSection}>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.catchButton,
-                                                threadPosts[0]?.authorId ===
-                                                    user?.uid &&
-                                                    styles.catchButtonDisabled,
-                                            ]}
-                                            onPress={handleCatchPress}
-                                            disabled={
-                                                threadPosts[0]?.authorId ===
-                                                user?.uid
-                                            }
-                                            accessibilityLabel="Catch This Shot"
-                                            accessibilityRole="button"
-                                            accessibilityState={{
-                                                disabled:
-                                                    threadPosts[0]?.authorId ===
-                                                    user?.uid,
-                                            }}
-                                            accessibilityHint="Take a photo at this location"
-                                        >
-                                            <Ionicons
-                                                name="camera"
-                                                size={20}
-                                                color="#fff"
+                                    {/* Divider + actions: one toolbar row —
+                                        the catch bar plus square location
+                                        buttons (labeled chips on your own
+                                        post, where there's no catch bar) */}
+                                    {showActions && (
+                                        <>
+                                            <View
+                                                style={styles.footerDivider}
                                             />
-                                            <Text
-                                                style={styles.catchButtonText}
+                                            <View
+                                                style={styles.actionsSection}
                                             >
-                                                Catch This Shot
-                                            </Text>
-                                        </TouchableOpacity>
-
-                                        {/* Locate on Map Button */}
-                                        {threadPosts[0]?.hasLocation && (
-                                            <TouchableOpacity
-                                                style={styles.directionsButton}
-                                                onPress={handleLocateOnMap}
-                                                accessibilityLabel="Locate on Map"
-                                                accessibilityRole="button"
-                                            >
-                                                <Ionicons
-                                                    name="map-outline"
-                                                    size={20}
-                                                    color={colors.primary}
-                                                />
-                                                <Text
-                                                    style={
-                                                        styles.directionsButtonText
-                                                    }
-                                                >
-                                                    Locate on Map
-                                                </Text>
-                                            </TouchableOpacity>
-                                        )}
-
-                                        {/* Get Directions Button */}
-                                        {threadPosts[0]?.hasLocation &&
-                                            postLocation && (
-                                                <TouchableOpacity
-                                                    style={
-                                                        styles.directionsButton
-                                                    }
-                                                    onPress={
-                                                        handleGetDirections
-                                                    }
-                                                    accessibilityLabel="Get directions"
-                                                    accessibilityRole="button"
-                                                    accessibilityHint="Opens maps application"
-                                                >
-                                                    <Ionicons
-                                                        name="navigate-outline"
-                                                        size={20}
-                                                        color={colors.primary}
-                                                    />
-                                                    <Text
+                                                {!isOwnRoot && (
+                                                    <TouchableOpacity
                                                         style={
-                                                            styles.directionsButtonText
+                                                            styles.catchButton
                                                         }
+                                                        onPress={
+                                                            handleCatchPress
+                                                        }
+                                                        accessibilityLabel="Catch This Shot"
+                                                        accessibilityRole="button"
+                                                        accessibilityHint="Take a photo at this location"
                                                     >
-                                                        Directions
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            )}
-                                    </View>
+                                                        <Ionicons
+                                                            name="camera"
+                                                            size={18}
+                                                            color={
+                                                                colors.inverseTextPrimary
+                                                            }
+                                                        />
+                                                        <Text
+                                                            style={
+                                                                styles.catchButtonText
+                                                            }
+                                                        >
+                                                            Catch This Shot
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                )}
+
+                                                {threadPosts[0]
+                                                    ?.hasLocation && (
+                                                    <TouchableOpacity
+                                                        style={
+                                                            styles.iconAction
+                                                        }
+                                                        onPress={
+                                                            handleLocateOnMap
+                                                        }
+                                                        accessibilityLabel="Locate on Map"
+                                                        accessibilityRole="button"
+                                                    >
+                                                        <Ionicons
+                                                            name="map-outline"
+                                                            size={20}
+                                                            color={
+                                                                colors.primary
+                                                            }
+                                                        />
+                                                    </TouchableOpacity>
+                                                )}
+
+                                                {threadPosts[0]
+                                                    ?.hasLocation &&
+                                                    postLocation && (
+                                                        <TouchableOpacity
+                                                            style={
+                                                                styles.iconAction
+                                                            }
+                                                            onPress={
+                                                                handleGetDirections
+                                                            }
+                                                            accessibilityLabel="Get directions"
+                                                            accessibilityRole="button"
+                                                            accessibilityHint="Opens maps application"
+                                                        >
+                                                            <Ionicons
+                                                                name="navigate-outline"
+                                                                size={20}
+                                                                color={
+                                                                    colors.primary
+                                                                }
+                                                            />
+                                                        </TouchableOpacity>
+                                                    )}
+                                            </View>
+                                        </>
+                                    )}
                                 </View>
                             </View>
                         </View>
@@ -1194,11 +1308,15 @@ export default function ThreadModal({
                 place={revealData?.place ?? null}
                 onClose={dismissReveal}
             />
+            </GestureHandlerRootView>
         </Modal>
     )
 }
 
 const styles = StyleSheet.create({
+    gestureRoot: {
+        flex: 1,
+    },
     modalOverlay: {
         flex: 1,
         backgroundColor: colors.modalOverlay,
@@ -1220,7 +1338,7 @@ const styles = StyleSheet.create({
     // Post Card - matches ExploreScreen card style
     postCard: {
         backgroundColor: colors.card,
-        borderRadius: 12,
+        borderRadius: 2,
         overflow: 'hidden',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -1325,8 +1443,11 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         marginVertical: 12,
     },
+    // One row: catch bar + square location buttons, equal height
     actionsSection: {
-        gap: 12,
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        gap: 10,
     },
     galleryFlatList: {
         flexGrow: 0,
@@ -1407,48 +1528,49 @@ const styles = StyleSheet.create({
     },
     distanceText: {
         fontSize: 12,
-        color: colors.secondary,
+        color: colors.textSecondary,
         fontWeight: '500',
     },
     progressText: {
         fontSize: 12,
         color: colors.textTertiary,
-        minWidth: 50,
+    },
+    gapNote: {
+        fontSize: 12,
+        fontStyle: 'italic',
+        color: colors.textTertiary,
+        textAlign: 'center',
+        paddingHorizontal: 12,
+        paddingTop: 2,
+        paddingBottom: 10,
     },
     catchButton: {
+        flex: 1,
         backgroundColor: colors.primary,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        borderRadius: 12,
+        paddingVertical: 13,
+        paddingHorizontal: 12,
+        borderRadius: 2,
         gap: 8,
     },
     catchButtonText: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '600',
-        color: colors.textPrimary,
+        color: colors.inverseTextPrimary,
     },
-    catchButtonDisabled: {
-        opacity: 0.6,
-    },
-    directionsButton: {
-        backgroundColor: 'transparent',
-        borderWidth: 2,
-        borderColor: colors.primary,
-        flexDirection: 'row',
+    // Square icon-only button — beside the catch bar, or standing alone
+    // on your own post (explicit height: with no catch bar in the row
+    // there's nothing to stretch against)
+    iconAction: {
+        width: 48,
+        height: 48,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 12,
-        gap: 8,
-    },
-    directionsButtonText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: colors.primary,
+        borderWidth: HAIRLINE,
+        borderColor: 'rgba(255, 255, 255, 0.35)',
+        borderRadius: 2,
     },
     caughtBadgeOverlay: {
         position: 'absolute',

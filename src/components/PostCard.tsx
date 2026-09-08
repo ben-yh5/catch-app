@@ -544,7 +544,7 @@ export default function PostCard({
 const styles = StyleSheet.create({
     postCard: {
         backgroundColor: colors.card,
-        borderRadius: 12,
+        borderRadius: 2,
         overflow: 'hidden',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 4,
+        borderRadius: 2,
     },
     // Footer styles
     cardFooter: {
@@ -722,13 +722,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingVertical: 14,
         paddingHorizontal: 20,
-        borderRadius: 12,
+        borderRadius: 2,
         gap: 8,
     },
     actionButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: colors.textPrimary,
+        color: colors.inverseTextPrimary,
     },
     actionButtonDisabled: {
         opacity: 0.6,

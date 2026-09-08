@@ -154,7 +154,7 @@ export default function ListsScreen() {
             >
                 <View style={styles.listContent}>
                     <View style={styles.listHeader}>
-                        <Ionicons name="list" size={24} color="#007AFF" />
+                        <Ionicons name="list" size={24} color={colors.primary} />
                         <View style={styles.listInfo}>
                             <Text style={styles.listName}>{item.name}</Text>
                             {item.description ? (
@@ -353,7 +353,7 @@ export default function ListsScreen() {
                     accessibilityRole="button"
                     accessibilityHint="Create a new list to organize locations"
                 >
-                    <Ionicons name="add" size={32} color="#fff" />
+                    <Ionicons name="add" size={32} color={colors.inverseTextPrimary} />
                 </TouchableOpacity>
             )}
         </View>
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     emptyCreateButtonText: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#fff',
+        color: colors.inverseTextPrimary,
     },
     errorState: {
         marginHorizontal: 16,

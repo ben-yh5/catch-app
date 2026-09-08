@@ -72,9 +72,8 @@ describe('PassportView', () => {
         mockUserDoc()
         mockGetPassportData.mockResolvedValue(lisbonPassport)
 
-        const { getByLabelText, getByText, queryByLabelText } = render(
-            <PassportView userId="me" isOwnProfile={true} />
-        )
+        const { getByLabelText, getByText, queryByLabelText, queryByText } =
+            render(<PassportView userId="me" isOwnProfile={true} />)
 
         await waitFor(() => {
             expect(getByLabelText('Open passport cover')).toBeTruthy()
@@ -87,7 +86,8 @@ describe('PassportView', () => {
             expect(getByLabelText('Passport pages')).toBeTruthy()
         })
         expect(getByText('LISBON')).toBeTruthy()
-        expect(getByText('PORTUGAL')).toBeTruthy()
+        // Minimalist stamps carry city + date only — no country row
+        expect(queryByText('PORTUGAL')).toBeNull()
     })
 
     it("renders another user's cover via the callable", async () => {

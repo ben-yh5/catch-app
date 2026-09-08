@@ -48,3 +48,18 @@ export function formatPostDate(timestamp: any): string {
         year: 'numeric',
     })
 }
+
+/**
+ * "September 2026" — the granularity of a place's timeline. Used by the
+ * catch reveal labels, the thread date ticker, and postcard postmarks.
+ * Falls back to now when the timestamp is missing/invalid: these are
+ * display-only moments where "when this happened" defaults to the
+ * present, never a placeholder value.
+ */
+export function monthYear(timestamp: any): string {
+    const date = toDate(timestamp) ?? new Date()
+    return date.toLocaleDateString(undefined, {
+        month: 'long',
+        year: 'numeric',
+    })
+}

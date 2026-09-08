@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     actionTextPrimary: {
-        color: colors.white,
+        color: colors.inverseTextPrimary,
     },
     actionTextSecondary: {
         color: colors.primary,

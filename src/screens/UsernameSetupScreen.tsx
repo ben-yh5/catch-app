@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
         opacity: 0.6,
     },
     buttonText: {
-        color: colors.textPrimary,
+        color: colors.inverseTextPrimary,
         fontSize: 16,
         fontWeight: '600',
     },

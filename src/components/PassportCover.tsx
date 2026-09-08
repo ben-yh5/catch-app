@@ -7,13 +7,14 @@
  * Gold here is decoration (cover embossing), not status ink.
  */
 
-import { radii, spacing, typography } from '@/theme/tokens'
+import { cover, HAIRLINE } from '@/theme/document'
+import { radii, spacing } from '@/theme/tokens'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 
-export const COVER_BACKGROUND = '#12233c'
-export const COVER_GOLD = '#d4af37'
+export const COVER_BACKGROUND = cover.background
+export const COVER_GOLD = cover.gold
 
 /** width / height of a single page face (and the closed cover) */
 export const PASSPORT_ASPECT = 0.72
@@ -41,7 +42,7 @@ export default function PassportCover({ width, height }: PassportCoverProps) {
     return (
         <View style={[styles.cover, { width, height }]}>
             <View style={styles.coverBorder}>
-                <Ionicons name="earth" size={40} color={COVER_GOLD} />
+                <Ionicons name="earth" size={30} color={COVER_GOLD} />
                 <Text style={styles.coverTitle}>PASSPORT</Text>
             </View>
         </View>
@@ -56,7 +57,7 @@ const styles = StyleSheet.create({
     },
     coverBorder: {
         flex: 1,
-        borderWidth: 1.5,
+        borderWidth: HAIRLINE,
         borderColor: COVER_GOLD,
         borderRadius: radii.md,
         alignItems: 'center',
@@ -64,8 +65,8 @@ const styles = StyleSheet.create({
         gap: spacing.lg,
     },
     coverTitle: {
-        fontSize: typography.bodyLarge,
-        fontWeight: '800',
+        fontSize: 15,
+        fontWeight: '700',
         letterSpacing: 4,
         color: COVER_GOLD,
     },

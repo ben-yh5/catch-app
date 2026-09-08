@@ -23,8 +23,8 @@ interface RecommendedPostCardProps {
 }
 
 const REASON_COLORS: Record<string, { bg: string; text: string }> = {
-    social: { bg: 'rgba(0, 122, 255, 0.15)', text: '#007AFF' },
-    city_trending: { bg: 'rgba(255, 179, 0, 0.15)', text: '#FFB300' },
+    social: { bg: 'rgba(255, 255, 255, 0.10)', text: '#c9c9ce' },
+    city_trending: { bg: 'rgba(255, 255, 255, 0.10)', text: '#c9c9ce' },
 }
 
 export default function RecommendedPostCard({
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
         marginHorizontal: 16,
         marginBottom: 16,
         backgroundColor: colors.card,
-        borderRadius: 12,
+        borderRadius: 2,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: colors.border,

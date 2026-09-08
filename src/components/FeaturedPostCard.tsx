@@ -82,7 +82,7 @@ export default function FeaturedPostCard({
 const styles = StyleSheet.create({
     card: {
         backgroundColor: colors.card,
-        borderRadius: 12,
+        borderRadius: 2,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: colors.border,

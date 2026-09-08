@@ -8,18 +8,14 @@
  * celebrated status — the catch is the act this app celebrates.)
  */
 
-import PassportStamp, { StampPlace } from '@/components/PassportStamp'
+import PassportPageCard from '@/components/PassportPageCard'
+import { StampPlace } from '@/components/PassportStamp'
+import DocumentButton from '@/components/ui/DocumentButton'
 import { colors } from '@/theme/colors'
+import { spacing, typography } from '@/theme/tokens'
 import { Image } from 'expo-image'
 import React from 'react'
-import {
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native'
+import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native'
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -54,8 +50,8 @@ export default function PostStampModal({
                     contentContainerStyle={[
                         styles.content,
                         {
-                            paddingTop: insets.top + 24,
-                            paddingBottom: insets.bottom + 24,
+                            paddingTop: insets.top + spacing.xl,
+                            paddingBottom: insets.bottom + spacing.xl,
                         },
                     ]}
                     showsVerticalScrollIndicator={false}
@@ -72,32 +68,30 @@ export default function PostStampModal({
 
                     <Animated.View
                         entering={FadeInDown.duration(500).delay(200)}
-                        style={styles.pageCard}
+                        style={styles.cardWrap}
                     >
-                        <Image
-                            source={{ uri: photoUri }}
-                            style={styles.photo}
-                            contentFit="cover"
-                            accessibilityLabel="Your posted photo"
-                        />
-                        <View style={styles.stampWrap} pointerEvents="none">
-                            <PassportStamp
-                                variant="posted"
-                                place={place}
-                                delay={800}
+                        <PassportPageCard
+                            variant="posted"
+                            place={place}
+                            stampDelay={800}
+                            stampSize={140}
+                            overlap={96}
+                        >
+                            <Image
+                                source={{ uri: photoUri }}
+                                style={styles.photo}
+                                contentFit="cover"
+                                accessibilityLabel="Your posted photo"
                             />
-                        </View>
+                        </PassportPageCard>
                     </Animated.View>
 
                     <Animated.View entering={FadeIn.duration(400).delay(1300)}>
-                        <TouchableOpacity
-                            style={styles.doneButton}
+                        <DocumentButton
+                            title="Done"
                             onPress={onClose}
-                            accessibilityRole="button"
-                            accessibilityLabel="Done"
-                        >
-                            <Text style={styles.doneButtonText}>Done</Text>
-                        </TouchableOpacity>
+                            style={styles.doneButton}
+                        />
                     </Animated.View>
                 </ScrollView>
             </View>
@@ -111,50 +105,33 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
     content: {
-        paddingHorizontal: 24,
+        paddingHorizontal: spacing.xl,
         alignItems: 'center',
     },
     title: {
-        fontSize: 34,
+        fontSize: typography.hero,
         fontWeight: '800',
         color: colors.textPrimary,
         textAlign: 'center',
     },
     subtitle: {
-        fontSize: 15,
+        fontSize: typography.body,
         color: colors.textSecondary,
         textAlign: 'center',
         marginTop: 6,
-        marginBottom: 24,
+        marginBottom: spacing.xl,
     },
-    pageCard: {
+    cardWrap: {
         width: '100%',
-        backgroundColor: colors.cardElevated,
-        borderRadius: 16,
-        padding: 10,
-        paddingBottom: 16,
     },
+    // Square corners — it's a print on the mount, not an app image
     photo: {
         width: '100%',
         aspectRatio: 1,
-        borderRadius: 10,
         backgroundColor: colors.imageBackground,
     },
-    // Overlaps the bottom edge of the photo like ink over the page
-    stampWrap: {
-        alignSelf: 'center',
-        marginTop: -104,
-    },
     doneButton: {
-        marginTop: 28,
-        backgroundColor: colors.primary,
+        marginTop: spacing.xl + 4,
         paddingHorizontal: 48,
-        paddingVertical: 14,
-        borderRadius: 26,
-    },
-    doneButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '700',
     },
 })

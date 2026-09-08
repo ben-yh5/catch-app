@@ -161,8 +161,35 @@ export const onPostCreated = functions
 
                 // --- Best-effort work below (failures don't affect counters) ---
 
+                // The root's locationMeta is the city of record for the
+                // caught notification's postmark AND the catcher's passport
+                // stamp (catches aren't geocoded themselves — they happen
+                // within the catch radius of the root). One read, shared by
+                // both consumers below; null when the root is unenriched.
+                let rootMeta: { country?: string; city?: string } | null = null
+                if (rootPostId) {
+                    try {
+                        const rootLocationQuery = await db
+                            .collection('post_locations')
+                            .where('postId', '==', rootPostId)
+                            .limit(1)
+                            .get()
+                        rootMeta =
+                            rootLocationQuery.docs[0]?.data()?.locationMeta ??
+                            null
+                    } catch (e) {
+                        functions.logger.warn(
+                            `[onPostCreated] Root locationMeta read failed for catch ${postId}`,
+                            e
+                        )
+                    }
+                }
+
                 // Notify the original poster that someone stood where they
                 // stood — this is the reward for having found the spot.
+                // catchPostId points at the catcher's photo so the client
+                // can render the notification as a postcard; city is the
+                // postmark (null when unknown — the client omits it).
                 if (
                     txnResult.rootAuthorId &&
                     txnResult.rootAuthorId !== authorId
@@ -176,6 +203,8 @@ export const onPostCreated = functions
                                 type: 'caught',
                                 fromUserId: authorId,
                                 postId: rootPostId,
+                                catchPostId: postId,
+                                city: rootMeta?.city ?? null,
                                 createdAt:
                                     admin.firestore.FieldValue.serverTimestamp(),
                                 read: false,
@@ -196,6 +225,7 @@ export const onPostCreated = functions
                                 {
                                     userId: authorId,
                                     postId: rootPostId,
+                                    catchPostId: postId,
                                     type: 'caught',
                                 }
                             )
@@ -236,27 +266,16 @@ export const onPostCreated = functions
                     )
                 }
 
-                // Passport city stamp for the catch. Catches aren't geocoded
-                // themselves — they happen within the catch radius of the
-                // root, so the root's locationMeta is the city of record. If
-                // the root hasn't been enriched (or enrichment failed), skip;
-                // backfillCoverage repairs the gap.
+                // Passport city stamp for the catch, from the shared
+                // rootMeta read above. If the root hasn't been enriched (or
+                // enrichment failed), skip; backfillCoverage repairs the gap.
                 try {
-                    if (rootPostId) {
-                        const rootLocationQuery = await db
-                            .collection('post_locations')
-                            .where('postId', '==', rootPostId)
-                            .limit(1)
-                            .get()
-                        const rootMeta =
-                            rootLocationQuery.docs[0]?.data()?.locationMeta
-                        if (rootMeta?.country && rootMeta?.city) {
-                            await recordPassportCity(db, authorId, {
-                                country: rootMeta.country,
-                                city: rootMeta.city,
-                                caught: 1,
-                            })
-                        }
+                    if (rootMeta?.country && rootMeta?.city) {
+                        await recordPassportCity(db, authorId, {
+                            country: rootMeta.country,
+                            city: rootMeta.city,
+                            caught: 1,
+                        })
                     }
                 } catch (e) {
                     functions.logger.warn(

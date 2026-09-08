@@ -7,15 +7,22 @@ import { useAuth } from '@/context/AuthContext'
 import { usePost, usePostEvents } from '@/context/PostContext'
 import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
+import { documentInk } from '@/theme/document'
 import { Post, SearchPost } from '@/types'
 import {
+    calculateDistance,
     getPostsInViewport as fetchViewportPosts,
     getPostLocations,
     invalidateAreaCache,
     MapBounds,
 } from '@/utils/geospatialQueries'
 import { decodeGeohashBBox } from '@/utils/coverageQueries'
-import { isLostPlace } from '@/utils/postClassification'
+import { monthYear } from '@/utils/dateUtils'
+import {
+    isLostPlace,
+    LOST_PLACE_INACTIVITY_DAYS,
+} from '@/utils/postClassification'
+import LostPlaceWhisper from '@/components/LostPlaceWhisper'
 import {
     useCoverage,
     useClusterBubbles,
@@ -46,7 +53,6 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    useColorScheme,
     View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -61,14 +67,17 @@ if (!MAPBOX_ACCESS_TOKEN) {
 }
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
-// Map marker colors (using theme colors)
+// Map marker colors. Resting pins wear the muted document inks so the
+// map reads calm; selection/own keep the full-saturation pink — transient
+// feedback should pop. (Muted gold for lost places, if ever revived:
+// #C9A94F.)
 const MAP_COLORS = {
     userLocation: colors.white, // White - user's location puck
-    pin: colors.pinDefault, // Blue - uncaught posts
-    pinCaught: colors.pinCaught, // Pink - caught by user
-    selectedPin: colors.pinSelected, // Light pink - currently selected
+    pin: documentInk.posted, // Muted blue - uncaught posts
+    pinCaught: documentInk.caught, // Muted pink - caught by user
+    selectedPin: colors.pinSelected, // Full pink - currently selected
     pinLostPlace: colors.pinLostPlace, // Gold - lost places (record has a gap)
-    stroke: colors.white,
+    stroke: 'rgba(255, 255, 255, 0.8)',
 }
 
 // Last session's camera, persisted on every settle. Lets the map mount
@@ -90,7 +99,6 @@ export default function MapScreen() {
     const cameraRef = useRef<Camera>(null)
     const shapeSourceRef = useRef<ShapeSource>(null)
     const bubblesSourceRef = useRef<ShapeSource>(null)
-    const colorScheme = useColorScheme()
 
     // State
     const [visiblePosts, setVisiblePosts] = useState<Post[]>([])
@@ -1026,6 +1034,63 @@ export default function MapScreen() {
         [handlePostPress]
     )
 
+    // Proximity whisper: passing near a lost place gets one quiet line.
+    // Foreground-only by design — computed from pins already on screen
+    // and the map's own location fix; no background location, ever.
+    // Singular and unnumbered ("a lost place", never "3 lost places") —
+    // an invitation to notice, not a count.
+    const WHISPER_RADIUS_METERS = 250
+    const [whisperPost, setWhisperPost] = useState<Post | null>(null)
+    const whisperedPinsRef = useRef<Set<string>>(new Set())
+
+    useEffect(() => {
+        if (!userLocation || isSearchMode || isListMode || whisperPost) return
+        const { latitude, longitude } = userLocation.coords
+        const staleCutoff =
+            Date.now() - LOST_PLACE_INACTIVITY_DAYS * 86400000
+
+        let nearest: Post | null = null
+        let nearestDist = Infinity
+        for (const post of sortedVisiblePosts) {
+            if (!post.latitude || !post.longitude) continue
+            if (post.authorId === user?.uid) continue
+            if (whisperedPinsRef.current.has(post.id)) continue
+            if (!isLostPlace(post)) continue
+            // isLostPlace also flags brand-new 0-catch posts; a whisper
+            // is about a record gone quiet, so require real staleness
+            const lastActivity: any = post.lastCaughtAt ?? post.createdAt
+            const lastMs =
+                lastActivity?.toMillis?.() ??
+                (lastActivity?.toDate
+                    ? lastActivity.toDate().getTime()
+                    : new Date(lastActivity).getTime())
+            if (!lastMs || isNaN(lastMs) || lastMs > staleCutoff) continue
+
+            const d = calculateDistance(
+                latitude,
+                longitude,
+                post.latitude,
+                post.longitude
+            )
+            if (d <= WHISPER_RADIUS_METERS && d < nearestDist) {
+                nearest = post
+                nearestDist = d
+            }
+        }
+        if (nearest) {
+            // Once per pin per session, even if dismissed untapped
+            whisperedPinsRef.current.add(nearest.id)
+            setWhisperPost(nearest)
+        }
+    }, [
+        userLocation,
+        sortedVisiblePosts,
+        isSearchMode,
+        isListMode,
+        whisperPost,
+        user?.uid,
+    ])
+
     // Stable handler — an inline ShapeSource onPress is a new function each
     // render, which re-sends the prop across the bridge
     // Tap a bubble. Merged bubbles (Mapbox cluster of several cells) zoom
@@ -1114,10 +1179,12 @@ export default function MapScreen() {
         setSelectedPostId(null)
     }
 
-    const mapStyle =
-        colorScheme === 'dark'
-            ? 'mapbox://styles/mapbox/dark-v11'
-            : 'mapbox://styles/mapbox/streets-v12'
+    // The app's chrome is dark-only (root layout pins DarkTheme) — a light
+    // basemap under dark UI is exactly the clash the document restyle
+    // removes, so the map is dark in both device schemes. Swap for the
+    // custom paper-toned Studio style (MAPBOX_STUDIO_STYLE.md) once
+    // published.
+    const mapStyle = 'mapbox://styles/mapbox/dark-v11'
 
     const handleSearchClear = useCallback(() => {
         isSearchModeRef.current = false
@@ -1147,6 +1214,21 @@ export default function MapScreen() {
                 activeFilter={activeFilter}
                 onFilterChange={handleFilterChange}
             />
+
+            {whisperPost && (
+                <LostPlaceWhisper
+                    // Below the HUD island (search bar + filter pills)
+                    top={insets.top + 132}
+                    message={`A lost place is near you — last photographed ${monthYear(whisperPost.lastCaughtAt ?? whisperPost.createdAt)}.`}
+                    onPress={() => {
+                        const target = whisperPost
+                        setWhisperPost(null)
+                        setSelectedPostId(target.id)
+                        handlePostPress(target.id)
+                    }}
+                    onDismiss={() => setWhisperPost(null)}
+                />
+            )}
 
             {locationDenied && !browseWithoutLocation ? (
                 // Location denied: explain and offer recovery instead of
@@ -1179,7 +1261,7 @@ export default function MapScreen() {
                             <Ionicons
                                 name="settings-outline"
                                 size={18}
-                                color={colors.white}
+                                color={colors.inverseTextPrimary}
                             />
                             <Text
                                 style={styles.locationDeniedPrimaryButtonText}
@@ -1302,26 +1384,29 @@ export default function MapScreen() {
                             <FillLayer
                                 id="coverage-fill"
                                 style={{
+                                    // Muted-ink wash: coverage is context,
+                                    // not content — it should sit under
+                                    // the pins, not compete with them
                                     fillColor:
                                         coverageMode === 'personal'
-                                            ? 'rgba(207, 44, 246, 0.3)'
+                                            ? 'rgba(196, 104, 224, 0.18)'
                                             : [
                                                   'interpolate',
                                                   ['linear'],
                                                   ['get', 'postCount'],
                                                   1,
-                                                  'rgba(0, 122, 255, 0.1)',
+                                                  'rgba(90, 147, 212, 0.06)',
                                                   10,
-                                                  'rgba(0, 122, 255, 0.25)',
+                                                  'rgba(90, 147, 212, 0.14)',
                                                   50,
-                                                  'rgba(0, 122, 255, 0.4)',
+                                                  'rgba(90, 147, 212, 0.22)',
                                                   200,
-                                                  'rgba(0, 122, 255, 0.55)',
+                                                  'rgba(90, 147, 212, 0.32)',
                                               ],
                                     fillOutlineColor:
                                         coverageMode === 'personal'
-                                            ? 'rgba(207, 44, 246, 0.5)'
-                                            : 'rgba(0, 122, 255, 0.3)',
+                                            ? 'rgba(196, 104, 224, 0.3)'
+                                            : 'rgba(90, 147, 212, 0.2)',
                                 }}
                             />
                         </ShapeSource>
@@ -1349,7 +1434,7 @@ export default function MapScreen() {
                                 style={{
                                     circlePitchAlignment: 'map',
                                     circleColor: MAP_COLORS.pin,
-                                    circleOpacity: 0.75,
+                                    circleOpacity: 0.6,
                                     circleRadius: [
                                         'interpolate',
                                         ['linear'],
@@ -1367,7 +1452,7 @@ export default function MapScreen() {
                                         200,
                                         26,
                                     ],
-                                    circleStrokeWidth: 2,
+                                    circleStrokeWidth: 1.5,
                                     circleStrokeColor: MAP_COLORS.stroke,
                                 }}
                             />
@@ -1420,9 +1505,9 @@ export default function MapScreen() {
                                     circlePitchAlignment: 'map',
                                     circleColor: MAP_COLORS.pin,
                                     circleRadius: 20,
-                                    circleOpacity: 0.7,
-                                    circleStrokeWidth: 2,
-                                    circleStrokeColor: 'white',
+                                    circleOpacity: 0.6,
+                                    circleStrokeWidth: 1.5,
+                                    circleStrokeColor: MAP_COLORS.stroke,
                                 }}
                             />
 
@@ -1448,7 +1533,7 @@ export default function MapScreen() {
                                         12,
                                         10,
                                     ],
-                                    circleStrokeWidth: 3,
+                                    circleStrokeWidth: 1.5,
                                     circleStrokeColor: MAP_COLORS.stroke,
                                 }}
                             />
@@ -1624,7 +1709,7 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
     },
     toggleTextActive: {
-        color: '#fff',
+        color: colors.inverseTextPrimary,
     },
     listViewContainer: {
         flex: 1,
@@ -1702,7 +1787,7 @@ const styles = StyleSheet.create({
     locationDeniedPrimaryButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: colors.white,
+        color: colors.inverseTextPrimary,
     },
     locationDeniedSecondaryButton: {
         borderWidth: 1,

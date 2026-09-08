@@ -1,11 +1,19 @@
 /**
- * Color Theme
+ * Color Theme — monochrome with ink (Sept 2026 restyle).
  *
- * Dark mode color palette for the Catch app.
- * Uses a blue/pink accent palette:
- * - Blue (#007AFF): Primary actions, uncaught/available state
- * - Pink (#CF2CF6): Caught/owned state, trophies, achievements
+ * The UI is grayscale: white chrome on near-black surfaces. The ONLY
+ * color in the app is stamp ink — blue = posted, pink = caught — and it
+ * appears solely where it carries that meaning (map pins, stamps,
+ * caught badges, coverage wash). Color is meaning, never decoration.
+ * Danger red survives for destructive actions only.
  */
+
+/** The act inks — the only color in the app. Blue is the invitation
+ * (posted), pink is the prestige ink (caught, the verified act). */
+export const ink = {
+    posted: '#5A93D4',
+    caught: '#C468E0',
+} as const
 
 export const colors = {
     // Backgrounds
@@ -15,22 +23,23 @@ export const colors = {
     cardElevated: '#2c2c2e', // Slightly lighter gray for badges/buttons
     surface: '#1c1c1e', // Standard surface color
 
-    // Primary Accents
-    primary: '#007AFF', // iOS blue - primary actions, uncaught state
-    secondary: '#CF2CF6', // Pink - caught state, trophies
-    accent: '#CF2CF6', // Pink - highlights, user location
+    // Chrome accents — monochrome. Anything interactive/active is white
+    // ink, not blue. Pair `primary` backgrounds with inverseTextPrimary.
+    primary: '#ececee', // White ink - primary actions, active states
+    secondary: ink.caught, // SEMANTIC: caught state only, never decoration
+    accent: ink.caught, // SEMANTIC: caught state only
     danger: '#FF3B30', // iOS red - delete/destructive actions
 
     // Caught State Indicators
-    caughtBadge: '#CF2CF6', // Pink badge background (same as secondary)
+    caughtBadge: ink.caught, // Pink badge background (caught semantic)
     caughtBadgeText: '#ffffff', // White text on badge
 
     // Map Pin Colors
-    pinDefault: '#007AFF', // Blue - uncaught posts
-    pinCaught: '#CF2CF6', // Pink - caught by user
-    pinSelected: '#CF2CF6', // Pink - currently selected
-    pinLostPlace: '#FFD700', // Gold - lost places (0 catches or inactive >30 days)
-    userLocation: '#CF2CF6', // Pink - user's location puck
+    pinDefault: ink.posted, // Blue ink - uncaught posts
+    pinCaught: ink.caught, // Pink ink - caught by user
+    pinSelected: ink.caught, // Pink ink - currently selected
+    pinLostPlace: '#C9A94F', // Muted gold - lost places (currently unused on map)
+    userLocation: '#ececee', // White - user's location puck (not act-semantic)
 
     // Text
     textPrimary: '#ffffff', // White
@@ -48,12 +57,13 @@ export const colors = {
     white: '#ffffff',
     error: '#FF3B30',
 
-    // Status (toasts, banners)
-    success: '#30D158', // Green - success feedback
-    warning: '#FF9F0A', // Amber - warnings
-    info: '#007AFF', // Blue - informational
+    // Status (toasts, banners) — monochrome: outcome is carried by copy
+    // and icon, not hue. Only danger/error keep red.
+    success: '#ececee',
+    warning: '#ececee',
+    info: '#ececee',
 
     // Icon states
     iconInactive: '#98989f',
-    iconActive: '#007AFF', // Same as primary for consistency
+    iconActive: '#ececee', // Same as primary for consistency
 }

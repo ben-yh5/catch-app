@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
         backgroundColor: colors.card,
-        borderRadius: 16,
+        borderRadius: 2,
         marginHorizontal: 16,
         marginVertical: 8,
         overflow: 'hidden',
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 6,
         backgroundColor: colors.cardElevated,
-        borderRadius: 8,
+        borderRadius: 2,
     },
     locationButtonText: {
         fontSize: 12,

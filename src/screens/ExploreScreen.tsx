@@ -789,7 +789,7 @@ const styles = StyleSheet.create({
     emptyActionText: {
         fontSize: 14,
         fontWeight: '600',
-        color: colors.white,
+        color: colors.inverseTextPrimary,
     },
     emptyActionTextSecondary: {
         fontSize: 14,
