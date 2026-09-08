@@ -243,7 +243,7 @@ Notification types: `new_post`, `follow`, `caught`.
 | `reportUser` / `reportPost` | HTTPS Callable | Content/user reports into `reports` collection; one report per reporter per target |
 | `blockUser` / `unblockUser` | HTTPS Callable | Manages caller's `blockedUsers` array; blocking also severs follows both ways. Client filters blocked authors from feeds/map |
 | `markAllNotificationsRead` | HTTPS Callable | Bulk-marks all of the caller's notifications as read (batched server-side over the whole subcollection) |
-| `reconcileCounters` | HTTPS Callable | Admin-only: recomputes `totalPosts`/`totalCatches` from surviving posts; `dryRun` (default) reports drift without fixing |
+| `reconcileCounters` | HTTPS Callable | Admin-only: recomputes and overwrites `totalPosts`/`totalCatches` from surviving posts; pass `dryRun: true` to only report drift |
 | `onPostCreated` | Firestore Trigger | Pioneer attribution, counter/catchCount increments, caught + follower notifications. Idempotent via `context.eventId` dedup |
 | `onPostDeleted` | Firestore Trigger | Thread promotion, counter decrements (catchCount), list cleanup. Idempotent via `context.eventId` dedup |
 | `onUserFollowed` | Firestore Trigger | Follow notifications (in-app + push) |

@@ -171,6 +171,30 @@ export const onPostDeleted = functions
                         })
                     }
 
+                    // Counters follow classification (reconcileCounters
+                    // counts by isOriginal), so the reclassification above
+                    // must move the promoted author's counters with it —
+                    // otherwise their profile stat says N catches while
+                    // the catches tab can only list N-1. Same batch, so
+                    // the flip and the counter move land atomically.
+                    const promotedAuthorId = newRootDoc.data().authorId
+                    if (promotedAuthorId) {
+                        const promotedUserRef = db
+                            .collection('users')
+                            .doc(promotedAuthorId)
+                        // Author may be gone (account deletion race) —
+                        // updating a missing doc would fail the whole batch
+                        const promotedUserDoc = await promotedUserRef.get()
+                        if (promotedUserDoc.exists) {
+                            batch.update(promotedUserRef, {
+                                totalCatches:
+                                    admin.firestore.FieldValue.increment(-1),
+                                totalPosts:
+                                    admin.firestore.FieldValue.increment(1),
+                            })
+                        }
+                    }
+
                     await batch.commit()
                     functions.logger.info(
                         `Thread promotion complete. New root: ${newRootId}`

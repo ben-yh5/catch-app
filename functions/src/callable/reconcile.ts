@@ -14,7 +14,8 @@ import { MAX_INSTANCES } from '../lib/constants'
  * Any drift (from historical trigger bugs or partial failures) is detected
  * and — unless dryRun — corrected by writing the recomputed absolute values.
  *
- * @param data.dryRun - If true (default), report discrepancies without fixing
+ * @param data.dryRun - If true, report discrepancies without fixing
+ *   (default false: overwrite)
  * @returns Summary with per-user discrepancies (capped at 200 entries)
  *
  * Caveat: values are recomputed from a live scan, so run during quiet periods
@@ -30,7 +31,7 @@ export const reconcileCounters = functions
     .https.onCall(async (data, context) => {
         requireAdmin(context)
 
-        const dryRun = data?.dryRun !== false // default true
+        const dryRun = data?.dryRun === true // default false: overwrite
         const db = admin.firestore()
         const PAGE_SIZE = 500
 
