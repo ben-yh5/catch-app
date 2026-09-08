@@ -122,6 +122,10 @@ export default function ThreadModal({
         pitch?: number
     } | null>(null)
     const [distance, setDistance] = useState<number | null>(null)
+    // Bumped on every open and every location fetch — a fetch that resolves
+    // with a stale id belongs to a previously viewed post, so its writes
+    // are dropped instead of showing under the current one
+    const locationFetchId = useRef(0)
 
     // Hook-based catch flow
     const {
@@ -180,6 +184,12 @@ export default function ThreadModal({
     // Fetch all posts in the thread
     useEffect(() => {
         if (visible && post) {
+            // Whatever location state is on screen belongs to the
+            // previously viewed thread — clear it (and orphan any
+            // in-flight fetch) so its distance can't show under this post
+            locationFetchId.current++
+            setPostLocation(null)
+            setDistance(null)
             fetchThread()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -223,7 +233,10 @@ export default function ThreadModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPost?.id, user])
 
-    // Fetch location data when root post changes
+    // Fetch location data when the thread itself changes. Deliberately NOT
+    // keyed on `visible`: reopening fires before fetchThread resolves, so a
+    // visible-triggered run would fetch (and display) the PREVIOUS thread's
+    // root distance under the new post.
     useEffect(() => {
         if (visible && threadPosts.length > 0) {
             const rootPost = threadPosts[0]
@@ -235,7 +248,7 @@ export default function ThreadModal({
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [visible, threadPosts])
+    }, [threadPosts])
 
     const fetchThread = async () => {
         if (!post) return
@@ -352,6 +365,7 @@ export default function ThreadModal({
     }
 
     const fetchPostLocationAndDistance = async (postId: string) => {
+        const fetchId = ++locationFetchId.current
         try {
             // Fetch post location from Cloud Function
             const getPostLocation = httpsCallable(functions, 'getPostLocation')
@@ -364,6 +378,7 @@ export default function ThreadModal({
                 pitch?: number
             }
 
+            if (fetchId !== locationFetchId.current) return
             setPostLocation({
                 latitude: locationData.latitude,
                 longitude: locationData.longitude,
@@ -403,7 +418,7 @@ export default function ThreadModal({
                     userLoc = await Location.getLastKnownPositionAsync()
                 }
 
-                if (userLoc) {
+                if (userLoc && fetchId === locationFetchId.current) {
                     // Calculate distance
                     const dist = calculateDistance(
                         userLoc.coords.latitude,
@@ -416,6 +431,7 @@ export default function ThreadModal({
             }
         } catch (error) {
             console.error('Error fetching post location:', error)
+            if (fetchId !== locationFetchId.current) return
             setPostLocation(null)
             setDistance(null)
         }
