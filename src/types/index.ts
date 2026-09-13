@@ -32,6 +32,11 @@ export interface Post {
     mediumURL?: string
     isPioneer?: boolean
     lastCaughtAt?: any // Firestore Timestamp — set when post is caught, used for lost-place classification
+    // Denormalized place identity, written server-side by onPostCreated after
+    // geocoding (catches inherit the root's). Display-safe: coordinates stay
+    // server-only. Absent until enrichment runs or when geocoding failed.
+    city?: string
+    country?: string
 }
 
 /**

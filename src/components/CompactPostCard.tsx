@@ -21,6 +21,8 @@ interface CompactPostCardProps {
         | 'createdAt'
         | 'latitude'
         | 'longitude'
+        | 'city'
+        | 'country'
     >
     onPress: () => void
     onJumpToLocation?: () => void
@@ -78,6 +80,12 @@ export default function CompactPostCard({
                     </Text>
                 ) : (
                     <View style={{ flex: 1 }} />
+                )}
+
+                {(post.city || post.country) && (
+                    <Text style={styles.place} numberOfLines={1}>
+                        {[post.city, post.country].filter(Boolean).join(', ')}
+                    </Text>
                 )}
 
                 <View style={styles.footer}>
@@ -173,6 +181,12 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         lineHeight: 20,
         flex: 1,
+    },
+    place: {
+        fontSize: 12,
+        color: colors.textTertiary,
+        fontWeight: '500',
+        marginTop: 4,
     },
     footer: {
         flexDirection: 'row',

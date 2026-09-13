@@ -809,7 +809,7 @@ export const deleteAccount = functions
         try {
             const listsQuery = await db
                 .collection('lists')
-                .where('userId', '==', userId)
+                .where('creatorId', '==', userId)
                 .get()
 
             if (!listsQuery.empty) {

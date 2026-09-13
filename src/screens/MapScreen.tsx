@@ -2,6 +2,7 @@ import { FilterType } from '@/components/FilterPills'
 import MapBottomSheet from '@/components/MapBottomSheet'
 import MapHUD from '@/components/MapHUD'
 import ThreadModal from '@/components/ThreadModal'
+import ViewToggle from '@/components/ViewToggle'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { usePost, usePostEvents } from '@/context/PostContext'
@@ -29,7 +30,10 @@ import {
     CoverageMode,
     PIN_MIN_ZOOM,
 } from '@/hooks/useCoverage'
+import { useTabBarInset } from '@/hooks/useTabBarInset'
+import { removePostFromList } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
+import type BottomSheet from '@gorhom/bottom-sheet'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { distanceBetween } from 'geofire-common'
 import Mapbox, {
@@ -44,10 +48,11 @@ import Mapbox, {
 } from '@rnmapbox/maps'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { doc, getDoc } from 'firebase/firestore'
+import { deleteDoc, doc, getDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
+    Alert,
     BackHandler,
     Linking,
     StyleSheet,
@@ -93,6 +98,7 @@ type StoredCamera = { lng: number; lat: number; zoom: number }
 export default function MapScreen() {
     const { user, blockedUserIds } = useAuth()
     const { showToast } = useToast()
+    const tabBarInset = useTabBarInset()
     const router = useRouter()
     const insets = useSafeAreaInsets()
     const mapRef = useRef<MapView>(null)
@@ -129,16 +135,36 @@ export default function MapScreen() {
     const pendingCameraActionRef = useRef<(() => void) | null>(null)
 
     // List Focus Mode State
-    const { listId, postId, filter, panToUser, searchQuery } =
+    const { listId, postId, view, filter, panToUser, searchQuery } =
         useLocalSearchParams<{
             listId: string
             postId: string
+            view: string
             filter: string
             panToUser: string
             searchQuery: string
         }>()
     const [activeList, setActiveList] = useState<any | null>(null)
     const [, setListPosts] = useState<Post[]>([])
+
+    // The list/map toggle is a sheet position, not a navigation: the fully
+    // raised sheet IS the list view. These drive/mirror the sheet from the
+    // ViewToggle pill.
+    const listSheetRef = useRef<BottomSheet>(null)
+    const [listSheetIndex, setListSheetIndex] = useState(1)
+    // Entry asked for list view (?view=list): raise the sheet on arrival
+    const pendingListViewRef = useRef(false)
+    // The map tab paints a frame before the sheet reaches full — mask it
+    // with an opaque cover (under the sheet, over the map) so a list opens
+    // straight onto a page, never a split-second of map
+    const [listEntryMasking, setListEntryMasking] = useState(false)
+    // "See location" for a post belonging to the open list: consume the
+    // postId param as a camera jump instead of entering post focus
+    const handledListJumpPostRef = useRef('')
+    const [pendingListJump, setPendingListJump] = useState<{
+        latitude: number
+        longitude: number
+    } | null>(null)
 
     // Native-tabs quirk: the tab bar dispatches a params-less JUMP_TO on
     // every focus change — including the programmatic one right after
@@ -150,8 +176,39 @@ export default function MapScreen() {
     // adjustment is React's sanctioned derived-state pattern.
     const [stickyListId, setStickyListId] = useState('')
     const [stickyPostId, setStickyPostId] = useState('')
-    if (listId && listId !== stickyListId) setStickyListId(listId)
-    if (postId && postId !== stickyPostId) setStickyPostId(postId)
+    if (listId && listId !== stickyListId) {
+        setStickyListId(listId)
+        // Read view alongside listId — TabRouter wipes both moments later
+        pendingListViewRef.current = view === 'list'
+        if (view === 'list' && !listEntryMasking) setListEntryMasking(true)
+    }
+    // A post opened while a list is focused ("see location" from a card's
+    // thread): if it's one of the list's own shots, treat it as a jump —
+    // camera to the pin, sheet to peek, list focus intact. A foreign post
+    // hands the focus over to post mode instead.
+    if (
+        postId &&
+        postId !== stickyPostId &&
+        postId !== handledListJumpPostRef.current
+    ) {
+        const listPost = stickyListId
+            ? visiblePosts.find((p) => p.id === postId)
+            : undefined
+        if (listPost?.latitude && listPost?.longitude) {
+            handledListJumpPostRef.current = postId
+            setPendingListJump({
+                latitude: listPost.latitude,
+                longitude: listPost.longitude,
+            })
+        } else {
+            if (stickyListId) setStickyListId('')
+            setStickyPostId(postId)
+        }
+    }
+    // Same post can be jumped to again once the param has been wiped
+    if (!postId && handledListJumpPostRef.current) {
+        handledListJumpPostRef.current = ''
+    }
     const effectiveListId = listId || stickyListId
     const effectivePostId = postId || stickyPostId
 
@@ -172,6 +229,9 @@ export default function MapScreen() {
     // ref at execution time instead
     const isListModeRef = useRef(false)
     isListModeRef.current = isListMode
+    // List-focus (not post-focus) mirror for the hardware back handler
+    const hasListFocusRef = useRef(false)
+    hasListFocusRef.current = Boolean(effectiveListId)
     const [searchPostResults, setSearchPostResults] = useState<Post[]>([])
     const [searchLoading, setSearchLoading] = useState(false)
     const [activeSearchQuery, setActiveSearchQuery] = useState('')
@@ -208,6 +268,118 @@ export default function MapScreen() {
         lastFetchBoundsRef.current = null
         loadVisiblePostsRef.current?.()
     }, [router])
+
+    // Back from a list returns to the Lists tab (the list of lists) — a
+    // list is a page you leave, not a mode you clear. The sheet's Close
+    // button still exits list focus in place on the map.
+    const handleListBack = useCallback(() => {
+        handleListClose()
+        router.push('/(tabs)/lists' as any)
+    }, [handleListClose, router])
+
+    // Entry position: ?view=list lands fully raised (a list page — the map
+    // hidden until you swipe down); map-first entries (e.g. Explore cards)
+    // land at the peek. Deferred a tick so the sheet has re-rendered with
+    // the binary list-mode snap points before the command.
+    useEffect(() => {
+        if (stickyListId) {
+            const target = pendingListViewRef.current ? 2 : 0
+            pendingListViewRef.current = false
+            const t = setTimeout(
+                () => listSheetRef.current?.snapToIndex(target),
+                50
+            )
+            // The mask under the sheet is invisible once the sheet is full,
+            // so a generous fallback clear is safe in every path
+            const m = setTimeout(() => setListEntryMasking(false), 800)
+            return () => {
+                clearTimeout(t)
+                clearTimeout(m)
+            }
+        }
+        return undefined
+    }, [stickyListId])
+
+    // Post focus ("see location") lands at the mid detent — pin visible
+    // above, the shot's card in hand below
+    useEffect(() => {
+        if (stickyPostId) {
+            const t = setTimeout(
+                () => listSheetRef.current?.snapToIndex(1),
+                50
+            )
+            return () => clearTimeout(t)
+        }
+        return undefined
+    }, [stickyPostId])
+
+    // Owner actions for the raised-sheet list view (the old ListDetailScreen
+    // affordances, now living on the sheet)
+    const handleEditList = useCallback(() => {
+        router.push(`/create-list?listId=${effectiveListId}` as any)
+    }, [router, effectiveListId])
+
+    const handleDeleteList = useCallback(() => {
+        Alert.alert(
+            'Delete List',
+            `"${activeList?.name}" and its saved shots will be permanently deleted. This cannot be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deleteDoc(doc(db, 'lists', effectiveListId))
+                            handleListClose()
+                        } catch (error) {
+                            console.error('Error deleting list:', error)
+                            showToast('error', 'Failed to delete list')
+                        }
+                    },
+                },
+            ]
+        )
+    }, [activeList?.name, effectiveListId, handleListClose, showToast])
+
+    const handleRemoveListPost = useCallback(
+        (removeId: string) => {
+            Alert.alert('Remove Post', 'Remove this post from the list?', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await removePostFromList(effectiveListId, removeId)
+                            setVisiblePosts((prev) =>
+                                prev.filter((p) => p.id !== removeId)
+                            )
+                            setListPosts((prev) =>
+                                prev.filter((p) => p.id !== removeId)
+                            )
+                            setActiveList((prev: any) =>
+                                prev
+                                    ? {
+                                          ...prev,
+                                          postIds: (
+                                              prev.postIds ?? []
+                                          ).filter(
+                                              (id: string) => id !== removeId
+                                          ),
+                                      }
+                                    : prev
+                            )
+                        } catch (error) {
+                            console.error('Error removing post:', error)
+                            showToast('error', 'Failed to remove post')
+                        }
+                    },
+                },
+            ])
+        },
+        [effectiveListId, showToast]
+    )
 
     // Wrap fetchListDetails in useCallback
     const fetchListDetails = useCallback(
@@ -635,12 +807,17 @@ export default function MapScreen() {
         }
     }, [effectiveListId, effectivePostId, fetchListDetails, fetchPostForLocate])
 
-    // Hardware back exits list mode (reads the ref so this effect never
-    // needs to re-register)
+    // Hardware back: a focused list goes back to the Lists tab (same as
+    // the header back arrow); post focus just exits in place. Reads refs
+    // so this effect rarely re-registers.
     useEffect(() => {
         const backHandler = BackHandler.addEventListener(
             'hardwareBackPress',
             () => {
+                if (hasListFocusRef.current) {
+                    handleListBack()
+                    return true
+                }
                 if (isListModeRef.current) {
                     handleListClose()
                     return true
@@ -650,9 +827,7 @@ export default function MapScreen() {
         )
 
         return () => backHandler.remove()
-    }, [
-        handleListClose,
-    ])
+    }, [handleListBack, handleListClose])
 
     // Apply sorting based on active filter
     const applySorting = useCallback(
@@ -969,6 +1144,11 @@ export default function MapScreen() {
     // Handle jump to location from bottom sheet
     const handleJumpToLocation = useCallback(
         (latitude: number, longitude: number) => {
+            // Jumping to a shot means "show me the map" — drop a raised
+            // list sheet to the peek so the pin is actually visible
+            if (isListModeRef.current) {
+                listSheetRef.current?.snapToIndex(0)
+            }
             if (cameraRef.current) {
                 cameraRef.current.setCamera({
                     centerCoordinate: [longitude, latitude],
@@ -979,6 +1159,17 @@ export default function MapScreen() {
         },
         []
     )
+
+    // Execute a "see location" jump latched while a list is focused
+    useEffect(() => {
+        if (pendingListJump) {
+            setPendingListJump(null)
+            handleJumpToLocation(
+                pendingListJump.latitude,
+                pendingListJump.longitude
+            )
+        }
+    }, [pendingListJump, handleJumpToLocation])
     // Handle post press from bottom sheet
     const handlePostPress = useCallback(
         (postId: string) => {
@@ -1204,16 +1395,20 @@ export default function MapScreen() {
 
     return (
         <View style={styles.container}>
-            {/* Map HUD (Search + Filters) */}
-            <MapHUD
-                onSearch={handleSearch}
-                onSearchClear={handleSearchClear}
-                searchLoading={searchLoading}
-                searchQuery={searchQuery || ''}
-                isSearchMode={isSearchMode}
-                activeFilter={activeFilter}
-                onFilterChange={handleFilterChange}
-            />
+            {/* Map HUD (Search + Filters) — hidden while a list or a single
+                post is focused: focus modes own the screen, and search comes
+                back when they close */}
+            {!isListMode && (
+                <MapHUD
+                    onSearch={handleSearch}
+                    onSearchClear={handleSearchClear}
+                    searchLoading={searchLoading}
+                    searchQuery={searchQuery || ''}
+                    isSearchMode={isSearchMode}
+                    activeFilter={activeFilter}
+                    onFilterChange={handleFilterChange}
+                />
+            )}
 
             {whisperPost && (
                 <LostPlaceWhisper
@@ -1590,6 +1785,19 @@ export default function MapScreen() {
                 </View>
             )}
 
+            {/* List-entry mask. Sibling order stacks it above the map
+                (earlier siblings) and below the sheet (later sibling) —
+                deliberately no zIndex, which would beat the sheet */}
+            {listEntryMasking && (
+                <View
+                    style={[
+                        StyleSheet.absoluteFill,
+                        { backgroundColor: colors.background },
+                    ]}
+                    pointerEvents="none"
+                />
+            )}
+
             {/* Bottom Sheet */}
             {(!locationDenied || browseWithoutLocation) && (
                 <MapBottomSheet
@@ -1633,12 +1841,60 @@ export default function MapScreen() {
                                 : undefined
                     }
                     onClose={isSearchMode ? handleSearchClear : handleListClose}
+                    onBack={
+                        !isSearchMode && effectiveListId
+                            ? handleListBack
+                            : undefined
+                    }
                     isListMode={isListMode || isSearchMode}
+                    // Full-page state belongs to real lists only — post
+                    // focus ("see location") is map-first and keeps the
+                    // peek/half pair
+                    allowFullSnap={Boolean(effectiveListId) && !isSearchMode}
+                    sheetRef={listSheetRef}
+                    onIndexChange={setListSheetIndex}
+                    onEditList={
+                        !isSearchMode &&
+                        activeList &&
+                        activeList.creatorId === user?.uid
+                            ? handleEditList
+                            : undefined
+                    }
+                    onDeleteList={
+                        !isSearchMode &&
+                        activeList &&
+                        activeList.creatorId === user?.uid
+                            ? handleDeleteList
+                            : undefined
+                    }
+                    onRemovePost={
+                        !isSearchMode &&
+                        activeList &&
+                        activeList.creatorId === user?.uid
+                            ? handleRemoveListPost
+                            : undefined
+                    }
                     // Belt to the derived isListMode: the zoomed-out header
                     // must never surface while a list or search is open
                     zoomedOut={!isListMode && !isSearchMode && zoomedTooFarOut}
                 />
             )}
+
+            {/* Floating "Map" pill — shown only on the raised list page, as
+                the hint that a map exists underneath. When the map is
+                exposed there's no floating button: the peek strip itself is
+                the way back up (drag) */}
+            {Boolean(effectiveListId) &&
+                !isSearchMode &&
+                activeList &&
+                listSheetIndex === 2 &&
+                (!locationDenied || browseWithoutLocation) && (
+                    <ViewToggle
+                        activeMode="list"
+                        onToggle={() => listSheetRef.current?.snapToIndex(0)}
+                        bottomOffset={tabBarInset + 24}
+                    />
+                )}
 
             {/* Thread Modal */}
             <ThreadModal

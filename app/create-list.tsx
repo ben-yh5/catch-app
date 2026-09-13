@@ -2,7 +2,6 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
-import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { addDoc, collection, doc, getDoc, updateDoc } from 'firebase/firestore'
 import React, { useState } from 'react'
@@ -12,6 +11,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
+    Switch,
     Text,
     TextInput,
     TouchableOpacity,
@@ -30,6 +30,7 @@ export default function CreateListModal() {
 
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
+    const [isPublic, setIsPublic] = useState(false)
     const [loading, setLoading] = useState(false)
     const [isLoadingList, setIsLoadingList] = useState(isEditing)
 
@@ -43,6 +44,7 @@ export default function CreateListModal() {
                         const data = listDoc.data()
                         setName(data.name || '')
                         setDescription(data.description || '')
+                        setIsPublic(data.isPublic === true)
                     }
                 } catch (error) {
                     console.error('Error loading list:', error)
@@ -89,6 +91,7 @@ export default function CreateListModal() {
                 await updateDoc(doc(db, 'lists', listId), {
                     name: name.trim(),
                     description: description.trim(),
+                    isPublic,
                     updatedAt: new Date(),
                 })
             } else {
@@ -99,7 +102,7 @@ export default function CreateListModal() {
                     creatorId: user.uid,
                     creatorUsername: username,
                     postIds: [],
-                    isPublic: true,
+                    isPublic,
                     createdAt: new Date(),
                     updatedAt: new Date(),
                 })
@@ -183,15 +186,22 @@ export default function CreateListModal() {
                     </Text>
                 </View>
 
-                <View style={styles.infoBox}>
-                    <Ionicons
-                        name="information-circle"
-                        size={20}
-                        color={colors.textSecondary}
+                <View style={styles.toggleRow}>
+                    <View style={styles.toggleLabels}>
+                        <Text style={styles.label}>Public list</Text>
+                        <Text style={styles.toggleHint}>
+                            {isPublic
+                                ? 'Anyone can view this list'
+                                : 'Only you can see this list'}
+                        </Text>
+                    </View>
+                    <Switch
+                        value={isPublic}
+                        onValueChange={setIsPublic}
+                        disabled={isLoadingList}
+                        trackColor={{ true: colors.primary }}
+                        accessibilityLabel="Public list"
                     />
-                    <Text style={styles.infoText}>
-                        Lists are public and can be viewed by anyone
-                    </Text>
                 </View>
             </View>
         </KeyboardAvoidingView>
@@ -265,18 +275,22 @@ const styles = StyleSheet.create({
         textAlign: 'right',
         marginTop: 4,
     },
-    infoBox: {
+    toggleRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         backgroundColor: colors.cardElevated,
         padding: 12,
         borderRadius: 8,
         marginTop: 8,
     },
-    infoText: {
+    toggleLabels: {
+        flex: 1,
+        marginRight: 12,
+    },
+    toggleHint: {
         fontSize: 14,
         color: colors.textSecondary,
-        marginLeft: 8,
-        flex: 1,
+        marginTop: 2,
     },
 })

@@ -85,16 +85,24 @@ service cloud.firestore {
 
     // Lists collection
     match /lists/{listId} {
-      // Anyone can read lists (all lists are public)
-      allow read: if true;
+      // Public lists are readable by anyone; private lists only by their creator
+      allow read: if resource.data.isPublic == true ||
+                     (request.auth != null &&
+                      request.auth.uid == resource.data.creatorId);
 
-      // Only authenticated users can create lists
+      // Only authenticated users can create lists, as themselves
       allow create: if request.auth != null &&
                        request.auth.uid == request.resource.data.creatorId;
 
-      // Only creator can update/delete
-      allow update, delete: if request.auth != null &&
-                            request.auth.uid == resource.data.creatorId;
+      // Only creator can update; identity/provenance fields are immutable
+      allow update: if request.auth != null &&
+                       request.auth.uid == resource.data.creatorId &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['name', 'description', 'postIds', 'isPublic', 'updatedAt']);
+
+      // Only creator can delete
+      allow delete: if request.auth != null &&
+                       request.auth.uid == resource.data.creatorId;
     }
 
     // Training pairs collection

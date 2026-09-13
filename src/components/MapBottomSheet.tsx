@@ -1,6 +1,8 @@
 import { useAuth } from '@/context/AuthContext'
 import { useTabBarInset } from '@/hooks/useTabBarInset'
 import { colors } from '@/theme/colors'
+import { smallTargetHitSlop } from '@/theme/tokens'
+import { Ionicons } from '@expo/vector-icons'
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet'
 import React, { useMemo, useRef, useState } from 'react'
 import {
@@ -10,6 +12,13 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native'
+import Animated, {
+    Extrapolation,
+    interpolate,
+    useAnimatedStyle,
+    useSharedValue,
+} from 'react-native-reanimated'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import CompactPostCard from './CompactPostCard'
 
 interface MapBottomSheetProps {
@@ -27,7 +36,21 @@ interface MapBottomSheetProps {
     emptyTitle?: string
     emptySubtitle?: string
     onClose?: () => void
+    /** List focus: back to wherever lists are listed (header arrow) */
+    onBack?: () => void
     isListMode?: boolean
+    /** List focus mode: unlocks the 100% snap point — the fully raised
+     *  sheet IS the list view (list/map is a sheet position, not a
+     *  navigation) */
+    allowFullSnap?: boolean
+    /** External handle so the screen (ViewToggle pill) can command snaps */
+    sheetRef?: React.RefObject<BottomSheet | null>
+    /** Reports snap index changes so the pill can mirror the position */
+    onIndexChange?: (index: number) => void
+    /** Owner-only list actions, shown in the list-mode header / rows */
+    onEditList?: () => void
+    onDeleteList?: () => void
+    onRemovePost?: (postId: string) => void
     /** Below pin zoom — no pin query runs, so a "0 shots" count would be a
      *  lie; the header explains the zoom state instead */
     zoomedOut?: boolean
@@ -46,37 +69,120 @@ function MapBottomSheet({
     emptyTitle,
     emptySubtitle,
     onClose,
+    onBack,
     isListMode,
+    allowFullSnap,
+    sheetRef,
+    onIndexChange,
+    onEditList,
+    onDeleteList,
+    onRemovePost,
     zoomedOut,
 }: MapBottomSheetProps) {
     const { user } = useAuth()
     // Map tab only — raise the sheet above the Android native tab bar the
     // screen extends behind (0 on iOS)
     const tabBarInset = useTabBarInset()
-    const bottomSheetRef = useRef<BottomSheet>(null)
-    const snapPoints = useMemo(() => ['15%', '50%'], [])
+    const insets = useSafeAreaInsets()
+    const internalRef = useRef<BottomSheet>(null)
+    const bottomSheetRef = sheetRef ?? internalRef
+    // Three detents for lists (Apple/Google Maps style): peek, mid (cards
+    // + map together), and full — the list page. Browse/search/post focus
+    // keep the peek/half pair.
+    const snapPoints = useMemo(
+        () => (allowFullSnap ? ['15%', '50%', '100%'] : ['15%', '50%']),
+        [allowFullSnap]
+    )
     const [sheetIndex, setSheetIndex] = useState(1)
 
+    // Fully raised, the sheet must read as a plain page — no map peeking
+    // anywhere: corners square off and the header pads itself below the
+    // status bar as the sheet approaches the top snap. Swiping down
+    // re-rounds the corners and reveals the map.
+    const animatedIndex = useSharedValue(1)
+    const fullSnapEnabled = allowFullSnap === true
+    const statusBarPad = insets.top
+    const animatedBackgroundStyle = useAnimatedStyle(() => {
+        const radius = fullSnapEnabled
+            ? interpolate(
+                  animatedIndex.value,
+                  [1.85, 2],
+                  [20, 0],
+                  Extrapolation.CLAMP
+              )
+            : 20
+        return {
+            borderTopLeftRadius: radius,
+            borderTopRightRadius: radius,
+        }
+    })
+    // Base 8 at sheet positions; at the top snap exactly the safe-area
+    // inset, so the list header touches the screen top right below the
+    // status bar / camera area with no extra gap
+    const animatedHeaderStyle = useAnimatedStyle(() => {
+        const pad = fullSnapEnabled
+            ? interpolate(
+                  animatedIndex.value,
+                  [1.85, 2],
+                  [4, statusBarPad],
+                  Extrapolation.CLAMP
+              )
+            : 4
+        return { paddingTop: pad }
+    })
+
     const renderItem = ({ item }: { item: any }) => (
-        <CompactPostCard
-            post={item}
-            onPress={() => onPostPress(item.id)}
-            onJumpToLocation={
-                item.latitude && item.longitude
-                    ? () => onJumpToLocation(item.latitude, item.longitude)
-                    : undefined
-            }
-            highlighted={item.authorId === user?.uid}
-        />
+        <View style={styles.postContainer}>
+            <CompactPostCard
+                post={item}
+                onPress={() => onPostPress(item.id)}
+                onJumpToLocation={
+                    item.latitude && item.longitude
+                        ? () => onJumpToLocation(item.latitude, item.longitude)
+                        : undefined
+                }
+                highlighted={item.authorId === user?.uid}
+            />
+            {onRemovePost && (
+                <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => onRemovePost(item.id)}
+                    accessibilityLabel="Remove post from list"
+                    accessibilityRole="button"
+                    hitSlop={smallTargetHitSlop}
+                >
+                    <Ionicons
+                        name="close-circle"
+                        size={22}
+                        color={colors.danger}
+                    />
+                </TouchableOpacity>
+            )}
+        </View>
     )
 
     const renderHeader = () => (
-        <View style={styles.header}>
+        <Animated.View style={[styles.header, animatedHeaderStyle]}>
             <View style={styles.handleContainer}>
                 <View style={styles.handle} />
             </View>
             {isListMode ? (
                 <View style={styles.listHeaderContainer}>
+                    {onBack && (
+                        <TouchableOpacity
+                            onPress={onBack}
+                            style={styles.backButton}
+                            accessibilityLabel="Back to lists"
+                            accessibilityRole="button"
+                            hitSlop={smallTargetHitSlop}
+                        >
+                            <Ionicons
+                                name="arrow-back"
+                                size={20}
+                                color={colors.textPrimary}
+                            />
+                        </TouchableOpacity>
+                    )}
                     <View style={styles.listTitleContainer}>
                         <Text style={styles.listTitle} numberOfLines={1}>
                             {title || 'List'}
@@ -85,14 +191,44 @@ function MapBottomSheet({
                             <Text style={styles.listSubtitle}>{subtitle}</Text>
                         )}
                     </View>
+                    {onEditList && (
+                        <TouchableOpacity
+                            onPress={onEditList}
+                            style={styles.iconButton}
+                            accessibilityLabel="Edit list"
+                            accessibilityRole="button"
+                            hitSlop={smallTargetHitSlop}
+                        >
+                            <Ionicons
+                                name="pencil"
+                                size={16}
+                                color={colors.primary}
+                            />
+                        </TouchableOpacity>
+                    )}
+                    {onDeleteList && (
+                        <TouchableOpacity
+                            onPress={onDeleteList}
+                            style={styles.iconButton}
+                            accessibilityLabel="Delete list"
+                            accessibilityRole="button"
+                            hitSlop={smallTargetHitSlop}
+                        >
+                            <Ionicons
+                                name="trash-outline"
+                                size={16}
+                                color={colors.danger}
+                            />
+                        </TouchableOpacity>
+                    )}
                     {onClose && (
                         <TouchableOpacity
                             onPress={onClose}
-                            style={styles.closeButton}
+                            style={styles.headerButton}
                             accessibilityLabel="Close"
                             accessibilityRole="button"
                         >
-                            <Text style={styles.closeButtonText}>Close</Text>
+                            <Text style={styles.headerButtonText}>Close</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -110,7 +246,7 @@ function MapBottomSheet({
                     </Text>
                 </View>
             )}
-        </View>
+        </Animated.View>
     )
 
     const renderEmpty = () => (
@@ -156,11 +292,23 @@ function MapBottomSheet({
             ref={bottomSheetRef}
             index={sheetIndex}
             snapPoints={snapPoints}
-            onChange={setSheetIndex}
+            onChange={(index) => {
+                setSheetIndex(index)
+                onIndexChange?.(index)
+            }}
             enablePanDownToClose={false}
             enableDynamicSizing={false}
             bottomInset={tabBarInset}
-            backgroundStyle={styles.background}
+            animatedIndex={animatedIndex}
+            backgroundComponent={({ style }) => (
+                <Animated.View
+                    style={[
+                        style,
+                        styles.background,
+                        animatedBackgroundStyle,
+                    ]}
+                />
+            )}
             handleIndicatorStyle={styles.handleIndicator}
         >
             {renderHeader()}
@@ -195,14 +343,15 @@ const styles = StyleSheet.create({
         display: 'none',
     },
     header: {
-        paddingTop: 8,
-        paddingBottom: 12,
+        // paddingTop is animated (see animatedHeaderStyle)
+        paddingBottom: 8,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
     },
     handleContainer: {
         alignItems: 'center',
-        paddingVertical: 8,
+        paddingTop: 4,
+        paddingBottom: 6,
     },
     handle: {
         width: 40,
@@ -283,17 +432,39 @@ const styles = StyleSheet.create({
         color: colors.textTertiary,
         marginTop: 2,
     },
-    closeButton: {
-        padding: 4,
+    headerButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
         backgroundColor: colors.card,
         borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 6,
+        marginLeft: 8,
     },
-    closeButtonText: {
+    headerButtonText: {
         fontSize: 14,
         fontWeight: '600',
         color: colors.primary,
+    },
+    iconButton: {
+        backgroundColor: colors.card,
+        borderRadius: 12,
+        padding: 8,
+        marginLeft: 8,
+    },
+    backButton: {
+        padding: 4,
+        marginRight: 10,
+    },
+    postContainer: {
+        position: 'relative',
+    },
+    removeButton: {
+        position: 'absolute',
+        top: 2,
+        right: 20,
+        zIndex: 1,
     },
 })
 

@@ -60,13 +60,9 @@ export default function ListsScreen() {
                 } as List)
             })
 
-            // Sort to put Saved list first
-            const savedList = fetchedLists.find(
-                (l) => l.isSavedList || l.name === 'Saved'
-            )
-            const otherLists = fetchedLists.filter(
-                (l) => !l.isSavedList && l.name !== 'Saved'
-            )
+            // Sort to put the default saved list first
+            const savedList = fetchedLists.find((l) => l.isSavedList)
+            const otherLists = fetchedLists.filter((l) => !l.isSavedList)
 
             setMyLists(savedList ? [savedList, ...otherLists] : otherLists)
             setMyError(false)
@@ -144,9 +140,13 @@ export default function ListsScreen() {
             <TouchableOpacity
                 style={styles.listItem}
                 onPress={() =>
-                    // List detail is the canonical home (edit/delete/map all
-                    // live there). All lists are public — no lock affordance.
-                    router.push(`/list-detail?listId=${item.id}` as any)
+                    // Lists live on the map: list focus mode with the sheet
+                    // raised to full (?view=list) IS the list detail view —
+                    // edit/delete/remove live in the sheet header, and the
+                    // map is one drag below.
+                    router.push(
+                        `/(tabs)/map?listId=${item.id}&view=list` as any
+                    )
                 }
                 accessibilityLabel={`${item.name}, ${item.postIds.length} ${item.postIds.length === 1 ? 'shot' : 'shots'}${tab === 'community' ? `, by @${item.creatorUsername}` : ''}`}
                 accessibilityRole="button"

@@ -1,117 +1,69 @@
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import React from 'react'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, Text, TouchableOpacity } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface ViewToggleProps {
+    /** The view currently showing — the FAB offers the OTHER one */
     activeMode: 'map' | 'list'
     onToggle: (mode: 'map' | 'list') => void
     bottomOffset?: number
 }
 
+/**
+ * AllTrails-style floating view switch: a single pill naming the view
+ * you'd switch to — "Map" floats over the list, "List" floats over the map.
+ */
 export default function ViewToggle({
     activeMode,
     onToggle,
     bottomOffset = 20,
 }: ViewToggleProps) {
     const insets = useSafeAreaInsets()
+    const target = activeMode === 'list' ? 'map' : 'list'
 
     return (
-        <View
-            style={[styles.container, { bottom: insets.bottom + bottomOffset }]}
+        <TouchableOpacity
+            style={[styles.fab, { bottom: insets.bottom + bottomOffset }]}
+            onPress={() => onToggle(target)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={target === 'map' ? 'Show map' : 'Show list'}
         >
-            <TouchableOpacity
-                style={[
-                    styles.option,
-                    activeMode === 'map' && styles.optionActive,
-                ]}
-                onPress={() => onToggle('map')}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Map view"
-                accessibilityState={{ selected: activeMode === 'map' }}
-            >
-                <Ionicons
-                    name="map"
-                    size={16}
-                    color={activeMode === 'map' ? '#fff' : colors.textSecondary}
-                />
-                <Text
-                    style={[
-                        styles.text,
-                        activeMode === 'map' && styles.textActive,
-                    ]}
-                >
-                    Map
-                </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={[
-                    styles.option,
-                    activeMode === 'list' && styles.optionActive,
-                ]}
-                onPress={() => onToggle('list')}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="List view"
-                accessibilityState={{ selected: activeMode === 'list' }}
-            >
-                <Ionicons
-                    name="list"
-                    size={16}
-                    color={
-                        activeMode === 'list' ? '#fff' : colors.textSecondary
-                    }
-                />
-                <Text
-                    style={[
-                        styles.text,
-                        activeMode === 'list' && styles.textActive,
-                    ]}
-                >
-                    List
-                </Text>
-            </TouchableOpacity>
-        </View>
+            <Ionicons
+                name={target === 'map' ? 'map' : 'list'}
+                size={16}
+                color={colors.inverseTextPrimary}
+            />
+            <Text style={styles.text}>
+                {target === 'map' ? 'Map' : 'List'}
+            </Text>
+        </TouchableOpacity>
     )
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flexDirection: 'row',
-        backgroundColor: colors.card,
-        borderRadius: 24,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: 4,
+    fab: {
         position: 'absolute',
         alignSelf: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: colors.primary,
+        borderRadius: 24,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
         zIndex: 100,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
+        shadowOpacity: 0.25,
         shadowRadius: 4,
-        elevation: 4,
-    },
-    option: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        gap: 6,
-    },
-    optionActive: {
-        backgroundColor: colors.primary,
+        elevation: 5,
     },
     text: {
         fontSize: 14,
-        fontWeight: '600',
-        color: colors.textSecondary,
-    },
-    textActive: {
+        fontWeight: '700',
         color: colors.inverseTextPrimary,
     },
 })

@@ -185,6 +185,24 @@ export const onPostCreated = functions
                     }
                 }
 
+                // Denormalize the root's place identity onto the catch post
+                // doc for client display (list grouping, card subtitles).
+                // City-level only — coordinates stay in post_locations.
+                try {
+                    const placeUpdate: Record<string, string> = {}
+                    if (rootMeta?.city) placeUpdate.city = rootMeta.city
+                    if (rootMeta?.country)
+                        placeUpdate.country = rootMeta.country
+                    if (Object.keys(placeUpdate).length > 0) {
+                        await postRef.update(placeUpdate)
+                    }
+                } catch (e) {
+                    functions.logger.warn(
+                        `[onPostCreated] Post city denorm failed for catch ${postId}`,
+                        e
+                    )
+                }
+
                 // Notify the original poster that someone stood where they
                 // stood — this is the reward for having found the spot.
                 // catchPostId points at the catcher's photo so the client
@@ -566,6 +584,24 @@ export const onPostCreated = functions
                         )
                     }
                     // --- End AI Search enrichment ---
+
+                    // Denormalize place identity onto the post doc for client
+                    // display (list grouping, card subtitles). City-level
+                    // only — coordinates stay in post_locations.
+                    try {
+                        const meta = enrichmentUpdate.locationMeta
+                        const placeUpdate: Record<string, string> = {}
+                        if (meta?.city) placeUpdate.city = meta.city
+                        if (meta?.country) placeUpdate.country = meta.country
+                        if (Object.keys(placeUpdate).length > 0) {
+                            await postRef.update(placeUpdate)
+                        }
+                    } catch (e) {
+                        functions.logger.warn(
+                            `[onPostCreated] Post city denorm failed for post ${postId}`,
+                            e
+                        )
+                    }
 
                     // Update coverage cells for original post
                     try {

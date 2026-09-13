@@ -110,13 +110,19 @@ export const onPostDeleted = functions
                 .get()
 
             if (!listsQuery.empty) {
-                const batch = db.batch()
-                listsQuery.docs.forEach((listDoc) => {
-                    batch.update(listDoc.ref, {
-                        postIds: admin.firestore.FieldValue.arrayRemove(postId),
+                // Batches cap at 500 ops — chunk in case a post is in many lists
+                const docs = listsQuery.docs
+                for (let i = 0; i < docs.length; i += 500) {
+                    const batch = db.batch()
+                    docs.slice(i, i + 500).forEach((listDoc) => {
+                        batch.update(listDoc.ref, {
+                            postIds: admin.firestore.FieldValue.arrayRemove(
+                                postId
+                            ),
+                        })
                     })
-                })
-                await batch.commit()
+                    await batch.commit()
+                }
                 functions.logger.info(
                     `Removed post ${postId} from ${listsQuery.size} list(s)`
                 )

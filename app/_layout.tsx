@@ -176,7 +176,12 @@ function RootLayoutNav() {
                     name="create-list"
                     options={{ presentation: 'modal' }}
                 />
-                <Stack.Screen name="list-detail" />
+                <Stack.Screen
+                    name="list-detail"
+                    // Redirect shell (see app/list-detail.tsx) — never
+                    // animate a screen that immediately forwards elsewhere
+                    options={{ animation: 'none' }}
+                />
                 <Stack.Screen name="blocked-users" />
                 <Stack.Screen name="passport" />
             </Stack>

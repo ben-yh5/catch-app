@@ -59,5 +59,8 @@ export { searchPosts, backfillEmbeddings } from './callable/search'
 // ─── Callable Functions: Coverage ───────────────────────────────────────────
 export { backfillCoverage } from './callable/coverage'
 
+// ─── Callable Functions: Post City Denormalization ──────────────────────────
+export { backfillPostCities } from './callable/postCities'
+
 // ─── Callable Functions: Passport ───────────────────────────────────────────
 export { getPassport } from './callable/passport'

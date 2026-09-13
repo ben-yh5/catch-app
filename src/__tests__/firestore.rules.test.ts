@@ -712,3 +712,146 @@ describe('post_locations collection', () => {
         )
     })
 })
+
+// ─── LISTS COLLECTION ────────────────────────────────────────────────
+
+describe('lists collection', () => {
+    const CREATOR_ID = 'creator1'
+    const OTHER_USER_ID = 'user2'
+
+    const seedList = async (
+        listId: string,
+        data: Record<string, any> = {}
+    ) => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(doc(context.firestore(), 'lists', listId), {
+                name: 'Test List',
+                description: '',
+                creatorId: CREATOR_ID,
+                creatorUsername: 'creator',
+                postIds: [],
+                isPublic: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                ...data,
+            })
+        })
+    }
+
+    // --- Read ---
+
+    test('anyone can read a public list', async () => {
+        await seedList('list1', { isPublic: true })
+        const unauthed = testEnv.unauthenticatedContext()
+        await assertSucceeds(getDoc(doc(unauthed.firestore(), 'lists', 'list1')))
+    })
+
+    test('creator can read their own private list', async () => {
+        await seedList('list1', { isPublic: false })
+        const authed = testEnv.authenticatedContext(CREATOR_ID)
+        await assertSucceeds(getDoc(doc(authed.firestore(), 'lists', 'list1')))
+    })
+
+    test('other users CANNOT read a private list', async () => {
+        await seedList('list1', { isPublic: false })
+        const otherAuthed = testEnv.authenticatedContext(OTHER_USER_ID)
+        await assertFails(
+            getDoc(doc(otherAuthed.firestore(), 'lists', 'list1'))
+        )
+    })
+
+    // --- Create ---
+
+    test('user can create a list as themselves', async () => {
+        const authed = testEnv.authenticatedContext(CREATOR_ID)
+        await assertSucceeds(
+            setDoc(doc(authed.firestore(), 'lists', 'list1'), {
+                name: 'My New List',
+                description: '',
+                creatorId: CREATOR_ID,
+                creatorUsername: 'creator',
+                postIds: [],
+                isPublic: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            })
+        )
+    })
+
+    test('user CANNOT create a list with another creatorId', async () => {
+        const authed = testEnv.authenticatedContext(CREATOR_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'lists', 'list1'), {
+                name: 'Forged List',
+                creatorId: OTHER_USER_ID,
+                postIds: [],
+                isPublic: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            })
+        )
+    })
+
+    // --- Update ---
+
+    test('creator can update allowlisted fields', async () => {
+        await seedList('list1')
+        const authed = testEnv.authenticatedContext(CREATOR_ID)
+        await assertSucceeds(
+            updateDoc(doc(authed.firestore(), 'lists', 'list1'), {
+                name: 'Renamed',
+                postIds: arrayUnion('post1'),
+                isPublic: true,
+                updatedAt: new Date(),
+            })
+        )
+    })
+
+    test('creator CANNOT change creatorId', async () => {
+        await seedList('list1')
+        const authed = testEnv.authenticatedContext(CREATOR_ID)
+        await assertFails(
+            updateDoc(doc(authed.firestore(), 'lists', 'list1'), {
+                creatorId: OTHER_USER_ID,
+            })
+        )
+    })
+
+    test('creator CANNOT change creatorUsername', async () => {
+        await seedList('list1')
+        const authed = testEnv.authenticatedContext(CREATOR_ID)
+        await assertFails(
+            updateDoc(doc(authed.firestore(), 'lists', 'list1'), {
+                creatorUsername: 'impostor',
+            })
+        )
+    })
+
+    test('other users CANNOT update a list', async () => {
+        await seedList('list1', { isPublic: true })
+        const otherAuthed = testEnv.authenticatedContext(OTHER_USER_ID)
+        await assertFails(
+            updateDoc(doc(otherAuthed.firestore(), 'lists', 'list1'), {
+                postIds: arrayUnion('spam-post'),
+            })
+        )
+    })
+
+    // --- Delete ---
+
+    test('creator can delete their list', async () => {
+        await seedList('list1')
+        const authed = testEnv.authenticatedContext(CREATOR_ID)
+        await assertSucceeds(
+            deleteDoc(doc(authed.firestore(), 'lists', 'list1'))
+        )
+    })
+
+    test('other users CANNOT delete a list', async () => {
+        await seedList('list1', { isPublic: true })
+        const otherAuthed = testEnv.authenticatedContext(OTHER_USER_ID)
+        await assertFails(
+            deleteDoc(doc(otherAuthed.firestore(), 'lists', 'list1'))
+        )
+    })
+})
