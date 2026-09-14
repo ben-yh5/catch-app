@@ -469,19 +469,12 @@ export default function ThreadModal({
         router.push(`/(tabs)/map?postId=${currentPost.id}` as any)
     }
 
-    // One-tap save/unsave; the list sheet is the long-press path
+    // One-tap save/unsave — the icon fill is the feedback. Adding to a
+    // list is a separate intent with its own header button (list icon).
     const handleBookmarkTap = async () => {
         if (!currentPost) return
-        const saving = !isSaved
         try {
             await toggleSave(currentPost.id)
-            if (saving) {
-                showToast(
-                    'success',
-                    'Saved',
-                    'Long-press the bookmark to add it to a list.'
-                )
-            }
         } catch (error) {
             console.error('Error toggling save:', error)
             showToast('error', "Couldn't save", 'Check your connection.')
@@ -922,6 +915,18 @@ export default function ThreadModal({
                                                         ? colors.iconActive
                                                         : colors.iconInactive
                                                 }
+                                            />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={handleSavePress}
+                                            style={styles.headerIconButton}
+                                            accessibilityLabel="Add to list"
+                                            accessibilityRole="button"
+                                        >
+                                            <Ionicons
+                                                name="list"
+                                                size={22}
+                                                color={colors.iconInactive}
                                             />
                                         </TouchableOpacity>
                                         <View style={{ zIndex: 10 }}>

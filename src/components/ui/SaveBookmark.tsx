@@ -1,3 +1,4 @@
+import { useListSheet } from '@/context/ListSheetContext'
 import { useSaves } from '@/context/SavesContext'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
@@ -24,6 +25,7 @@ export default function SaveBookmark({
     containerStyle,
 }: SaveBookmarkProps) {
     const { ready, isSaved, toggleSave } = useSaves()
+    const { openListSheet } = useListSheet()
     if (!ready) return null
 
     const saved = isSaved(postId)
@@ -34,6 +36,9 @@ export default function SaveBookmark({
                     console.error('Error toggling save:', error)
                 )
             }
+            // Shortcut: hold to file straight into a list without opening
+            // the post (adding to a list implies saving)
+            onLongPress={() => openListSheet(postId)}
             style={[
                 variant === 'overlay' ? styles.overlay : styles.inline,
                 containerStyle,
@@ -41,6 +46,7 @@ export default function SaveBookmark({
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
             accessibilityLabel={saved ? 'Unsave shot' : 'Save shot'}
+            accessibilityHint="Long press to add to a list"
         >
             <Ionicons
                 name={saved ? 'bookmark' : 'bookmark-outline'}
