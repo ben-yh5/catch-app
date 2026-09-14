@@ -19,6 +19,7 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import { ToastProvider } from '@/components/ui/Toast'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { PostProvider } from '@/context/PostContext'
+import { SavesProvider } from '@/context/SavesContext'
 import { db } from '@/services/firebase'
 import { doc, onSnapshot } from 'firebase/firestore'
 
@@ -195,11 +196,13 @@ function RootLayoutInner() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <ErrorBoundary>
                 <AuthProvider>
-                    <PostProvider>
-                        <ToastProvider>
-                            <RootLayoutNav />
-                        </ToastProvider>
-                    </PostProvider>
+                    <SavesProvider>
+                        <PostProvider>
+                            <ToastProvider>
+                                <RootLayoutNav />
+                            </ToastProvider>
+                        </PostProvider>
+                    </SavesProvider>
                 </AuthProvider>
             </ErrorBoundary>
         </GestureHandlerRootView>

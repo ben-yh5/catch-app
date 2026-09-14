@@ -33,7 +33,7 @@ import { colors } from '@/theme/colors'
 import { HAIRLINE } from '@/theme/document'
 import { formatPostDate, monthYear } from '@/utils/dateUtils'
 import { Post } from '@/types'
-import { isPostSaved } from '@/utils/listUtils'
+import { useSaves } from '@/context/SavesContext'
 import { LOST_PLACE_INACTIVITY_DAYS } from '@/utils/postClassification'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
@@ -111,7 +111,6 @@ export default function ThreadModal({
     const flatListRef = useRef<FlatList>(null)
 
     // UI state
-    const [isSaved, setIsSaved] = useState(false)
     const [showOptionsMenu, setShowOptionsMenu] = useState(false)
     const [showAddToListModal, setShowAddToListModal] = useState(false)
     const [showReportSheet, setShowReportSheet] = useState(false)
@@ -177,6 +176,9 @@ export default function ThreadModal({
 
     // Get the currently displayed post
     const currentPost = threadPosts[currentIndex] || null
+    // Saved state is an O(1) context lookup (replaces the old per-post query)
+    const { isSaved: isPostBookmarked, toggleSave } = useSaves()
+    const isSaved = currentPost ? isPostBookmarked(currentPost.id) : false
 
     // The wide action slot answers "have you stood here?" — any post of
     // yours in the thread (root OR catch) counts. Owning the root would
@@ -230,13 +232,6 @@ export default function ThreadModal({
         }
     }, [threadPosts, initialPostId])
 
-    // Update save status when current post changes
-    useEffect(() => {
-        if (currentPost && user) {
-            fetchSaveStatus()
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPost?.id, user])
 
     // Fetch location data when the thread itself changes. Deliberately NOT
     // keyed on `visible`: reopening fires before fetchThread resolves, so a
@@ -334,17 +329,6 @@ export default function ThreadModal({
             onClose()
         } finally {
             setLoadingThread(false)
-        }
-    }
-
-    const fetchSaveStatus = async () => {
-        if (!user || !currentPost) return
-
-        try {
-            const saved = await isPostSaved(user.uid, currentPost.id)
-            setIsSaved(saved)
-        } catch (error) {
-            console.error('Error fetching save status:', error)
         }
     }
 
@@ -483,6 +467,25 @@ export default function ThreadModal({
         onClose()
         // Navigate to map with postId
         router.push(`/(tabs)/map?postId=${currentPost.id}` as any)
+    }
+
+    // One-tap save/unsave; the list sheet is the long-press path
+    const handleBookmarkTap = async () => {
+        if (!currentPost) return
+        const saving = !isSaved
+        try {
+            await toggleSave(currentPost.id)
+            if (saving) {
+                showToast(
+                    'success',
+                    'Saved',
+                    'Long-press the bookmark to add it to a list.'
+                )
+            }
+        } catch (error) {
+            console.error('Error toggling save:', error)
+            showToast('error', "Couldn't save", 'Check your connection.')
+        }
     }
 
     const handleSavePress = () => {
@@ -896,13 +899,15 @@ export default function ThreadModal({
                                             containerStyle={styles.catchBadge}
                                         />
                                         <TouchableOpacity
-                                            onPress={handleSavePress}
+                                            onPress={handleBookmarkTap}
+                                            onLongPress={handleSavePress}
                                             style={styles.headerIconButton}
                                             accessibilityLabel={
                                                 isSaved
-                                                    ? 'Remove from list'
-                                                    : 'Save to list'
+                                                    ? 'Unsave shot'
+                                                    : 'Save shot'
                                             }
+                                            accessibilityHint="Long press to add to a list"
                                             accessibilityRole="button"
                                         >
                                             <Ionicons
@@ -1309,9 +1314,6 @@ export default function ThreadModal({
                     visible={showAddToListModal}
                     postId={currentPost.id}
                     onClose={() => setShowAddToListModal(false)}
-                    onSelectionChange={(selectedIds) => {
-                        setIsSaved(selectedIds.size > 0)
-                    }}
                 />
             )}
 

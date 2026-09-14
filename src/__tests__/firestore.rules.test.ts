@@ -713,6 +713,118 @@ describe('post_locations collection', () => {
     })
 })
 
+// ─── SAVES SUBCOLLECTION ─────────────────────────────────────────────
+
+describe('saves subcollection', () => {
+    const USER_ID = 'user1'
+    const OTHER_USER_ID = 'user2'
+
+    const validSave = (postId: string) => ({
+        postId,
+        savedAt: new Date(),
+        listIds: [],
+    })
+
+    const saveDoc = (ctx: any, userId: string, postId: string) =>
+        doc(ctx.firestore(), 'users', userId, 'saves', postId)
+
+    test('owner can create a valid save (doc id == postId)', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertSucceeds(
+            setDoc(saveDoc(authed, USER_ID, 'post1'), validSave('post1'))
+        )
+    })
+
+    test('CANNOT create with postId != doc id', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(saveDoc(authed, USER_ID, 'post1'), validSave('other-post'))
+        )
+    })
+
+    test('CANNOT create without savedAt', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        const { savedAt, ...noSavedAt } = validSave('post1')
+        await assertFails(setDoc(saveDoc(authed, USER_ID, 'post1'), noSavedAt))
+    })
+
+    test('CANNOT create with extra fields', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(saveDoc(authed, USER_ID, 'post1'), {
+                ...validSave('post1'),
+                sneaky: true,
+            })
+        )
+    })
+
+    test("CANNOT create in another user's saves", async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(saveDoc(authed, OTHER_USER_ID, 'post1'), validSave('post1'))
+        )
+    })
+
+    test('owner can read own saves', async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(
+                saveDoc(context, USER_ID, 'post1'),
+                validSave('post1')
+            )
+        })
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertSucceeds(getDoc(saveDoc(authed, USER_ID, 'post1')))
+    })
+
+    test("other users CANNOT read someone's saves", async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(
+                saveDoc(context, USER_ID, 'post1'),
+                validSave('post1')
+            )
+        })
+        const otherAuthed = testEnv.authenticatedContext(OTHER_USER_ID)
+        await assertFails(getDoc(saveDoc(otherAuthed, USER_ID, 'post1')))
+    })
+
+    test('owner can update listIds tags', async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(
+                saveDoc(context, USER_ID, 'post1'),
+                validSave('post1')
+            )
+        })
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertSucceeds(
+            updateDoc(saveDoc(authed, USER_ID, 'post1'), {
+                listIds: arrayUnion('list1'),
+            })
+        )
+    })
+
+    test('owner can delete own save', async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(
+                saveDoc(context, USER_ID, 'post1'),
+                validSave('post1')
+            )
+        })
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertSucceeds(deleteDoc(saveDoc(authed, USER_ID, 'post1')))
+    })
+
+    test("other users CANNOT delete someone's save", async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(
+                saveDoc(context, USER_ID, 'post1'),
+                validSave('post1')
+            )
+        })
+        const otherAuthed = testEnv.authenticatedContext(OTHER_USER_ID)
+        await assertFails(deleteDoc(saveDoc(otherAuthed, USER_ID, 'post1')))
+    })
+})
+
 // ─── LISTS COLLECTION ────────────────────────────────────────────────
 
 describe('lists collection', () => {

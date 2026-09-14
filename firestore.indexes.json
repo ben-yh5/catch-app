@@ -105,6 +105,16 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "saves",
+      "fieldPath": "postId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
       "collectionGroup": "post_locations",
       "fieldPath": "embedding",
       "indexes": [

@@ -30,6 +30,21 @@ service cloud.firestore {
         allow update: if request.auth != null && request.auth.uid == userId &&
                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       }
+
+      // Saves subcollection: one-tap bookmarks, doc id == postId (O(1)
+      // saved-check). Source of truth for "is saved"; listIds are tags
+      // into the lists collection. Owner-only.
+      match /saves/{savePostId} {
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId &&
+                         request.resource.data.keys().hasOnly(['postId', 'savedAt', 'listIds']) &&
+                         request.resource.data.keys().hasAll(['postId', 'savedAt']) &&
+                         request.resource.data.postId == savePostId;
+        allow update: if request.auth != null && request.auth.uid == userId &&
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['postId', 'savedAt', 'listIds']) &&
+                         request.resource.data.postId == savePostId;
+      }
     }
 
     // Posts collection

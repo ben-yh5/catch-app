@@ -1,10 +1,20 @@
+import CompactPostCard from '@/components/CompactPostCard'
+import ThreadModal from '@/components/ThreadModal'
 import { useAuth } from '@/context/AuthContext'
+import { useSaves } from '@/context/SavesContext'
 import { db } from '@/services/firebase'
 import { colors } from '@/theme/colors'
-import { List } from '@/types'
+import { List, Post } from '@/types'
 import { Ionicons } from '@expo/vector-icons'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
+import {
+    collection,
+    documentId,
+    getDocs,
+    orderBy,
+    query,
+    where,
+} from 'firebase/firestore'
 import ErrorState from '@/components/ui/ErrorState'
 import { ListsTabSkeleton } from '@/components/ui/Skeleton'
 import { useTabBarInset } from '@/hooks/useTabBarInset'
@@ -12,6 +22,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     FlatList,
     RefreshControl,
+    SectionList,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -22,6 +33,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 type ListsTab = 'my' | 'community'
 const TAB_ORDER: ListsTab[] = ['my', 'community']
+
+// The "My" page mixes saved posts (sectioned by city) with curated lists
+type MyRow = { kind: 'post'; post: Post } | { kind: 'list'; list: List }
+interface MySection {
+    title: string
+    data: MyRow[]
+}
 
 export default function ListsScreen() {
     const { user } = useAuth()
@@ -39,6 +57,54 @@ export default function ListsScreen() {
     const [activeTab, setActiveTab] = useState<ListsTab>('my')
     const [refreshing, setRefreshing] = useState(false)
     const [refreshEnabled, setRefreshEnabled] = useState(true)
+
+    // Saved posts (the bookmark pile), newest save first
+    const { savedIds } = useSaves()
+    const [savedPosts, setSavedPosts] = useState<Post[] | null>(null)
+    const [selectedPost, setSelectedPost] = useState<Post | null>(null)
+    const [threadModalVisible, setThreadModalVisible] = useState(false)
+
+    const fetchSaved = useCallback(async () => {
+        if (!user) return
+        try {
+            const savesSnap = await getDocs(
+                query(
+                    collection(db, 'users', user.uid, 'saves'),
+                    orderBy('savedAt', 'desc')
+                )
+            )
+            const ids = savesSnap.docs.map((d) => d.id)
+
+            const posts: Post[] = []
+            for (let i = 0; i < ids.length; i += 30) {
+                const chunk = ids.slice(i, i + 30)
+                const postsSnap = await getDocs(
+                    query(
+                        collection(db, 'posts'),
+                        where(documentId(), 'in', chunk)
+                    )
+                )
+                postsSnap.forEach((d) =>
+                    posts.push({ id: d.id, ...d.data() } as Post)
+                )
+            }
+            // Restore savedAt ordering (the `in` query returns id order)
+            const rank = new Map(ids.map((id, i) => [id, i]))
+            posts.sort(
+                (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
+            )
+            setSavedPosts(posts)
+        } catch (error) {
+            console.error('Error fetching saved posts:', error)
+            // Saved section degrades to empty; lists still render
+            setSavedPosts((prev) => prev ?? [])
+        }
+    }, [user])
+
+    // Live-sync with bookmark toggles anywhere in the app
+    useEffect(() => {
+        fetchSaved()
+    }, [fetchSaved, savedIds])
 
     const fetchMyLists = useCallback(async () => {
         if (!user) return
@@ -60,11 +126,7 @@ export default function ListsScreen() {
                 } as List)
             })
 
-            // Sort to put the default saved list first
-            const savedList = fetchedLists.find((l) => l.isSavedList)
-            const otherLists = fetchedLists.filter((l) => !l.isSavedList)
-
-            setMyLists(savedList ? [savedList, ...otherLists] : otherLists)
+            setMyLists(fetchedLists)
             setMyError(false)
         } catch (error) {
             console.error('Error fetching lists:', error)
@@ -128,7 +190,7 @@ export default function ListsScreen() {
     const handleRefresh = async () => {
         setRefreshing(true)
         if (activeTab === 'my') {
-            await fetchMyLists()
+            await Promise.all([fetchMyLists(), fetchSaved()])
         } else {
             await fetchCommunityLists()
         }
@@ -221,6 +283,113 @@ export default function ListsScreen() {
                     </>
                 )}
             </View>
+        )
+    }
+
+    // "My" page: saved shots sectioned by city (savedAt order), then lists
+    const buildMySections = (): MySection[] => {
+        const sections: MySection[] = []
+        if (savedPosts && savedPosts.length > 0) {
+            const byCity = new Map<string, Post[]>()
+            for (const post of savedPosts) {
+                const label = post.city
+                    ? post.country
+                        ? `${post.city}, ${post.country}`
+                        : post.city
+                    : post.country || 'Elsewhere'
+                if (!byCity.has(label)) byCity.set(label, [])
+                byCity.get(label)!.push(post)
+            }
+            for (const [label, posts] of byCity) {
+                sections.push({
+                    title: label,
+                    data: posts.map((post) => ({ kind: 'post', post })),
+                })
+            }
+        }
+        if (myLists && myLists.length > 0) {
+            sections.push({
+                title: 'My Lists',
+                data: myLists.map((list) => ({ kind: 'list', list })),
+            })
+        }
+        return sections
+    }
+
+    const renderMyPage = () => {
+        if (myLists === null && savedPosts === null) {
+            if (myError) return renderEmptyState('my')
+            return <ListsTabSkeleton />
+        }
+
+        return (
+            <SectionList
+                sections={buildMySections()}
+                keyExtractor={(item) =>
+                    item.kind === 'post'
+                        ? `post-${item.post.id}`
+                        : `list-${item.list.id}`
+                }
+                renderItem={({ item }) =>
+                    item.kind === 'post' ? (
+                        <CompactPostCard
+                            post={item.post}
+                            onPress={() => {
+                                setSelectedPost(item.post)
+                                setThreadModalVisible(true)
+                            }}
+                        />
+                    ) : (
+                        <View style={styles.listRowWrap}>
+                            {renderListItem(item.list, 'my')}
+                        </View>
+                    )
+                }
+                renderSectionHeader={({ section }) => (
+                    <Text style={styles.sectionHeader}>{section.title}</Text>
+                )}
+                ListHeaderComponent={
+                    savedPosts && savedPosts.length > 0 ? (
+                        <View style={styles.savedHeaderRow}>
+                            <Text style={styles.savedCount}>
+                                {savedPosts.length} saved{' '}
+                                {savedPosts.length === 1 ? 'shot' : 'shots'}
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.mapButton}
+                                onPress={() =>
+                                    router.push(
+                                        '/(tabs)/map?saved=1' as any
+                                    )
+                                }
+                                accessibilityLabel="View saved shots on map"
+                                accessibilityRole="button"
+                            >
+                                <Ionicons
+                                    name="map"
+                                    size={14}
+                                    color={colors.primary}
+                                />
+                                <Text style={styles.mapButtonText}>Map</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : null
+                }
+                contentContainerStyle={[
+                    styles.myListContainer,
+                    { paddingBottom: 16 + tabBarInset },
+                ]}
+                contentInsetAdjustmentBehavior="automatic"
+                stickySectionHeadersEnabled={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing && activeTab === 'my'}
+                        onRefresh={handleRefresh}
+                        enabled={refreshEnabled}
+                    />
+                }
+                ListEmptyComponent={renderEmptyState('my')}
+            />
         )
     }
 
@@ -328,12 +497,22 @@ export default function ListsScreen() {
                 }}
             >
                 <View key="my" style={styles.pageContainer}>
-                    {renderListsPage('my')}
+                    {renderMyPage()}
                 </View>
                 <View key="community" style={styles.pageContainer}>
                     {renderListsPage('community')}
                 </View>
             </PagerView>
+
+            {/* Thread modal for saved shots */}
+            {selectedPost && (
+                <ThreadModal
+                    visible={threadModalVisible}
+                    post={selectedPost}
+                    initialPostId={selectedPost.id}
+                    onClose={() => setThreadModalVisible(false)}
+                />
+            )}
 
             {/* FAB - only show on "My Lists" tab */}
             {activeTab === 'my' && (
@@ -408,6 +587,52 @@ const styles = StyleSheet.create({
     listContainer: {
         padding: 16,
         flexGrow: 1,
+    },
+    // My page: CompactPostCard brings its own horizontal margins
+    myListContainer: {
+        paddingVertical: 8,
+        flexGrow: 1,
+    },
+    listRowWrap: {
+        paddingHorizontal: 16,
+    },
+    sectionHeader: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: colors.textSecondary,
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    savedHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingTop: 12,
+    },
+    savedCount: {
+        fontSize: 13,
+        color: colors.textTertiary,
+        fontWeight: '500',
+    },
+    mapButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: colors.card,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    mapButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.primary,
     },
     listItem: {
         flexDirection: 'row',

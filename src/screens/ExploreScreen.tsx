@@ -128,15 +128,20 @@ export default function ExploreScreen() {
                     continue
 
                 try {
-                    const thumbnails: string[] = []
+                    // Parallel fetch — the old sequential per-post reads made
+                    // this section cost (lists × 4) round-trips in series
                     const postIdsToFetch = listData.postIds.slice(0, 4)
-                    for (const postId of postIdsToFetch) {
-                        const postDoc = await getDoc(doc(db, 'posts', postId))
-                        if (postDoc.exists()) {
-                            const data = postDoc.data()
-                            thumbnails.push(data.thumbnailURL || data.photoURL)
-                        }
-                    }
+                    const postDocs = await Promise.all(
+                        postIdsToFetch.map((postId: string) =>
+                            getDoc(doc(db, 'posts', postId))
+                        )
+                    )
+                    const thumbnails: string[] = postDocs
+                        .filter((postDoc) => postDoc.exists())
+                        .map((postDoc) => {
+                            const data = postDoc.data()!
+                            return data.thumbnailURL || data.photoURL
+                        })
 
                     if (thumbnails.length > 0) {
                         lists.push({

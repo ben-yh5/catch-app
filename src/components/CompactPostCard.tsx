@@ -1,5 +1,6 @@
 import CatchBadge from '@/components/ui/CatchBadge'
 import CaughtBadge from '@/components/ui/CaughtBadge'
+import SaveBookmark from '@/components/ui/SaveBookmark'
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
 import { formatPostDate } from '@/utils/dateUtils'
@@ -27,6 +28,8 @@ interface CompactPostCardProps {
     onPress: () => void
     onJumpToLocation?: () => void
     highlighted?: boolean
+    /** e.g. "2.3 km" — omitted when unknown (no placeholders) */
+    distanceLabel?: string
 }
 
 export default function CompactPostCard({
@@ -34,6 +37,7 @@ export default function CompactPostCard({
     onPress,
     onJumpToLocation,
     highlighted = false,
+    distanceLabel,
 }: CompactPostCardProps) {
     return (
         <TouchableOpacity
@@ -91,35 +95,43 @@ export default function CompactPostCard({
                 <View style={styles.footer}>
                     <Text style={styles.date}>
                         {formatPostDate(post.createdAt)}
+                        {distanceLabel ? ` · ${distanceLabel}` : ''}
                     </Text>
 
-                    {onJumpToLocation && (
-                        <TouchableOpacity
-                            style={styles.locationButton}
-                            onPress={(e) => {
-                                e.stopPropagation()
-                                onJumpToLocation()
-                            }}
-                            activeOpacity={0.7}
-                            hitSlop={{
-                                top: 10,
-                                bottom: 10,
-                                left: 10,
-                                right: 10,
-                            }}
-                            accessibilityLabel="Jump to location"
-                            accessibilityRole="button"
-                        >
-                            <Ionicons
-                                name="location-sharp"
-                                size={14}
-                                color={colors.primary}
-                            />
-                            <Text style={styles.locationButtonText}>
-                                Location
-                            </Text>
-                        </TouchableOpacity>
-                    )}
+                    <View style={styles.footerActions}>
+                        {onJumpToLocation && (
+                            <TouchableOpacity
+                                style={styles.locationButton}
+                                onPress={(e) => {
+                                    e.stopPropagation()
+                                    onJumpToLocation()
+                                }}
+                                activeOpacity={0.7}
+                                hitSlop={{
+                                    top: 10,
+                                    bottom: 10,
+                                    left: 10,
+                                    right: 10,
+                                }}
+                                accessibilityLabel="Jump to location"
+                                accessibilityRole="button"
+                            >
+                                <Ionicons
+                                    name="location-sharp"
+                                    size={14}
+                                    color={colors.primary}
+                                />
+                                <Text style={styles.locationButtonText}>
+                                    Location
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                        <SaveBookmark
+                            postId={post.id}
+                            variant="inline"
+                            size={18}
+                        />
+                    </View>
                 </View>
             </View>
         </TouchableOpacity>
@@ -198,6 +210,11 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: colors.textTertiary,
         fontWeight: '500',
+    },
+    footerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
     },
     locationButton: {
         flexDirection: 'row',

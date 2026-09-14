@@ -1,5 +1,6 @@
 import CatchBadge from '@/components/ui/CatchBadge'
 import CaughtBadge from '@/components/ui/CaughtBadge'
+import SaveBookmark from '@/components/ui/SaveBookmark'
 import { colors } from '@/theme/colors'
 import { Image } from 'expo-image'
 import React from 'react'
@@ -56,6 +57,10 @@ export default function FeaturedPostCard({
             />
 
             {isOwnPost && <CaughtBadge containerStyle={styles.cornerBadge} />}
+            <SaveBookmark
+                postId={post.id}
+                containerStyle={styles.saveCorner}
+            />
 
             <View style={styles.cardInfo}>
                 <View style={styles.textContainer}>
@@ -112,6 +117,12 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 6,
         right: 6,
+        zIndex: 1,
+    },
+    saveCorner: {
+        position: 'absolute',
+        top: 6,
+        left: 6,
         zIndex: 1,
     },
 })

@@ -872,6 +872,40 @@ export const deleteAccount = functions
             failedSteps.push('notifications')
         }
 
+        // 5b. Delete saves subcollection
+        try {
+            const savesQuery = await db
+                .collection('users')
+                .doc(userId)
+                .collection('saves')
+                .get()
+
+            if (!savesQuery.empty) {
+                const batches: admin.firestore.WriteBatch[] = [db.batch()]
+                let opCount = 0
+                for (const doc of savesQuery.docs) {
+                    if (opCount >= 500) {
+                        batches.push(db.batch())
+                        opCount = 0
+                    }
+                    batches[batches.length - 1].delete(doc.ref)
+                    opCount++
+                }
+                for (const batch of batches) {
+                    await batch.commit()
+                }
+                functions.logger.info(
+                    `[deleteAccount] Deleted ${savesQuery.size} saves`
+                )
+            }
+        } catch (error) {
+            functions.logger.error(
+                '[deleteAccount] Error deleting saves:',
+                error
+            )
+            failedSteps.push('saves')
+        }
+
         // 6. Delete user_recommendations, username index
         try {
             await db.collection('user_recommendations').doc(userId).delete()

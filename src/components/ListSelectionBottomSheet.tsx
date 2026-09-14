@@ -22,13 +22,12 @@ import { List } from '@/types'
 import {
     addPostToList,
     getListsContainingPost,
-    getOrCreateSavedList,
     removePostFromList,
 } from '@/utils/listUtils'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
+    addDoc,
     collection,
     doc,
     getDoc,
@@ -44,6 +43,7 @@ import {
     Modal,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native'
@@ -69,13 +69,16 @@ export default function ListSelectionBottomSheet({
 }: ListSelectionBottomSheetProps) {
     const { user } = useAuth()
     const { showToast } = useToast()
-    const router = useRouter()
     const [lists, setLists] = useState<List[]>([])
     const [selectedListIds, setSelectedListIds] = useState<Set<string>>(
         new Set()
     )
     const [loading, setLoading] = useState(false)
     const [updating, setUpdating] = useState<string | null>(null)
+    // Inline quick-create — creating a list never abandons the save context
+    const [showQuickCreate, setShowQuickCreate] = useState(false)
+    const [newListName, setNewListName] = useState('')
+    const [creating, setCreating] = useState(false)
     const slideAnim = React.useRef(new Animated.Value(0)).current
 
     const handleToggleList = useCallback(
@@ -159,20 +162,8 @@ export default function ListSelectionBottomSheet({
 
         setLoading(true)
         try {
-            // Get or create the default "My List". Fail fast if the profile
-            // has no username — never persist a placeholder list owner.
-            const userDoc = await getDoc(doc(db, 'users', user.uid))
-            const username: string | undefined = userDoc.exists()
-                ? userDoc.data().username
-                : undefined
-            if (!username) {
-                throw new Error(
-                    `User ${user.uid} has no username — cannot create saved list`
-                )
-            }
-            await getOrCreateSavedList(user.uid, username)
-
-            // Fetch all user's lists
+            // Fetch all user's lists (no auto-created default list anymore —
+            // the quick-save pile lives in users/{uid}/saves)
             const listsQuery = query(
                 collection(db, 'lists'),
                 where('creatorId', '==', user.uid)
@@ -188,16 +179,22 @@ export default function ListSelectionBottomSheet({
                 } as List)
             })
 
-            // Sort: My List first, then others by updatedAt
-            const myList = fetchedLists.find((l) => l.isSavedList)
-            const otherLists = fetchedLists
-                .filter((l) => !l.isSavedList)
-                .sort(
-                    (a, b) =>
-                        b.updatedAt?.toMillis?.() - a.updatedAt?.toMillis?.()
-                )
-
-            const sortedLists = myList ? [myList, ...otherLists] : otherLists
+            // Sort: last-used list first, then by updatedAt
+            const lastUsedId = await AsyncStorage.getItem(LAST_USED_LIST_KEY)
+            fetchedLists.sort(
+                (a, b) =>
+                    (b.updatedAt?.toMillis?.() ?? 0) -
+                    (a.updatedAt?.toMillis?.() ?? 0)
+            )
+            const lastUsed = lastUsedId
+                ? fetchedLists.find((l) => l.id === lastUsedId)
+                : undefined
+            const sortedLists = lastUsed
+                ? [
+                      lastUsed,
+                      ...fetchedLists.filter((l) => l.id !== lastUsed.id),
+                  ]
+                : fetchedLists
             setLists(sortedLists)
 
             // If we're in "real" mode (postId exists), fetch current state
@@ -219,6 +216,63 @@ export default function ListSelectionBottomSheet({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, postId])
+
+    const handleQuickCreate = useCallback(async () => {
+        if (!user || creating) return
+        const name = newListName.trim()
+        if (!name) return
+        setCreating(true)
+        try {
+            // Fail fast if the profile has no username — never persist a
+            // placeholder list owner
+            const userDoc = await getDoc(doc(db, 'users', user.uid))
+            const username: string | undefined = userDoc.exists()
+                ? userDoc.data().username
+                : undefined
+            if (!username) {
+                throw new Error(`User ${user.uid} has no username`)
+            }
+            const now = new Date()
+            const newListDoc = await addDoc(collection(db, 'lists'), {
+                name,
+                description: '',
+                creatorId: user.uid,
+                creatorUsername: username,
+                postIds: [],
+                isPublic: false,
+                createdAt: now,
+                updatedAt: now,
+            })
+            setLists((prev) => [
+                {
+                    id: newListDoc.id,
+                    name,
+                    description: '',
+                    creatorId: user.uid,
+                    creatorUsername: username,
+                    postIds: [],
+                    isPublic: false,
+                    createdAt: now,
+                    updatedAt: now,
+                } as List,
+                ...prev,
+            ])
+            setNewListName('')
+            setShowQuickCreate(false)
+            // The point of creating from here: the current post goes
+            // straight into the new list
+            await handleToggleList(newListDoc.id)
+        } catch (error) {
+            console.error('Error creating list:', error)
+            showToast(
+                'error',
+                "Couldn't create list",
+                'Check your connection and try again.'
+            )
+        } finally {
+            setCreating(false)
+        }
+    }, [user, creating, newListName, handleToggleList, showToast])
 
     useEffect(() => {
         if (visible) {
@@ -368,26 +422,86 @@ export default function ListSelectionBottomSheet({
                             contentContainerStyle={styles.listContainer}
                             showsVerticalScrollIndicator={false}
                             ListHeaderComponent={
-                                <TouchableOpacity
-                                    style={styles.createListButton}
-                                    onPress={() => {
-                                        onClose()
-                                        router.push('/create-list')
-                                    }}
-                                    accessibilityRole="button"
-                                    accessibilityLabel="Create new list"
-                                >
-                                    <View style={styles.createListIcon}>
-                                        <Ionicons
-                                            name="add"
-                                            size={20}
-                                            color={colors.primary}
+                                showQuickCreate ? (
+                                    <View style={styles.quickCreateRow}>
+                                        <TextInput
+                                            style={styles.quickCreateInput}
+                                            placeholder="List name"
+                                            placeholderTextColor={
+                                                colors.textTertiary
+                                            }
+                                            value={newListName}
+                                            onChangeText={setNewListName}
+                                            maxLength={50}
+                                            autoFocus
+                                            editable={!creating}
+                                            onSubmitEditing={handleQuickCreate}
+                                            returnKeyType="done"
                                         />
+                                        {creating ? (
+                                            <ActivityIndicator
+                                                size="small"
+                                                color={colors.primary}
+                                            />
+                                        ) : (
+                                            <>
+                                                <TouchableOpacity
+                                                    onPress={handleQuickCreate}
+                                                    style={
+                                                        styles.quickCreateAction
+                                                    }
+                                                    accessibilityLabel="Create list"
+                                                    accessibilityRole="button"
+                                                >
+                                                    <Ionicons
+                                                        name="checkmark"
+                                                        size={22}
+                                                        color={colors.primary}
+                                                    />
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        setShowQuickCreate(
+                                                            false
+                                                        )
+                                                        setNewListName('')
+                                                    }}
+                                                    style={
+                                                        styles.quickCreateAction
+                                                    }
+                                                    accessibilityLabel="Cancel"
+                                                    accessibilityRole="button"
+                                                >
+                                                    <Ionicons
+                                                        name="close"
+                                                        size={22}
+                                                        color={
+                                                            colors.textSecondary
+                                                        }
+                                                    />
+                                                </TouchableOpacity>
+                                            </>
+                                        )}
                                     </View>
-                                    <Text style={styles.createListText}>
-                                        Create New List
-                                    </Text>
-                                </TouchableOpacity>
+                                ) : (
+                                    <TouchableOpacity
+                                        style={styles.createListButton}
+                                        onPress={() => setShowQuickCreate(true)}
+                                        accessibilityRole="button"
+                                        accessibilityLabel="Create new list"
+                                    >
+                                        <View style={styles.createListIcon}>
+                                            <Ionicons
+                                                name="add"
+                                                size={20}
+                                                color={colors.primary}
+                                            />
+                                        </View>
+                                        <Text style={styles.createListText}>
+                                            Create New List
+                                        </Text>
+                                    </TouchableOpacity>
+                                )
                             }
                         />
                     )}
@@ -457,6 +571,26 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderStyle: 'dashed',
         borderColor: colors.primary,
+    },
+    quickCreateRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        marginBottom: 8,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        gap: 8,
+    },
+    quickCreateInput: {
+        flex: 1,
+        fontSize: 16,
+        color: colors.textPrimary,
+        paddingVertical: 4,
+    },
+    quickCreateAction: {
+        padding: 4,
     },
     createListIcon: {
         width: 24,

@@ -134,6 +134,31 @@ export const onPostDeleted = functions
             )
         }
 
+        // Remove the post from every user's saves subcollection
+        try {
+            const savesQuery = await db
+                .collectionGroup('saves')
+                .where('postId', '==', postId)
+                .get()
+
+            if (!savesQuery.empty) {
+                const docs = savesQuery.docs
+                for (let i = 0; i < docs.length; i += 500) {
+                    const batch = db.batch()
+                    docs.slice(i, i + 500).forEach((d) => batch.delete(d.ref))
+                    await batch.commit()
+                }
+                functions.logger.info(
+                    `Removed post ${postId} from ${savesQuery.size} save(s)`
+                )
+            }
+        } catch (error) {
+            functions.logger.error(
+                `[onPostDeleted] Saves cleanup failed for post ${postId}:`,
+                error
+            )
+        }
+
         // Handle root post deletion - promote oldest catch to new root
         if (postData.isOriginal) {
             try {

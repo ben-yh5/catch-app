@@ -1,19 +1,16 @@
 /**
  * List Management Utility
  *
- * Handles operations for the Lists feature, which replaced the deprecated
- * bookmarkedPosts system. Users can create multiple lists to organize posts.
- *
- * Key Features:
- * - Auto-creates a default "My List" for each user
- * - Add/remove posts from lists
- * - Check if posts are saved
- * - Toggle quick save/unsave
+ * Curated lists only — the quick-save bookmark pile lives in
+ * `users/{uid}/saves` (see src/services/saves.ts and SavesContext).
+ * The list's `postIds` array is the source of truth for membership/order;
+ * add/remove here also mirror a tag onto the saver's save doc so the save
+ * sheet's checkboxes stay in sync.
  */
 
-import { db } from '@/services/firebase'
+import { auth, db } from '@/services/firebase'
+import { tagSaveWithList, untagSaveFromList } from '@/services/saves'
 import {
-    addDoc,
     arrayRemove,
     arrayUnion,
     collection,
@@ -24,65 +21,8 @@ import {
     where,
 } from 'firebase/firestore'
 
-const SAVED_LIST_NAME = 'My List'
-
 /**
- * Get or create the user's default "My List"
- * This is a special private list that's auto-created for saving shots
- */
-export async function getOrCreateSavedList(
-    userId: string,
-    username: string
-): Promise<string> {
-    try {
-        // Check if user already has their default list (by isSavedList flag)
-        const savedListQuery = query(
-            collection(db, 'lists'),
-            where('creatorId', '==', userId),
-            where('isSavedList', '==', true)
-        )
-
-        const snapshot = await getDocs(savedListQuery)
-
-        if (!snapshot.empty) {
-            // Return existing default list ID
-            return snapshot.docs[0].id
-        }
-
-        // Fallback: check by name for backward compatibility
-        const nameQuery = query(
-            collection(db, 'lists'),
-            where('creatorId', '==', userId),
-            where('name', '==', SAVED_LIST_NAME)
-        )
-        const nameSnapshot = await getDocs(nameQuery)
-
-        if (!nameSnapshot.empty) {
-            return nameSnapshot.docs[0].id
-        }
-
-        // Create new "My List"
-        const newList = await addDoc(collection(db, 'lists'), {
-            name: SAVED_LIST_NAME,
-            description: 'Your saved shots',
-            creatorId: userId,
-            creatorUsername: username,
-            postIds: [],
-            isPublic: false,
-            isSavedList: true, // Special flag to identify this as the default list
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        })
-
-        return newList.id
-    } catch (error) {
-        console.error('Error getting/creating Saved list:', error)
-        throw error
-    }
-}
-
-/**
- * Add a post to a list
+ * Add a post to a list (adding to a list implies saving the post)
  */
 export async function addPostToList(
     listId: string,
@@ -93,6 +33,10 @@ export async function addPostToList(
             postIds: arrayUnion(postId),
             updatedAt: new Date(),
         })
+        const uid = auth.currentUser?.uid
+        if (uid) {
+            await tagSaveWithList(uid, postId, listId)
+        }
     } catch (error) {
         console.error('Error adding post to list:', error)
         throw error
@@ -100,7 +44,8 @@ export async function addPostToList(
 }
 
 /**
- * Remove a post from a list
+ * Remove a post from a list (the save itself survives — removing from a
+ * list doesn't unsave)
  */
 export async function removePostFromList(
     listId: string,
@@ -111,31 +56,13 @@ export async function removePostFromList(
             postIds: arrayRemove(postId),
             updatedAt: new Date(),
         })
+        const uid = auth.currentUser?.uid
+        if (uid) {
+            await untagSaveFromList(uid, postId, listId)
+        }
     } catch (error) {
         console.error('Error removing post from list:', error)
         throw error
-    }
-}
-
-/**
- * Check if a post is in any of the user's lists
- */
-export async function isPostSaved(
-    userId: string,
-    postId: string
-): Promise<boolean> {
-    try {
-        const listsQuery = query(
-            collection(db, 'lists'),
-            where('creatorId', '==', userId),
-            where('postIds', 'array-contains', postId)
-        )
-
-        const snapshot = await getDocs(listsQuery)
-        return !snapshot.empty
-    } catch (error) {
-        console.error('Error checking if post is saved:', error)
-        return false
     }
 }
 

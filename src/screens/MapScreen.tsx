@@ -1,10 +1,12 @@
 import { FilterType } from '@/components/FilterPills'
 import MapBottomSheet from '@/components/MapBottomSheet'
+import ListReorderModal from '@/components/ListReorderModal'
 import MapHUD from '@/components/MapHUD'
 import ThreadModal from '@/components/ThreadModal'
 import ViewToggle from '@/components/ViewToggle'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
+import { useSaves } from '@/context/SavesContext'
 import { usePost, usePostEvents } from '@/context/PostContext'
 import { db, functions } from '@/services/firebase'
 import { colors } from '@/theme/colors'
@@ -48,7 +50,7 @@ import Mapbox, {
 } from '@rnmapbox/maps'
 import * as Location from 'expo-location'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { deleteDoc, doc, getDoc } from 'firebase/firestore'
+import { deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -82,6 +84,7 @@ const MAP_COLORS = {
     pinCaught: documentInk.caught, // Muted pink - caught by user
     selectedPin: colors.pinSelected, // Full pink - currently selected
     pinLostPlace: colors.pinLostPlace, // Gold - lost places (record has a gap)
+    pinSaved: '#5B9E7D', // Muted green - saved/bookmarked posts
     stroke: 'rgba(255, 255, 255, 0.8)',
 }
 
@@ -135,17 +138,21 @@ export default function MapScreen() {
     const pendingCameraActionRef = useRef<(() => void) | null>(null)
 
     // List Focus Mode State
-    const { listId, postId, view, filter, panToUser, searchQuery } =
+    const { listId, postId, view, saved, filter, panToUser, searchQuery } =
         useLocalSearchParams<{
             listId: string
             postId: string
             view: string
+            saved: string
             filter: string
             panToUser: string
             searchQuery: string
         }>()
     const [activeList, setActiveList] = useState<any | null>(null)
-    const [, setListPosts] = useState<Post[]>([])
+    const [listPosts, setListPosts] = useState<Post[]>([])
+    const { savedIds } = useSaves()
+    const savedIdsRef = useRef(savedIds)
+    savedIdsRef.current = savedIds
 
     // The list/map toggle is a sheet position, not a navigation: the fully
     // raised sheet IS the list view. These drive/mirror the sheet from the
@@ -176,6 +183,9 @@ export default function MapScreen() {
     // adjustment is React's sanctioned derived-state pattern.
     const [stickyListId, setStickyListId] = useState('')
     const [stickyPostId, setStickyPostId] = useState('')
+    // Saved-focus mode: the user's bookmarks as a list-like map focus
+    const [stickySaved, setStickySaved] = useState(false)
+    if (saved && !stickySaved) setStickySaved(true)
     if (listId && listId !== stickyListId) {
         setStickyListId(listId)
         // Read view alongside listId — TabRouter wipes both moments later
@@ -215,7 +225,11 @@ export default function MapScreen() {
     // List mode is DERIVED from the (latched) route params, never tracked
     // as separate state — async state kept desyncing and let normal-mode
     // logic take over the sheet while a list was open.
-    const isListMode = Boolean(effectiveListId) || Boolean(effectivePostId)
+    const isListMode =
+        Boolean(effectiveListId) || Boolean(effectivePostId) || stickySaved
+    // List-like focus = a browsable collection (real list or saved posts):
+    // gets the full-page snap, the FAB, and back-to-Lists behavior
+    const isListLikeFocus = Boolean(effectiveListId) || stickySaved
 
     // Thread modal state
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
@@ -229,9 +243,9 @@ export default function MapScreen() {
     // ref at execution time instead
     const isListModeRef = useRef(false)
     isListModeRef.current = isListMode
-    // List-focus (not post-focus) mirror for the hardware back handler
+    // List-like-focus (not post-focus) mirror for the hardware back handler
     const hasListFocusRef = useRef(false)
-    hasListFocusRef.current = Boolean(effectiveListId)
+    hasListFocusRef.current = isListLikeFocus
     const [searchPostResults, setSearchPostResults] = useState<Post[]>([])
     const [searchLoading, setSearchLoading] = useState(false)
     const [activeSearchQuery, setActiveSearchQuery] = useState('')
@@ -254,9 +268,10 @@ export default function MapScreen() {
     // don't linger. Used by the Close button, hardware back, and the fetch
     // failure paths below.
     const handleListClose = useCallback(() => {
-        router.setParams({ listId: '', postId: '' })
+        router.setParams({ listId: '', postId: '', saved: '' })
         setStickyListId('')
         setStickyPostId('')
+        setStickySaved(false)
         // Flip the ref now so the refetch below isn't skipped (the state
         // changes haven't committed yet; the render mirror re-asserts it)
         isListModeRef.current = false
@@ -313,6 +328,19 @@ export default function MapScreen() {
         return undefined
     }, [stickyPostId])
 
+    // Saved focus enters map-first (the Saved screen IS the list view —
+    // its Map button means "show me the pins")
+    useEffect(() => {
+        if (stickySaved) {
+            const t = setTimeout(
+                () => listSheetRef.current?.snapToIndex(0),
+                50
+            )
+            return () => clearTimeout(t)
+        }
+        return undefined
+    }, [stickySaved])
+
     // Owner actions for the raised-sheet list view (the old ListDetailScreen
     // affordances, now living on the sheet)
     const handleEditList = useCallback(() => {
@@ -341,6 +369,46 @@ export default function MapScreen() {
             ]
         )
     }, [activeList?.name, effectiveListId, handleListClose, showToast])
+
+    // Owner reordering (photowalk substrate): arrow-based modal, one
+    // postIds write on save; sheet + pins follow the new order
+    const [showReorderModal, setShowReorderModal] = useState(false)
+    const handleSaveReorder = useCallback(
+        async (orderedPostIds: string[]) => {
+            try {
+                await updateDoc(doc(db, 'lists', effectiveListId), {
+                    postIds: orderedPostIds,
+                    updatedAt: new Date(),
+                })
+                setActiveList((prev: any) =>
+                    prev ? { ...prev, postIds: orderedPostIds } : prev
+                )
+                const rank = new Map(
+                    orderedPostIds.map((id, i) => [id, i])
+                )
+                const byRank = (a: Post, b: Post) =>
+                    (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
+                setListPosts((prev) => [...prev].sort(byRank))
+                setVisiblePosts((prev) => [...prev].sort(byRank))
+            } catch (error) {
+                console.error('Error saving list order:', error)
+                showToast('error', "Couldn't save order")
+                throw error
+            }
+        },
+        [effectiveListId, showToast]
+    )
+
+    // Reorder modal shows posts in the list's canonical postIds order
+    const orderedListPosts = React.useMemo(() => {
+        if (!activeList?.postIds) return listPosts
+        const rank = new Map<string, number>(
+            activeList.postIds.map((id: string, i: number) => [id, i])
+        )
+        return [...listPosts].sort(
+            (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
+        )
+    }, [activeList?.postIds, listPosts])
 
     const handleRemoveListPost = useCallback(
         (removeId: string) => {
@@ -380,6 +448,88 @@ export default function MapScreen() {
         },
         [effectiveListId, showToast]
     )
+
+    // Saved-focus: the user's bookmarks shown like a list on the map.
+    // Reads savedIds via ref so this callback stays stable — a bookmark
+    // toggled elsewhere must not re-trigger the focus dispatch effect.
+    const fetchSavedForMap = useCallback(async () => {
+        try {
+            setLoadingPosts(true)
+            setVisiblePosts([])
+            const ids = Array.from(savedIdsRef.current)
+            setActiveList({
+                id: 'saved-view',
+                name: 'Saved',
+                creatorId: 'system',
+                postIds: ids,
+            })
+
+            if (ids.length === 0) {
+                setListPosts([])
+                return
+            }
+
+            const [postDocs, locations] = await Promise.all([
+                Promise.all(
+                    ids.map((id) => getDoc(doc(db, 'posts', id)))
+                ),
+                getPostLocations(ids),
+            ])
+
+            const posts = postDocs
+                .filter((docSnap) => docSnap.exists())
+                .map((docSnap) => {
+                    const data = docSnap.data()
+                    const location = locations.find(
+                        (loc) => loc.postId === docSnap.id
+                    )
+                    return {
+                        id: docSnap.id,
+                        ...data,
+                        latitude: location?.latitude,
+                        longitude: location?.longitude,
+                    } as Post
+                })
+
+            setListPosts(posts)
+            setVisiblePosts(posts)
+
+            const coordinates = posts
+                .filter((p) => p.longitude && p.latitude)
+                .map((p) => [p.longitude!, p.latitude!] as [number, number])
+            if (coordinates.length === 1) {
+                cameraRef.current?.setCamera({
+                    centerCoordinate: coordinates[0],
+                    zoomLevel: 14,
+                    animationDuration: 1000,
+                })
+            } else if (coordinates.length > 1) {
+                const lngs = coordinates.map((c) => c[0])
+                const lats = coordinates.map((c) => c[1])
+                cameraRef.current?.fitBounds(
+                    [Math.max(...lngs), Math.max(...lats)],
+                    [Math.min(...lngs), Math.min(...lats)],
+                    [100, 50, 250, 50],
+                    1000
+                )
+            }
+        } catch (error) {
+            console.error('[SavedMode] Failed to load saved posts:', error)
+            showToast('error', 'Failed to load saved shots')
+            handleListClose()
+        } finally {
+            setLoadingPosts(false)
+        }
+    }, [showToast, handleListClose])
+
+    // Unsaving from the saved-focus sheet prunes the pin/row in place
+    // (no refetch; new saves appear on the next open)
+    useEffect(() => {
+        if (stickySaved) {
+            setVisiblePosts((prev) => prev.filter((p) => savedIds.has(p.id)))
+            setListPosts((prev) => prev.filter((p) => savedIds.has(p.id)))
+        }
+    }, [savedIds, stickySaved])
 
     // Wrap fetchListDetails in useCallback
     const fetchListDetails = useCallback(
@@ -799,13 +949,22 @@ export default function MapScreen() {
     useEffect(() => {
         if (effectiveListId) {
             fetchListDetails(effectiveListId)
+        } else if (stickySaved) {
+            fetchSavedForMap()
         } else if (effectivePostId) {
             fetchPostForLocate(effectivePostId)
         } else {
             setActiveList(null)
             setListPosts([])
         }
-    }, [effectiveListId, effectivePostId, fetchListDetails, fetchPostForLocate])
+    }, [
+        effectiveListId,
+        effectivePostId,
+        stickySaved,
+        fetchListDetails,
+        fetchPostForLocate,
+        fetchSavedForMap,
+    ])
 
     // Hardware back: a focused list goes back to the Lists tab (same as
     // the header back arrow); post focus just exits in place. Reads refs
@@ -1128,8 +1287,10 @@ export default function MapScreen() {
             blockedSet.size === 0
                 ? visiblePosts
                 : visiblePosts.filter((p) => !blockedSet.has(p.authorId))
-        return applySorting(unblocked, activeFilter)
-    }, [visiblePosts, activeFilter, applySorting, blockedSet])
+        // Focus modes show curated/saved order — the browse filter must not
+        // re-sort a list out of its postIds order
+        return isListMode ? unblocked : applySorting(unblocked, activeFilter)
+    }, [visiblePosts, activeFilter, applySorting, blockedSet, isListMode])
 
     const filteredSearchResults = React.useMemo(() => {
         if (blockedSet.size === 0) return searchPostResults
@@ -1197,6 +1358,7 @@ export default function MapScreen() {
                     isSelected: post.id === selectedPostId,
                     isOwn: post.authorId === user?.uid,
                     isCaught: caughtThreadIds.has(post.id),
+                    isSaved: savedIds.has(post.id),
                     isLostPlace: isLostPlace(post),
                 },
                 geometry: {
@@ -1209,7 +1371,7 @@ export default function MapScreen() {
             type: 'FeatureCollection' as const,
             features,
         }
-    }, [sortedVisiblePosts, selectedPostId, user?.uid, caughtThreadIds])
+    }, [sortedVisiblePosts, selectedPostId, user?.uid, caughtThreadIds, savedIds])
 
     const handleMarkerPress = useCallback(
         (event: any) => {
@@ -1718,6 +1880,8 @@ export default function MapScreen() {
                                         MAP_COLORS.selectedPin,
                                         ['get', 'isCaught'],
                                         MAP_COLORS.pinCaught,
+                                        ['get', 'isSaved'],
+                                        MAP_COLORS.pinSaved,
                                         // Gold "lost place" pins disabled for now — re-enable by
                                         // adding back: ['get', 'isLostPlace'], MAP_COLORS.pinLostPlace,
                                         MAP_COLORS.pin,
@@ -1825,32 +1989,36 @@ export default function MapScreen() {
                     emptyTitle={
                         isSearchMode
                             ? `No shots match "${activeSearchQuery}"`
-                            : isListMode
-                              ? 'No shots in this list'
-                              : zoomedTooFarOut
-                                ? 'Viewing from above'
-                                : undefined
+                            : stickySaved
+                              ? 'No saved shots'
+                              : isListMode
+                                ? 'No shots in this list'
+                                : zoomedTooFarOut
+                                  ? 'Viewing from above'
+                                  : undefined
                     }
                     emptySubtitle={
                         isSearchMode
                             ? 'Try different words, like "sunset viewpoint" or "street art"'
-                            : isListMode
-                              ? 'Shots added to this list will show up here'
-                              : zoomedTooFarOut
-                                ? 'Tap a cluster or zoom in to see shots'
-                                : undefined
+                            : stickySaved
+                              ? 'Tap the bookmark on any shot to save it'
+                              : isListMode
+                                ? 'Shots added to this list will show up here'
+                                : zoomedTooFarOut
+                                  ? 'Tap a cluster or zoom in to see shots'
+                                  : undefined
                     }
                     onClose={isSearchMode ? handleSearchClear : handleListClose}
                     onBack={
-                        !isSearchMode && effectiveListId
+                        !isSearchMode && isListLikeFocus
                             ? handleListBack
                             : undefined
                     }
                     isListMode={isListMode || isSearchMode}
-                    // Full-page state belongs to real lists only — post
-                    // focus ("see location") is map-first and keeps the
-                    // peek/half pair
-                    allowFullSnap={Boolean(effectiveListId) && !isSearchMode}
+                    // Full-page state belongs to browsable collections
+                    // (lists, saved) — post focus ("see location") is
+                    // map-first and keeps the peek/half pair
+                    allowFullSnap={isListLikeFocus && !isSearchMode}
                     sheetRef={listSheetRef}
                     onIndexChange={setListSheetIndex}
                     onEditList={
@@ -1874,6 +2042,22 @@ export default function MapScreen() {
                             ? handleRemoveListPost
                             : undefined
                     }
+                    onReorderList={
+                        !isSearchMode &&
+                        activeList &&
+                        activeList.creatorId === user?.uid &&
+                        listPosts.length > 1
+                            ? () => setShowReorderModal(true)
+                            : undefined
+                    }
+                    distanceFrom={
+                        isListMode && userLocation
+                            ? {
+                                  latitude: userLocation.coords.latitude,
+                                  longitude: userLocation.coords.longitude,
+                              }
+                            : null
+                    }
                     // Belt to the derived isListMode: the zoomed-out header
                     // must never surface while a list or search is open
                     zoomedOut={!isListMode && !isSearchMode && zoomedTooFarOut}
@@ -1884,7 +2068,7 @@ export default function MapScreen() {
                 the hint that a map exists underneath. When the map is
                 exposed there's no floating button: the peek strip itself is
                 the way back up (drag) */}
-            {Boolean(effectiveListId) &&
+            {isListLikeFocus &&
                 !isSearchMode &&
                 activeList &&
                 listSheetIndex === 2 &&
@@ -1903,6 +2087,14 @@ export default function MapScreen() {
                 onClose={handleThreadModalClose}
                 onPostUpdate={handlePostUpdate}
                 onPostDelete={handlePostDelete}
+            />
+
+            {/* Owner list reordering */}
+            <ListReorderModal
+                visible={showReorderModal}
+                posts={orderedListPosts}
+                onClose={() => setShowReorderModal(false)}
+                onSave={handleSaveReorder}
             />
         </View>
     )

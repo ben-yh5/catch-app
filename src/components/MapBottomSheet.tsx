@@ -2,6 +2,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useTabBarInset } from '@/hooks/useTabBarInset'
 import { colors } from '@/theme/colors'
 import { smallTargetHitSlop } from '@/theme/tokens'
+import { calculateDistance } from '@/utils/geospatialQueries'
 import { Ionicons } from '@expo/vector-icons'
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet'
 import React, { useMemo, useRef, useState } from 'react'
@@ -51,6 +52,9 @@ interface MapBottomSheetProps {
     onEditList?: () => void
     onDeleteList?: () => void
     onRemovePost?: (postId: string) => void
+    onReorderList?: () => void
+    /** When set, rows with coordinates show a distance label */
+    distanceFrom?: { latitude: number; longitude: number } | null
     /** Below pin zoom — no pin query runs, so a "0 shots" count would be a
      *  lie; the header explains the zoom state instead */
     zoomedOut?: boolean
@@ -77,6 +81,8 @@ function MapBottomSheet({
     onEditList,
     onDeleteList,
     onRemovePost,
+    onReorderList,
+    distanceFrom,
     zoomedOut,
 }: MapBottomSheetProps) {
     const { user } = useAuth()
@@ -131,6 +137,11 @@ function MapBottomSheet({
         return { paddingTop: pad }
     })
 
+    const formatDistance = (meters: number) =>
+        meters < 1000
+            ? `${Math.round(meters)} m`
+            : `${(meters / 1000).toFixed(1)} km`
+
     const renderItem = ({ item }: { item: any }) => (
         <View style={styles.postContainer}>
             <CompactPostCard
@@ -142,6 +153,18 @@ function MapBottomSheet({
                         : undefined
                 }
                 highlighted={item.authorId === user?.uid}
+                distanceLabel={
+                    distanceFrom && item.latitude && item.longitude
+                        ? formatDistance(
+                              calculateDistance(
+                                  distanceFrom.latitude,
+                                  distanceFrom.longitude,
+                                  item.latitude,
+                                  item.longitude
+                              )
+                          )
+                        : undefined
+                }
             />
             {onRemovePost && (
                 <TouchableOpacity
@@ -191,6 +214,21 @@ function MapBottomSheet({
                             <Text style={styles.listSubtitle}>{subtitle}</Text>
                         )}
                     </View>
+                    {onReorderList && (
+                        <TouchableOpacity
+                            onPress={onReorderList}
+                            style={styles.iconButton}
+                            accessibilityLabel="Reorder list"
+                            accessibilityRole="button"
+                            hitSlop={smallTargetHitSlop}
+                        >
+                            <Ionicons
+                                name="swap-vertical"
+                                size={16}
+                                color={colors.primary}
+                            />
+                        </TouchableOpacity>
+                    )}
                     {onEditList && (
                         <TouchableOpacity
                             onPress={onEditList}
