@@ -662,7 +662,8 @@ export const unblockUser = functions
  * 2. Remove from other users' followers/following arrays
  * 3. User's lists
  * 4. Notifications subcollection
- * 5. user_recommendations, usernames index, training_pairs
+ * 5. user_recommendations, user_coverage, usernames index, training_pairs
+ *    (Storage images first — the docs hold the only path pointers)
  * 6. Storage files
  * 7. User document
  * 8. Firebase Auth account (last)
@@ -906,7 +907,7 @@ export const deleteAccount = functions
             failedSteps.push('saves')
         }
 
-        // 6. Delete user_recommendations, username index
+        // 6. Delete user_recommendations, user_coverage, username index
         try {
             await db.collection('user_recommendations').doc(userId).delete()
         } catch (error) {
@@ -915,6 +916,17 @@ export const deleteAccount = functions
                 error
             )
             failedSteps.push('recommendations')
+        }
+
+        try {
+            await db.collection('user_coverage').doc(userId).delete()
+            functions.logger.info(`[deleteAccount] Deleted user_coverage doc`)
+        } catch (error) {
+            functions.logger.error(
+                '[deleteAccount] Error deleting coverage:',
+                error
+            )
+            failedSteps.push('coverage')
         }
 
         if (username) {
@@ -932,7 +944,11 @@ export const deleteAccount = functions
             }
         }
 
-        // 7. Delete training_pairs contributed by this user
+        // 7. Delete training_pairs contributed by this user — Storage images
+        // first, then the Firestore docs. The docs hold the only pointers to
+        // the image paths (training_data/{pairId}/...), so deleting a doc
+        // before its files would orphan them unfindably. Any failure here
+        // keeps the docs (pointers intact) so a retry can finish the job.
         try {
             const trainingQuery = await db
                 .collection('training_pairs')
@@ -940,6 +956,28 @@ export const deleteAccount = functions
                 .get()
 
             if (!trainingQuery.empty) {
+                const imagePaths = trainingQuery.docs.flatMap((doc) => {
+                    const data = doc.data()
+                    return [
+                        data.originalStoragePath,
+                        data.catchStoragePath,
+                    ].filter(
+                        (p): p is string =>
+                            typeof p === 'string' && p.length > 0
+                    )
+                })
+                for (let i = 0; i < imagePaths.length; i += 50) {
+                    await Promise.all(
+                        imagePaths
+                            .slice(i, i + 50)
+                            .map((path) =>
+                                bucket
+                                    .file(path)
+                                    .delete({ ignoreNotFound: true })
+                            )
+                    )
+                }
+
                 const batches: admin.firestore.WriteBatch[] = [db.batch()]
                 let opCount = 0
                 for (const doc of trainingQuery.docs) {
@@ -954,7 +992,7 @@ export const deleteAccount = functions
                     await batch.commit()
                 }
                 functions.logger.info(
-                    `[deleteAccount] Deleted ${trainingQuery.size} training pairs`
+                    `[deleteAccount] Deleted ${trainingQuery.size} training pairs and ${imagePaths.length} training images`
                 )
             }
         } catch (error) {

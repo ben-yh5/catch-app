@@ -130,7 +130,7 @@ There is deliberately **no scoring economy** — no points, XP, royalties, or ca
 - **Pioneer attribution**: An original post >50m from any existing pin gets `isPioneer: true` — permanent "first found here" credit. Classification uses geohash queries on `post_locations` in `onPostCreated` (threshold in `NEARBY_THRESHOLD_METERS`, `functions/src/lib/constants.ts`). Deliberately **thread metadata only** (Sept 2026): being first is circumstance, not an act, and is trivially farmable — no gold stamps, no stat tile, no payoff-screen celebration. Status flows through catches.
 - **Counters as stats**: `totalPosts` / `totalCatches` on user docs are plain counts, not currency.
 - **Caught notification**: When someone catches your post you get a `caught` notification (in-app + push) — the reward is knowing someone stood where you stood.
-- **Lost places (gold pins)**: Posts with 0 catches or no catch in >30 days render gold on the map (`isLostPlace()` in `src/utils/postClassification.ts`), pointing players at spots whose photographic record has a gap.
+- **Lost places**: Posts with 0 catches or no catch in >30 days are "lost" (`isLostPlace()` in `src/utils/postClassification.ts`) — spots whose photographic record has a gap. Gold map pins for them were **removed** (at current scale gold was the default, not a signal; the muted-gold color stays in MapScreen's pin palette in case they return); the cue now surfaces contextually via `LostPlaceWhisper`.
 - **Nudge over penalty**: `NudgeCard` suggests catching an existing nearby thread instead of posting a duplicate — behavior is steered by UX, not point differentials.
 - **Catch reveal**: After a successful catch, `CatchRevealModal` shows the then/now pair side by side on a passport-page card with an animated CAUGHT stamp (`PassportStamp`) — this payoff screen is the success feedback (no toast). Wired into both catch paths (`useCatchFlow` → ThreadModal, and PostScreen's nudge path).
 - **Post stamp**: After sharing an original, `PostStampModal` shows the photo on a passport-page card with a blue POSTED stamp — replaces the old success toast (no pioneer variant on purpose). Stamp place lines come from a display-only client reverse geocode (`src/utils/reverseGeocode.ts`, OS geocoder — never persisted; omitted when unavailable, no placeholders).
@@ -207,7 +207,12 @@ Notification types: `new_post`, `follow`, `caught`.
 - `metadataVersion`: number
 
 ### lists/{listId}
-- `name`, `userId`, `postIds` (array), `isPublic`
+- `name`, `description`, `creatorId`, `creatorUsername`, `postIds` (ordered array), `isPublic` (default false), `createdAt`, `updatedAt`
+- Deliberate, shareable curation. Read: public or creator; update restricted to allowlisted fields.
+
+### users/{userId}/saves/{postId} (owner-only)
+- `postId`, `savedAt`, `listIds` (tags mirroring list membership; the list's `postIds` stays the source of truth for membership/order)
+- One-tap bookmark pile; doc id == postId gives O(1) saved-checks via the `SavesContext` snapshot Set. See `docs/LISTS_REDESIGN.md`.
 
 ### usernames/{lowercaseUsername} (uniqueness index, server-only writes)
 - `uid`: user ID that owns this username
