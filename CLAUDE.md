@@ -294,7 +294,7 @@ Rules enforce authorization, not just authentication:
 
 - **Content validation**: All upload paths enforce `isValidImage()` — content type must be `image/(jpeg|png|webp)` and size ≤ 10MB.
 - **Posts**: Owner-only writes to `/posts/{userId}/`, public reads.
-- **Training data**: Any authenticated user can write (client-side opt-in check), authenticated reads.
+- **Training data**: Any authenticated user can write (client-side opt-in check); no client reads — the offline pipeline reads via Admin SDK, and contributed photos include never-published catch attempts.
 - **User profiles**: Owner-only writes to `/users/{userId}/`, public reads.
 
 ## TODOs

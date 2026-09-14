@@ -122,8 +122,19 @@ service cloud.firestore {
 
     // Training pairs collection
     match /training_pairs/{pairId} {
-      // Allow authenticated users to contribute data
-      allow create: if request.auth != null;
+      // Opted-in users contribute pairs — only as themselves (deleteAccount
+      // cleanup is keyed by userId, so a spoofed userId would attach data to
+      // someone else's deletion) and only with the expected shape
+      allow create: if request.auth != null &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.label in ['POSITIVE', 'HARD_NEGATIVE'] &&
+                       request.resource.data.originalId is string &&
+                       (request.resource.data.catchId is string ||
+                        request.resource.data.catchId == null) &&
+                       request.resource.data.originalStoragePath is string &&
+                       request.resource.data.catchStoragePath is string &&
+                       request.resource.data.originalMeta is map &&
+                       request.resource.data.catchMeta is map;
       // No client-side read/update/delete
       allow read, update, delete: if false;
     }

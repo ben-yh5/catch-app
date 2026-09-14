@@ -825,6 +825,114 @@ describe('saves subcollection', () => {
     })
 })
 
+// ─── TRAINING PAIRS COLLECTION ───────────────────────────────────────
+
+describe('training_pairs collection', () => {
+    const USER_ID = 'user1'
+    const OTHER_USER_ID = 'user2'
+
+    const validPair = {
+        pairId: 'orig1_1700000000000',
+        userId: USER_ID,
+        originalId: 'orig1',
+        catchId: 'catch1',
+        label: 'POSITIVE',
+        originalStoragePath: 'training_data/orig1_1700000000000/original.jpg',
+        catchStoragePath: 'training_data/orig1_1700000000000/catch.jpg',
+        originalMeta: { latitude: 40.7, longitude: -74.0, date: '2026-09-14' },
+        catchMeta: { latitude: 40.7, longitude: -74.0, date: '2026-09-14' },
+        createdAt: '2026-09-14T00:00:00.000Z',
+        status: 'unverified',
+    }
+
+    test('opted-in user can create a valid pair as themselves', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertSucceeds(
+            setDoc(doc(authed.firestore(), 'training_pairs', 'pair1'), validPair)
+        )
+    })
+
+    test('can create a hard negative (null catchId)', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertSucceeds(
+            setDoc(doc(authed.firestore(), 'training_pairs', 'pair1'), {
+                ...validPair,
+                catchId: null,
+                label: 'HARD_NEGATIVE',
+            })
+        )
+    })
+
+    test('CANNOT create with spoofed userId', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'training_pairs', 'pair1'), {
+                ...validPair,
+                userId: OTHER_USER_ID,
+            })
+        )
+    })
+
+    test('CANNOT create with an unknown label', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'training_pairs', 'pair1'), {
+                ...validPair,
+                label: 'BANANA',
+            })
+        )
+    })
+
+    test('CANNOT create without metadata maps', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        const { originalMeta, ...noMeta } = validPair
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'training_pairs', 'pair1'), noMeta)
+        )
+    })
+
+    test('unauthenticated user CANNOT create pairs', async () => {
+        const unauthed = testEnv.unauthenticatedContext()
+        await assertFails(
+            setDoc(
+                doc(unauthed.firestore(), 'training_pairs', 'pair1'),
+                validPair
+            )
+        )
+    })
+
+    test('contributor CANNOT read pairs back (server-only)', async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(
+                doc(context.firestore(), 'training_pairs', 'pair1'),
+                validPair
+            )
+        })
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            getDoc(doc(authed.firestore(), 'training_pairs', 'pair1'))
+        )
+    })
+
+    test('contributor CANNOT update or delete pairs', async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(
+                doc(context.firestore(), 'training_pairs', 'pair1'),
+                validPair
+            )
+        })
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            updateDoc(doc(authed.firestore(), 'training_pairs', 'pair1'), {
+                label: 'HARD_NEGATIVE',
+            })
+        )
+        await assertFails(
+            deleteDoc(doc(authed.firestore(), 'training_pairs', 'pair1'))
+        )
+    })
+})
+
 // ─── LISTS COLLECTION ────────────────────────────────────────────────
 
 describe('lists collection', () => {

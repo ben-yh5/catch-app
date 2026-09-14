@@ -24,10 +24,12 @@ service firebase.storage {
       allow write: if isAuthenticated() && isOwner(userId) && isValidImage();
     }
 
-    // Training Data: Allow uploading for authorized users (opted-in)
-    // For now, we just check if they are authenticated to avoid complex firestore lookups in storage rules
+    // Training Data: opted-in clients upload pairs (opt-in checked client-side
+    // to avoid a Firestore lookup here). No client reads: contributed photos
+    // include never-published catch attempts, and the only reader is the
+    // offline training pipeline, which uses the Admin SDK and bypasses rules.
     match /training_data/{pairId}/{imageId} {
-      allow read: if isAuthenticated(); // Must be readable to getDownloadURL
+      allow read: if false;
       allow write: if isAuthenticated() && isValidImage();
     }
 
