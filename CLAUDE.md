@@ -228,10 +228,14 @@ Notification types: `new_post`, `follow`, `caught`.
 - `cells5`, `cells6`: geohash arrays (map coverage overlay)
 - `cities`: map keyed `{country}|{city}` → `{ country, city, posted, caught, pioneers, lastActivity }` — passport stamps. Written best-effort by `onPostCreated` (originals stamp their geocoded city; catches inherit the root's `locationMeta`), rebuilt by `backfillCoverage`. Permanent: post deletion does not decrement stamps.
 
+### judge_metrics/{metricId} (anonymous telemetry, client create-only, server-only reads)
+- `rootPostId`, `outcome` (`'pass' | 'reject' | 'unavailable'`), `score` (number, null when unavailable), `threshold`, `createdAt`
+- One row per visual-matcher run in the catch flow (`useCatchFlow` → `logJudgeMetric`, fire-and-forget). Deliberately no uid/coordinates — rules reject identity fields — so rows aren't personal data and need no `deleteAccount` cleanup. Analyzed offline via `catch-ml-training/scripts/judge_stats.py`; check the measured false-reject rate there before changing `SIMILARITY_THRESHOLD` or retraining.
+
 ### training_pairs/{pairId} (opt-in ML training data, written by client when `dataContributionEnabled`)
 - `pairId`, `userId`, `originalId`, `catchId`, `label` (`POSITIVE` | `HARD_NEGATIVE`)
 - `originalStoragePath`, `catchStoragePath` — images live under the `training_data/` Storage prefix
-- `originalMeta`, `catchMeta`: `{ latitude, longitude, heading?, pitch?, date }`
+- `originalMeta`, `catchMeta`: `{ latitude, longitude, heading?, pitch?, date }` — `originalMeta` is `null` on hard negatives (the client doesn't know the original's true location; rules enforce this pairing)
 - Consumed by the offline training pipeline in the separate `catch-ml-training` repo (not part of this repo) — see `src/services/trainingData.ts` for the upload path
 
 ## Cloud Functions (`functions/src/index.ts`)

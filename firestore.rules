@@ -133,9 +133,28 @@ service cloud.firestore {
                         request.resource.data.catchId == null) &&
                        request.resource.data.originalStoragePath is string &&
                        request.resource.data.catchStoragePath is string &&
-                       request.resource.data.originalMeta is map &&
+                       // originalMeta is null on hard negatives — the client
+                       // doesn't know the original's true location
+                       (request.resource.data.originalMeta is map ||
+                        (request.resource.data.originalMeta == null &&
+                         request.resource.data.label == 'HARD_NEGATIVE')) &&
                        request.resource.data.catchMeta is map;
       // No client-side read/update/delete
+      allow read, update, delete: if false;
+    }
+
+    // Judge metrics collection — anonymous visual-matcher telemetry (score +
+    // outcome per catch attempt, no uid/coordinates). Client create-only.
+    match /judge_metrics/{metricId} {
+      allow create: if request.auth != null &&
+                       request.resource.data.rootPostId is string &&
+                       request.resource.data.outcome in ['pass', 'reject', 'unavailable'] &&
+                       (request.resource.data.score is number ||
+                        request.resource.data.score == null) &&
+                       request.resource.data.threshold is number &&
+                       // keep rows anonymous — no identity fields
+                       !('uid' in request.resource.data) &&
+                       !('userId' in request.resource.data);
       allow read, update, delete: if false;
     }
 

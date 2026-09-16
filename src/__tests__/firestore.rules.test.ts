@@ -852,13 +852,24 @@ describe('training_pairs collection', () => {
         )
     })
 
-    test('can create a hard negative (null catchId)', async () => {
+    test('can create a hard negative (null catchId, null originalMeta)', async () => {
         const authed = testEnv.authenticatedContext(USER_ID)
         await assertSucceeds(
             setDoc(doc(authed.firestore(), 'training_pairs', 'pair1'), {
                 ...validPair,
                 catchId: null,
+                originalMeta: null,
                 label: 'HARD_NEGATIVE',
+            })
+        )
+    })
+
+    test('CANNOT create a POSITIVE pair with null originalMeta', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'training_pairs', 'pair1'), {
+                ...validPair,
+                originalMeta: null,
             })
         )
     })
@@ -929,6 +940,81 @@ describe('training_pairs collection', () => {
         )
         await assertFails(
             deleteDoc(doc(authed.firestore(), 'training_pairs', 'pair1'))
+        )
+    })
+})
+
+// ─── JUDGE METRICS COLLECTION ────────────────────────────────────────
+
+describe('judge_metrics collection', () => {
+    const USER_ID = 'user1'
+
+    const validMetric = {
+        rootPostId: 'post1',
+        outcome: 'reject',
+        score: 0.42,
+        threshold: 0.65,
+        createdAt: '2026-09-14T00:00:00.000Z',
+    }
+
+    test('authenticated user can log a metric', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertSucceeds(
+            setDoc(doc(authed.firestore(), 'judge_metrics', 'm1'), validMetric)
+        )
+    })
+
+    test('can log an unavailable outcome with null score', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertSucceeds(
+            setDoc(doc(authed.firestore(), 'judge_metrics', 'm1'), {
+                ...validMetric,
+                outcome: 'unavailable',
+                score: null,
+            })
+        )
+    })
+
+    test('CANNOT log with an unknown outcome', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'judge_metrics', 'm1'), {
+                ...validMetric,
+                outcome: 'banana',
+            })
+        )
+    })
+
+    test('CANNOT include identity fields (rows stay anonymous)', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'judge_metrics', 'm1'), {
+                ...validMetric,
+                uid: USER_ID,
+            })
+        )
+    })
+
+    test('unauthenticated user CANNOT log metrics', async () => {
+        const unauthed = testEnv.unauthenticatedContext()
+        await assertFails(
+            setDoc(
+                doc(unauthed.firestore(), 'judge_metrics', 'm1'),
+                validMetric
+            )
+        )
+    })
+
+    test('no one can read metrics back (server-only)', async () => {
+        await testEnv.withSecurityRulesDisabled(async (context) => {
+            await setDoc(
+                doc(context.firestore(), 'judge_metrics', 'm1'),
+                validMetric
+            )
+        })
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            getDoc(doc(authed.firestore(), 'judge_metrics', 'm1'))
         )
     })
 })

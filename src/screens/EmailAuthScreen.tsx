@@ -14,6 +14,7 @@ export default function EmailAuthScreen() {
     const [mode, setMode] = useState<Mode>('signin')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [confirmPassword, setConfirmPassword] = useState('')
     const [showPassword, setShowPassword] = useState(false)
     const [loading, setLoading] = useState(false)
     const [resetting, setResetting] = useState(false)
@@ -33,6 +34,10 @@ export default function EmailAuthScreen() {
         }
         if (!password) {
             setError('Enter a password.')
+            return
+        }
+        if (isSignup && password !== confirmPassword) {
+            setError("Passwords don't match.")
             return
         }
 
@@ -81,6 +86,7 @@ export default function EmailAuthScreen() {
     const switchMode = (next: Mode) => {
         if (loading || resetting) return
         setMode(next)
+        setConfirmPassword('')
         setError(null)
     }
 
@@ -140,6 +146,24 @@ export default function EmailAuthScreen() {
                     </TouchableOpacity>
                 }
             />
+
+            {isSignup && (
+                <AppInput
+                    placeholder="Confirm password"
+                    value={confirmPassword}
+                    onChangeText={(text) => {
+                        setConfirmPassword(text)
+                        setError(null)
+                    }}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="newPassword"
+                    autoComplete="new-password"
+                    editable={!loading && !resetting}
+                    accessibilityLabel="Confirm password"
+                />
+            )}
 
             {isSignup && (
                 <Text style={styles.hintText}>At least 6 characters</Text>

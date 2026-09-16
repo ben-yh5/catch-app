@@ -166,8 +166,10 @@ export default function SettingsScreen() {
                                 Improve Catch AI
                             </Text>
                             <Text style={styles.settingDescription}>
-                                Allow Catch to use your matches to train our
-                                view verification model. Photos are anonymized.
+                                Contribute your matches — both photos, with
+                                their location and time — to train the view
+                                verification model. Deleted if you delete your
+                                account.
                             </Text>
                         </View>
                         <Switch

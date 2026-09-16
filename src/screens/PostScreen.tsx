@@ -409,8 +409,10 @@ export default function PostScreen() {
         )
             return
 
-        // Upload as hard negative in background — model thought they matched, user disagreed
-        const meta = {
+        // Upload as hard negative in background — model thought they matched,
+        // user disagreed. originalMeta is null: the client doesn't know the
+        // original's true location, only that it was a nearby nudge candidate.
+        const catchMeta = {
             latitude: location.latitude,
             longitude: location.longitude,
             heading: capturedHeading ?? undefined,
@@ -422,8 +424,8 @@ export default function PostScreen() {
             null,
             post.thumbnailURL || post.photoURL,
             capturedImage,
-            meta,
-            meta,
+            null,
+            catchMeta,
             'HARD_NEGATIVE',
             user.uid
         )

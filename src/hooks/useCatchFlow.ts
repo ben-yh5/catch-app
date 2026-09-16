@@ -4,6 +4,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
 import { useDeviceSensors } from '@/hooks/useDeviceSensors'
 import { db, storage } from '@/services/firebase'
+import { logJudgeMetric } from '@/services/judgeMetrics'
 import { ImageMetadata, uploadTrainingPair } from '@/services/trainingData'
 import { Post } from '@/types'
 import { validateCatch } from '@/utils/catchValidation'
@@ -32,6 +33,11 @@ interface UseCatchFlowProps {
     } | null
     onSuccess: (newPost: Post) => void
 }
+
+// Set from MobileNetV3 encoder testing (secure range: 0.60–0.70). Every
+// attempt logs its score + outcome to `judge_metrics` — check the measured
+// false-reject rate there before changing this or retraining the model.
+const SIMILARITY_THRESHOLD = 0.65
 
 const LOCATION_DENIED_ISSUE: CatchIssue = {
     title: 'Location needed',
@@ -369,7 +375,12 @@ export function useCatchFlow({
                     rootPost.photoURL,
                     catchImageUri
                 )
-                const SIMILARITY_THRESHOLD = 0.65 // Adjusted based on MobileNetV2 testing (Secure: 0.60-0.70)
+                logJudgeMetric(
+                    rootPost.id,
+                    similarity < SIMILARITY_THRESHOLD ? 'reject' : 'pass',
+                    similarity,
+                    SIMILARITY_THRESHOLD
+                )
 
                 if (similarity < SIMILARITY_THRESHOLD) {
                     setUploading(false)
@@ -387,6 +398,12 @@ export function useCatchFlow({
             } catch (aiError) {
                 // Fail open: don't block a catch on an ML infra problem, but
                 // surface it so degraded verification isn't silent.
+                logJudgeMetric(
+                    rootPost.id,
+                    'unavailable',
+                    null,
+                    SIMILARITY_THRESHOLD
+                )
                 console.warn(
                     '[CatchFlow] Visual verification skipped due to error:',
                     aiError

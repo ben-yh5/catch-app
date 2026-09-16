@@ -33,7 +33,9 @@ export type TrainingLabel = 'POSITIVE' | 'HARD_NEGATIVE'
  * @param catchId The ID of the catch post (if created)
  * @param originalImageUri Local URI or Remote URL of original image
  * @param catchImageUri Local URI of the new catch image
- * @param originalMeta Metadata for the original image
+ * @param originalMeta Metadata for the original image, or null when the client
+ *   doesn't know the original's true location (hard negatives from the nudge
+ *   path) — never substitute the catcher's own location here
  * @param catchMeta Metadata for the new catch image
  * @param label Classification label ('POSITIVE' for successful catches)
  * @param userId ID of the user contributing the data
@@ -43,7 +45,7 @@ export const uploadTrainingPair = async (
     catchId: string | null,
     originalImageUri: string,
     catchImageUri: string,
-    originalMeta: ImageMetadata,
+    originalMeta: ImageMetadata | null,
     catchMeta: ImageMetadata,
     label: TrainingLabel,
     userId: string
@@ -83,10 +85,12 @@ export const uploadTrainingPair = async (
             label,
             originalStoragePath: originalPath,
             catchStoragePath: catchPath,
-            originalMeta: {
-                ...originalMeta,
-                date: originalMeta.date.toISOString(),
-            },
+            originalMeta: originalMeta
+                ? {
+                      ...originalMeta,
+                      date: originalMeta.date.toISOString(),
+                  }
+                : null,
             catchMeta: {
                 ...catchMeta,
                 date: catchMeta.date.toISOString(),

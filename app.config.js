@@ -18,12 +18,23 @@ export default {
             bundleIdentifier: `app.catchapp.mobile${suffix}`,
             supportsTablet: true,
             usesAppleSignIn: true,
-            googleServicesFile: './GoogleService-Info.plist', // Download from Firebase Console
+            // Per-variant Firebase config (each variant is its own Firebase
+            // iOS app). Download from Firebase Console / apps:sdkconfig.
+            // Prebuild also derives the Google Sign-In URL scheme
+            // (REVERSED_CLIENT_ID) from this file.
+            googleServicesFile:
+                process.env.GOOGLE_SERVICE_INFO_PLIST ||
+                (variant
+                    ? `./GoogleService-Info.${variant}.plist`
+                    : './GoogleService-Info.plist'),
         },
         android: {
             package: `app.catchapp.mobile${suffix}`,
             googleServicesFile:
-                process.env.GOOGLE_SERVICES_JSON || './google-services.json',
+                process.env.GOOGLE_SERVICES_JSON ||
+                (variant
+                    ? `./google-services.${variant}.json`
+                    : './google-services.json'),
             adaptiveIcon: {
                 backgroundColor: '#E6F4FE',
                 foregroundImage: './assets/images/android-icon-foreground.png',
