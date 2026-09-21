@@ -19,6 +19,7 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import { ToastProvider } from '@/components/ui/Toast'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { ListSheetProvider } from '@/context/ListSheetContext'
+import { OutboxProvider } from '@/context/OutboxContext'
 import { PostProvider } from '@/context/PostContext'
 import { SavesProvider } from '@/context/SavesContext'
 import { db } from '@/services/firebase'
@@ -200,9 +201,11 @@ function RootLayoutInner() {
                     <SavesProvider>
                         <PostProvider>
                             <ToastProvider>
-                                <ListSheetProvider>
-                                    <RootLayoutNav />
-                                </ListSheetProvider>
+                                <OutboxProvider>
+                                    <ListSheetProvider>
+                                        <RootLayoutNav />
+                                    </ListSheetProvider>
+                                </OutboxProvider>
                             </ToastProvider>
                         </PostProvider>
                     </SavesProvider>

@@ -1,6 +1,7 @@
 import ExploreSearchBar from '@/components/ExploreSearchBar'
 import ExploreSection from '@/components/ExploreSection'
 import ActivityFeed from '@/components/NotificationInbox'
+import OutboxBanner from '@/components/OutboxBanner'
 import RecommendedPostCard from '@/components/RecommendedPostCard'
 import ThreadModal from '@/components/ThreadModal'
 import ErrorState from '@/components/ui/ErrorState'
@@ -581,6 +582,9 @@ export default function ExploreScreen() {
                 visible={showNotifications}
                 onClose={() => setShowNotifications(false)}
             />
+
+            {/* Offline outbox status — queued shots + failed uploads */}
+            <OutboxBanner />
 
             <FlatList
                 ref={feedListRef}

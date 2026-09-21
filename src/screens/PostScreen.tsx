@@ -5,6 +5,7 @@ import PostStampModal from '@/components/PostStampModal'
 import UnifiedCameraView from '@/components/UnifiedCameraView'
 import UnifiedPreviewScreen from '@/components/UnifiedPreviewScreen'
 import { useAuth } from '@/context/AuthContext'
+import { useOutbox } from '@/context/OutboxContext'
 import { usePost } from '@/context/PostContext'
 import { useDeviceSensors } from '@/hooks/useDeviceSensors'
 import { useTabBarInset } from '@/hooks/useTabBarInset'
@@ -13,6 +14,7 @@ import { colors } from '@/theme/colors'
 import { Post } from '@/types'
 import { validateCatch } from '@/utils/catchValidation'
 import { getShutterFix } from '@/utils/deviceLocation'
+import { isOffline } from '@/utils/network'
 import { getPostsInRadius } from '@/utils/geospatialQueries'
 import { uploadTrainingPair } from '@/services/trainingData'
 import { cropToSquare } from '@/utils/imageProcessing'
@@ -22,7 +24,7 @@ import { addPostToList } from '@/utils/listUtils'
 import { findMostSimilar } from '@/utils/visualMatcher'
 import { useToast } from '@/components/ui/Toast'
 import { Ionicons } from '@expo/vector-icons'
-import { useCameraPermissions } from 'expo-camera'
+import { useCameraPermission } from 'react-native-vision-camera'
 import * as Location from 'expo-location'
 import { useFocusEffect, useRouter } from 'expo-router'
 import {
@@ -78,7 +80,7 @@ const LOCATION_ERROR_ISSUE: CatchIssue = {
 
 export default function PostScreen() {
     const tabBarInset = useTabBarInset()
-    const [permission, requestPermission] = useCameraPermissions()
+    const cameraPermission = useCameraPermission()
     const [status, requestLocationPermission] =
         Location.useForegroundPermissions()
     const [showCamera, setShowCamera] = useState(false)
@@ -109,6 +111,7 @@ export default function PostScreen() {
     const { user, dataContributionEnabled } = useAuth()
     const { notifyPostEvent } = usePost()
     const { showToast } = useToast()
+    const { enqueue: enqueueOutbox } = useOutbox()
 
     // Use shared sensor hook
     const {
@@ -121,13 +124,13 @@ export default function PostScreen() {
     } = useDeviceSensors()
 
     const handleOpenCamera = async () => {
-        // permission is null until useCameraPermissions resolves — on the
-        // first focus that happens after the auto-open below has already
-        // fired, so ask directly: requestPermission() resolves immediately
-        // with the current status when it's already determined
-        if (!permission?.granted) {
-            const result = await requestPermission()
-            if (!result.granted) {
+        // Ask directly when not yet granted; once the OS has permanently
+        // denied, requestPermission can't prompt again — send to Settings
+        if (!cameraPermission.hasPermission) {
+            const granted = cameraPermission.canRequestPermission
+                ? await cameraPermission.requestPermission()
+                : false
+            if (!granted) {
                 openSettingsAlert(
                     'Camera access needed',
                     'Sharing a shot means taking a fresh photo. Enable camera access in Settings to continue.'
@@ -416,6 +419,59 @@ export default function PostScreen() {
         )
     }
 
+    /**
+     * Offline path: park the shot in the outbox instead of failing the
+     * submit. Coords/heading/pitch/capturedAt are already fixed at shutter
+     * press, so nothing is lost by uploading later; catches re-run
+     * validateCatch at flush time (docs/OFFLINE_OUTBOX.md).
+     */
+    const queueForLater = async (
+        kind: 'original' | 'catch',
+        caption?: string,
+        listIds?: Set<string>
+    ): Promise<void> => {
+        if (!capturedImage || !location) return
+        try {
+            await enqueueOutbox({
+                kind,
+                imageUri: capturedImage,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                heading: capturedHeading,
+                pitch: capturedPitch,
+                capturedAt: (capturedAtRef.current ?? new Date()).getTime(),
+                caption: caption?.trim() || '',
+                listIds: Array.from(listIds ?? []),
+                rootPostId: kind === 'catch' ? catchTarget?.id : undefined,
+            })
+            showToast(
+                'info',
+                "You're offline",
+                kind === 'catch'
+                    ? 'Catch saved to your outbox — it will be verified and posted when you reconnect.'
+                    : 'Shot saved to your outbox — it will post automatically when you reconnect.'
+            )
+            // Reset like a successful submit, minus the payoff modal (the
+            // stamp/reveal celebrates a post that exists; this one doesn't yet)
+            setCapturedImage(null)
+            setLocation(null)
+            setCatchTarget(null)
+            setPreviewIssues([])
+            setUploading(false)
+            setUploadProgress(null)
+        } catch (queueError) {
+            // Fail loud: the photo was NOT saved — never pretend it was
+            console.error('Error queueing shot to outbox:', queueError)
+            setUploading(false)
+            setUploadProgress(null)
+            showToast(
+                'error',
+                'Could not save shot',
+                "You're offline and the shot couldn't be saved for later. Keep the app open and try again when you reconnect."
+            )
+        }
+    }
+
     const handleCatchConfirm = async (
         caption?: string,
         listIds?: Set<string>
@@ -440,6 +496,13 @@ export default function PostScreen() {
 
         setUploading(true)
         setPreviewIssues([])
+
+        // Offline → outbox (validateCatch can't run without a connection;
+        // it re-runs with these shutter-time coords at flush)
+        if (await isOffline()) {
+            await queueForLater('catch', caption, listIds)
+            return
+        }
 
         // Display-only place lookup for the stamp — resolves while the
         // upload runs; failure just means a stamp without a place line
@@ -564,6 +627,12 @@ export default function PostScreen() {
             notifyPostEvent('catch', docRef.id, user.uid)
         } catch (error: any) {
             console.error('Error in catch confirm:', error)
+            // Connection dropped mid-submit — every await before the post doc
+            // write throws, so queueing here can't double-post
+            if (await isOffline()) {
+                await queueForLater('catch', caption, listIds)
+                return
+            }
             setUploading(false)
             setUploadProgress(null)
             showToast(
@@ -606,6 +675,12 @@ export default function PostScreen() {
         }
 
         setUploading(true)
+
+        // Offline → outbox; the upload runs on reconnect
+        if (await isOffline()) {
+            await queueForLater('original', caption, listIds)
+            return
+        }
 
         // Display-only place lookup for the stamp — resolves while the
         // upload runs; failure just means a stamp without a place line
@@ -718,6 +793,12 @@ export default function PostScreen() {
             notifyPostEvent('create', docRef.id, user.uid)
         } catch (error: any) {
             console.error('Error posting:', error)
+            // Connection dropped mid-submit — every await before the post doc
+            // write throws, so queueing here can't double-post
+            if (await isOffline()) {
+                await queueForLater('original', caption, listIds)
+                return
+            }
             setUploading(false)
             setUploadProgress(null)
             showToast('error', 'Post Failed', error.message || 'Unknown error')

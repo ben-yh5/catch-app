@@ -1,5 +1,11 @@
 import 'react-native-gesture-handler/jestSetup'
 
+// AsyncStorage is a native module — use the official in-memory jest mock
+// (pulled in transitively wherever the offline outbox is imported)
+jest.mock('@react-native-async-storage/async-storage', () =>
+    require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+)
+
 jest.mock('react-native-reanimated', () => {
     const Reanimated = require('react-native-reanimated/mock')
 

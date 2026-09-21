@@ -2,6 +2,7 @@ import { CatchIssue } from '@/components/CatchIssuesPanel'
 import { StampPlace } from '@/components/PassportStamp'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/context/AuthContext'
+import { useOutbox } from '@/context/OutboxContext'
 import { useDeviceSensors } from '@/hooks/useDeviceSensors'
 import { db, storage } from '@/services/firebase'
 import { logJudgeMetric } from '@/services/judgeMetrics'
@@ -11,10 +12,11 @@ import { validateCatch } from '@/utils/catchValidation'
 import { getShutterFix } from '@/utils/deviceLocation'
 import { cropToSquare } from '@/utils/imageProcessing'
 import { checkBlur, checkBrightness } from '@/utils/imageValidation'
+import { isOffline } from '@/utils/network'
 import { addPostToList } from '@/utils/listUtils'
 import { reverseGeocodeForStamp } from '@/utils/reverseGeocode'
 import { verifyViewSimilarity } from '@/utils/visualMatcher'
-import { useCameraPermissions } from 'expo-camera'
+import { useCameraPermission } from 'react-native-vision-camera'
 import * as Haptics from 'expo-haptics'
 import * as Location from 'expo-location'
 import { addDoc, collection, doc, getDoc } from 'firebase/firestore'
@@ -64,7 +66,8 @@ export function useCatchFlow({
 }: UseCatchFlowProps) {
     const { user, dataContributionEnabled } = useAuth()
     const { showToast } = useToast()
-    const [cameraPermission, requestCameraPermission] = useCameraPermissions()
+    const { enqueue: enqueueOutbox } = useOutbox()
+    const cameraPermission = useCameraPermission()
 
     // UI state
     const [catchMode, setCatchMode] = useState(false)
@@ -120,8 +123,12 @@ export function useCatchFlow({
     }
 
     const startCatch = async () => {
-        if (!cameraPermission?.granted) {
-            const { granted } = await requestCameraPermission()
+        if (!cameraPermission.hasPermission) {
+            // Once the OS has permanently denied, requestPermission can't
+            // prompt again — send to Settings
+            const granted = cameraPermission.canRequestPermission
+                ? await cameraPermission.requestPermission()
+                : false
             if (!granted) {
                 Alert.alert(
                     'Camera access needed',
@@ -252,6 +259,54 @@ export function useCatchFlow({
         startSensors()
     }
 
+    /**
+     * Offline path: park the catch in the outbox. The stored shutter-time
+     * coords/heading/pitch travel with it; validateCatch (and the permit it
+     * issues) runs at flush time. The judge and angle checks don't re-run —
+     * their remedy is "retake", impossible after the fact; the server-side
+     * location gate remains the authority (docs/OFFLINE_OUTBOX.md).
+     */
+    const queueCatchForLater = async (
+        caption?: string,
+        listIds?: Set<string>
+    ): Promise<void> => {
+        if (!rootPost || !catchImageUri || !catchLocation) return
+        try {
+            await enqueueOutbox({
+                kind: 'catch',
+                imageUri: catchImageUri,
+                latitude: catchLocation.latitude,
+                longitude: catchLocation.longitude,
+                heading: capturedHeading,
+                pitch: capturedPitch,
+                capturedAt: (capturedAtRef.current ?? new Date()).getTime(),
+                caption: caption?.trim() || '',
+                listIds: Array.from(listIds ?? []),
+                rootPostId: rootPost.id,
+            })
+            showToast(
+                'info',
+                "You're offline",
+                'Catch saved to your outbox — it will be verified and posted when you reconnect.'
+            )
+            setUploading(false)
+            setUploadProgress(null)
+            setStatusMessage('')
+            handlePreviewCancel()
+        } catch (queueError) {
+            // Fail loud: the photo was NOT saved — never pretend it was
+            console.error('Error queueing catch to outbox:', queueError)
+            setUploading(false)
+            setUploadProgress(null)
+            setStatusMessage('')
+            showToast(
+                'error',
+                'Could not save catch',
+                "You're offline and the photo couldn't be saved for later. Keep the app open and try again when you reconnect."
+            )
+        }
+    }
+
     const handleConfirmCatch = async (
         caption?: string,
         listIds?: Set<string>
@@ -287,6 +342,21 @@ export function useCatchFlow({
         setUploading(true)
         setIssues([])
         setStatusMessage('Checking your shot...')
+
+        // Offline → outbox. Capture-time quality problems still block (their
+        // remedy is a retake, which queueing would make impossible); the
+        // server-side validateCatch gate re-runs with these shutter-time
+        // coords at flush (docs/OFFLINE_OUTBOX.md).
+        if (await isOffline()) {
+            if (qualityIssues.length > 0) {
+                setUploading(false)
+                setStatusMessage('')
+                setIssues(qualityIssues)
+                return
+            }
+            await queueCatchForLater(caption, listIds)
+            return
+        }
 
         // Display-only place lookup for the stamp — resolves while
         // validation and upload run; failure just means a stamp without
@@ -551,6 +621,12 @@ export function useCatchFlow({
             handlePreviewCancel()
         } catch (error: any) {
             console.error('Error in catch confirm:', error)
+            // Connection dropped mid-submit — every await before the post doc
+            // write throws, so queueing here can't double-post
+            if ((await isOffline()) && qualityIssues.length === 0) {
+                await queueCatchForLater(caption, listIds)
+                return
+            }
             setUploading(false)
             setUploadProgress(null)
             setStatusMessage('')

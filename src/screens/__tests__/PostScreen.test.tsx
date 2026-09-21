@@ -14,8 +14,13 @@ jest.mock('expo-router', () => ({
     },
 }))
 
-jest.mock('expo-camera', () => ({
-    useCameraPermissions: () => [{ granted: true }, jest.fn()],
+jest.mock('react-native-vision-camera', () => ({
+    useCameraPermission: () => ({
+        hasPermission: true,
+        canRequestPermission: false,
+        status: 'authorized',
+        requestPermission: jest.fn(async () => true),
+    }),
 }))
 
 jest.mock('expo-location', () => ({
@@ -33,6 +38,19 @@ jest.mock('../../context/AuthContext', () => ({
 
 jest.mock('../../context/PostContext', () => ({
     usePost: () => ({ notifyPostEvent: jest.fn() }),
+}))
+
+jest.mock('../../context/OutboxContext', () => ({
+    useOutbox: () => ({
+        records: [],
+        queuedCount: 0,
+        failedCount: 0,
+        flushing: false,
+        enqueue: jest.fn(),
+        discard: jest.fn(),
+        retry: jest.fn(),
+        flush: jest.fn(),
+    }),
 }))
 
 jest.mock('../../hooks/useTabBarInset', () => ({

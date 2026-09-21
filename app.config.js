@@ -27,6 +27,13 @@ export default {
                 (variant
                     ? `./GoogleService-Info.${variant}.plist`
                     : './GoogleService-Info.plist'),
+            // Camera permission text — was supplied by expo-camera's plugin
+            // before the react-native-vision-camera migration (Sept 2026);
+            // VisionCamera v5 has no config plugin, so it lives here
+            infoPlist: {
+                NSCameraUsageDescription:
+                    'Catch uses the camera to take the photos you share and to catch shots at real places.',
+            },
         },
         android: {
             package: `app.catchapp.mobile${suffix}`,
@@ -41,6 +48,9 @@ export default {
                 backgroundImage: './assets/images/android-icon-background.png',
                 monochromeImage: './assets/images/android-icon-monochrome.png',
             },
+            // Was supplied by expo-camera's plugin before the VisionCamera
+            // migration; VisionCamera's manifest declares no permissions
+            permissions: ['android.permission.CAMERA'],
             edgeToEdgeEnabled: true,
             predictiveBackGestureEnabled: false,
             // Pan instead of resize: the keyboard covers the native tab bar
