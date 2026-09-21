@@ -19,12 +19,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 
+interface ToastAction {
+    label: string
+    onPress: () => void
+}
+
 interface ToastMessage {
     id: number
     type: ToastType
     title: string
     message?: string
     duration?: number
+    /** Optional snackbar-style button; pressing it also dismisses */
+    action?: ToastAction
 }
 
 interface ToastContextValue {
@@ -32,7 +39,8 @@ interface ToastContextValue {
         type: ToastType,
         title: string,
         message?: string,
-        duration?: number
+        duration?: number,
+        action?: ToastAction
     ) => void
 }
 
@@ -103,6 +111,21 @@ function ToastItem({
                         </Text>
                     )}
                 </View>
+                {toast.action && (
+                    <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => {
+                            onDismiss(toast.id)
+                            toast.action!.onPress()
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={toast.action.label}
+                    >
+                        <Text style={styles.actionLabel}>
+                            {toast.action.label}
+                        </Text>
+                    </TouchableOpacity>
+                )}
             </TouchableOpacity>
         </Animated.View>
     )
@@ -132,7 +155,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             type: ToastType,
             title: string,
             message?: string,
-            duration?: number
+            duration?: number,
+            action?: ToastAction
         ) => {
             const id = nextId.current++
             const ms = duration ?? DEFAULT_DURATION
@@ -143,6 +167,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 title,
                 message,
                 duration: ms,
+                action,
             }
 
             setToasts((prev) => {
@@ -216,5 +241,14 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
         marginTop: 2,
         lineHeight: 17,
+    },
+    actionButton: {
+        paddingVertical: 6,
+        paddingLeft: 10,
+    },
+    actionLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.primary,
     },
 })

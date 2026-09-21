@@ -31,14 +31,20 @@ import {
 import PagerView from 'react-native-pager-view'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-type ListsTab = 'my' | 'community'
-const TAB_ORDER: ListsTab[] = ['my', 'community']
+type ListsTab = 'saved' | 'my' | 'community'
+const TAB_ORDER: ListsTab[] = ['saved', 'my', 'community']
+const TAB_LABELS: Record<ListsTab, string> = {
+    saved: 'Saved',
+    my: 'My Lists',
+    community: 'Community',
+}
 
-// The "My" page mixes saved posts (sectioned by city) with curated lists
-type MyRow = { kind: 'post'; post: Post } | { kind: 'list'; list: List }
-interface MySection {
+// Saved page: the unfiled bookmark pile, sectioned by city. Saved is
+// deliberately NOT rendered as a list among lists — it's an inbox, and
+// filing a shot into a list moves it out (to My Lists).
+interface SavedSection {
     title: string
-    data: MyRow[]
+    data: Post[]
 }
 
 export default function ListsScreen() {
@@ -54,12 +60,12 @@ export default function ListsScreen() {
     const [communityLists, setCommunityLists] = useState<List[] | null>(null)
     const [myError, setMyError] = useState(false)
     const [communityError, setCommunityError] = useState(false)
-    const [activeTab, setActiveTab] = useState<ListsTab>('my')
+    const [activeTab, setActiveTab] = useState<ListsTab>('saved')
     const [refreshing, setRefreshing] = useState(false)
     const [refreshEnabled, setRefreshEnabled] = useState(true)
 
-    // Saved posts (the bookmark pile), newest save first
-    const { savedIds } = useSaves()
+    // Saved posts (the unfiled bookmark pile), newest save first
+    const { unfiledIds } = useSaves()
     const [savedPosts, setSavedPosts] = useState<Post[] | null>(null)
     const [selectedPost, setSelectedPost] = useState<Post | null>(null)
     const [threadModalVisible, setThreadModalVisible] = useState(false)
@@ -73,7 +79,11 @@ export default function ListsScreen() {
                     orderBy('savedAt', 'desc')
                 )
             )
-            const ids = savesSnap.docs.map((d) => d.id)
+            // Unfiled only — a save tagged with a list belongs to that
+            // list's page, not the pile
+            const ids = savesSnap.docs
+                .filter((d) => !(d.data().listIds?.length > 0))
+                .map((d) => d.id)
 
             const posts: Post[] = []
             for (let i = 0; i < ids.length; i += 30) {
@@ -101,10 +111,10 @@ export default function ListsScreen() {
         }
     }, [user])
 
-    // Live-sync with bookmark toggles anywhere in the app
+    // Live-sync with bookmark toggles and list filing anywhere in the app
     useEffect(() => {
         fetchSaved()
-    }, [fetchSaved, savedIds])
+    }, [fetchSaved, unfiledIds])
 
     const fetchMyLists = useCallback(async () => {
         if (!user) return
@@ -189,8 +199,10 @@ export default function ListsScreen() {
 
     const handleRefresh = async () => {
         setRefreshing(true)
-        if (activeTab === 'my') {
-            await Promise.all([fetchMyLists(), fetchSaved()])
+        if (activeTab === 'saved') {
+            await fetchSaved()
+        } else if (activeTab === 'my') {
+            await fetchMyLists()
         } else {
             await fetchCommunityLists()
         }
@@ -242,6 +254,22 @@ export default function ListsScreen() {
     }
 
     const renderEmptyState = (tab: ListsTab) => {
+        if (tab === 'saved') {
+            return (
+                <View style={styles.emptyContainer}>
+                    <Ionicons
+                        name="bookmark-outline"
+                        size={64}
+                        color={colors.textTertiary}
+                    />
+                    <Text style={styles.emptyText}>No Saved Shots</Text>
+                    <Text style={styles.emptySubtext}>
+                        Tap the bookmark on any shot to keep it here. Shots
+                        you file into a list live under My Lists.
+                    </Text>
+                </View>
+            )
+        }
         const error = tab === 'my' ? myError : communityError
         const retry = tab === 'my' ? fetchMyLists : fetchCommunityLists
         if (error) {
@@ -286,70 +314,48 @@ export default function ListsScreen() {
         )
     }
 
-    // "My" page: saved shots sectioned by city (savedAt order), then lists
-    const buildMySections = (): MySection[] => {
-        const sections: MySection[] = []
-        if (savedPosts && savedPosts.length > 0) {
-            const byCity = new Map<string, Post[]>()
-            for (const post of savedPosts) {
-                const label = post.city
-                    ? post.country
-                        ? `${post.city}, ${post.country}`
-                        : post.city
-                    : post.country || 'Elsewhere'
-                if (!byCity.has(label)) byCity.set(label, [])
-                byCity.get(label)!.push(post)
-            }
-            for (const [label, posts] of byCity) {
-                sections.push({
-                    title: label,
-                    data: posts.map((post) => ({ kind: 'post', post })),
-                })
-            }
+    // Saved page: unfiled shots sectioned by city (savedAt order)
+    const buildSavedSections = (): SavedSection[] => {
+        if (!savedPosts || savedPosts.length === 0) return []
+        const byCity = new Map<string, Post[]>()
+        for (const post of savedPosts) {
+            const label = post.city
+                ? post.country
+                    ? `${post.city}, ${post.country}`
+                    : post.city
+                : post.country || 'Elsewhere'
+            if (!byCity.has(label)) byCity.set(label, [])
+            byCity.get(label)!.push(post)
         }
-        if (myLists && myLists.length > 0) {
-            sections.push({
-                title: 'My Lists',
-                data: myLists.map((list) => ({ kind: 'list', list })),
-            })
-        }
-        return sections
+        return Array.from(byCity, ([title, posts]) => ({
+            title,
+            data: posts,
+        }))
     }
 
-    const renderMyPage = () => {
-        if (myLists === null && savedPosts === null) {
-            if (myError) return renderEmptyState('my')
+    const renderSavedPage = () => {
+        if (savedPosts === null) {
             return <ListsTabSkeleton />
         }
 
         return (
             <SectionList
-                sections={buildMySections()}
-                keyExtractor={(item) =>
-                    item.kind === 'post'
-                        ? `post-${item.post.id}`
-                        : `list-${item.list.id}`
-                }
-                renderItem={({ item }) =>
-                    item.kind === 'post' ? (
-                        <CompactPostCard
-                            post={item.post}
-                            onPress={() => {
-                                setSelectedPost(item.post)
-                                setThreadModalVisible(true)
-                            }}
-                        />
-                    ) : (
-                        <View style={styles.listRowWrap}>
-                            {renderListItem(item.list, 'my')}
-                        </View>
-                    )
-                }
+                sections={buildSavedSections()}
+                keyExtractor={(post) => post.id}
+                renderItem={({ item }) => (
+                    <CompactPostCard
+                        post={item}
+                        onPress={() => {
+                            setSelectedPost(item)
+                            setThreadModalVisible(true)
+                        }}
+                    />
+                )}
                 renderSectionHeader={({ section }) => (
                     <Text style={styles.sectionHeader}>{section.title}</Text>
                 )}
                 ListHeaderComponent={
-                    savedPosts && savedPosts.length > 0 ? (
+                    savedPosts.length > 0 ? (
                         <View style={styles.savedHeaderRow}>
                             <Text style={styles.savedCount}>
                                 {savedPosts.length} saved{' '}
@@ -383,12 +389,12 @@ export default function ListsScreen() {
                 stickySectionHeadersEnabled={false}
                 refreshControl={
                     <RefreshControl
-                        refreshing={refreshing && activeTab === 'my'}
+                        refreshing={refreshing && activeTab === 'saved'}
                         onRefresh={handleRefresh}
                         enabled={refreshEnabled}
                     />
                 }
-                ListEmptyComponent={renderEmptyState('my')}
+                ListEmptyComponent={renderEmptyState('saved')}
             />
         )
     }
@@ -444,41 +450,28 @@ export default function ListsScreen() {
 
             {/* Tab Switcher */}
             <View style={styles.tabContainer}>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'my' && styles.activeTab]}
-                    onPress={() => selectTab('my')}
-                    accessibilityLabel="My Lists"
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: activeTab === 'my' }}
-                >
-                    <Text
+                {TAB_ORDER.map((tab) => (
+                    <TouchableOpacity
+                        key={tab}
                         style={[
-                            styles.tabText,
-                            activeTab === 'my' && styles.activeTabText,
+                            styles.tab,
+                            activeTab === tab && styles.activeTab,
                         ]}
+                        onPress={() => selectTab(tab)}
+                        accessibilityLabel={TAB_LABELS[tab]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: activeTab === tab }}
                     >
-                        My Lists
-                    </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[
-                        styles.tab,
-                        activeTab === 'community' && styles.activeTab,
-                    ]}
-                    onPress={() => selectTab('community')}
-                    accessibilityLabel="Community"
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: activeTab === 'community' }}
-                >
-                    <Text
-                        style={[
-                            styles.tabText,
-                            activeTab === 'community' && styles.activeTabText,
-                        ]}
-                    >
-                        Community
-                    </Text>
-                </TouchableOpacity>
+                        <Text
+                            style={[
+                                styles.tabText,
+                                activeTab === tab && styles.activeTabText,
+                            ]}
+                        >
+                            {TAB_LABELS[tab]}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
             </View>
 
             {/* Swipeable Pager */}
@@ -496,8 +489,11 @@ export default function ListsScreen() {
                     }
                 }}
             >
+                <View key="saved" style={styles.pageContainer}>
+                    {renderSavedPage()}
+                </View>
                 <View key="my" style={styles.pageContainer}>
-                    {renderMyPage()}
+                    {renderListsPage('my')}
                 </View>
                 <View key="community" style={styles.pageContainer}>
                     {renderListsPage('community')}
@@ -592,9 +588,6 @@ const styles = StyleSheet.create({
     myListContainer: {
         paddingVertical: 8,
         flexGrow: 1,
-    },
-    listRowWrap: {
-        paddingHorizontal: 16,
     },
     sectionHeader: {
         fontSize: 14,

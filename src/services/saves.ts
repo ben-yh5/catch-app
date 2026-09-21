@@ -84,15 +84,29 @@ export async function untagSaveFromList(
  * Live subscription to the user's saved post ids. Firestore latency
  * compensation fires the callback immediately on local writes, so callers
  * get optimistic UI for free.
+ *
+ * `savedIds` is every save doc (drives bookmark icon fill); `unfiledIds`
+ * is the subset with no list tags — the Saved pile is an inbox, and
+ * filing a post into a list moves it out of the pile (removing it from
+ * its last list moves it back).
  */
 export function subscribeSaves(
     userId: string,
-    onChange: (savedIds: Set<string>) => void
+    onChange: (savedIds: Set<string>, unfiledIds: Set<string>) => void
 ): () => void {
     return onSnapshot(
         collection(db, 'users', userId, 'saves'),
         (snapshot) => {
-            onChange(new Set(snapshot.docs.map((d) => d.id)))
+            const savedIds = new Set<string>()
+            const unfiledIds = new Set<string>()
+            for (const d of snapshot.docs) {
+                savedIds.add(d.id)
+                const listIds = d.data().listIds
+                if (!Array.isArray(listIds) || listIds.length === 0) {
+                    unfiledIds.add(d.id)
+                }
+            }
+            onChange(savedIds, unfiledIds)
         },
         (error) => {
             console.error('[saves] subscription error:', error)

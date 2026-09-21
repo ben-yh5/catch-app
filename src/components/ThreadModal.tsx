@@ -177,8 +177,11 @@ export default function ThreadModal({
     // Get the currently displayed post
     const currentPost = threadPosts[currentIndex] || null
     // Saved state is an O(1) context lookup (replaces the old per-post query)
-    const { isSaved: isPostBookmarked, toggleSave } = useSaves()
-    const isSaved = currentPost ? isPostBookmarked(currentPost.id) : false
+    const { saveState, toggleSave } = useSaves()
+    // Filled bookmark = in the unfiled Saved pile; a filed shot's home is
+    // its list (empty bookmark, managed via the sheet)
+    const postSaveState = currentPost ? saveState(currentPost.id) : 'none'
+    const isSaved = postSaveState === 'pile'
 
     // The wide action slot answers "have you stood here?" — any post of
     // yours in the thread (root OR catch) counts. Owning the root would
@@ -469,12 +472,28 @@ export default function ThreadModal({
         router.push(`/(tabs)/map?postId=${currentPost.id}` as any)
     }
 
-    // One-tap save/unsave — the icon fill is the feedback. Adding to a
-    // list is a separate intent with its own header button (list icon).
+    // One-tap save/unsave. A fresh save offers the list route in a
+    // snackbar — the header list icon exists, but the offer makes the
+    // organize-later path discoverable at the moment it's relevant.
+    // Filed saves route to the sheet instead of toggling.
     const handleBookmarkTap = async () => {
         if (!currentPost) return
+        const state = saveState(currentPost.id)
+        if (state === 'filed') {
+            showToast('info', 'Saved in a list', undefined, undefined, {
+                label: 'Manage',
+                onPress: handleSavePress,
+            })
+            return
+        }
         try {
             await toggleSave(currentPost.id)
+            if (state === 'none') {
+                showToast('success', 'Saved', undefined, undefined, {
+                    label: 'Add to list',
+                    onPress: handleSavePress,
+                })
+            }
         } catch (error) {
             console.error('Error toggling save:', error)
             showToast('error', "Couldn't save", 'Check your connection.')

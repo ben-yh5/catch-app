@@ -150,9 +150,12 @@ export default function MapScreen() {
         }>()
     const [activeList, setActiveList] = useState<any | null>(null)
     const [listPosts, setListPosts] = useState<Post[]>([])
-    const { savedIds } = useSaves()
-    const savedIdsRef = useRef(savedIds)
-    savedIdsRef.current = savedIds
+    // savedIds drives pin bookmark glyphs (any save); unfiledIds is the
+    // Saved pile the ?saved=1 focus shows — same inbox as the Lists tab
+    // (shots filed into a list appear via that list, not the pile)
+    const { savedIds, unfiledIds } = useSaves()
+    const unfiledIdsRef = useRef(unfiledIds)
+    unfiledIdsRef.current = unfiledIds
 
     // The list/map toggle is a sheet position, not a navigation: the fully
     // raised sheet IS the list view. These drive/mirror the sheet from the
@@ -449,14 +452,15 @@ export default function MapScreen() {
         [effectiveListId, showToast]
     )
 
-    // Saved-focus: the user's bookmarks shown like a list on the map.
-    // Reads savedIds via ref so this callback stays stable — a bookmark
-    // toggled elsewhere must not re-trigger the focus dispatch effect.
+    // Saved-focus: the user's unfiled bookmarks shown like a list on the
+    // map. Reads unfiledIds via ref so this callback stays stable — a
+    // bookmark toggled elsewhere must not re-trigger the focus dispatch
+    // effect.
     const fetchSavedForMap = useCallback(async () => {
         try {
             setLoadingPosts(true)
             setVisiblePosts([])
-            const ids = Array.from(savedIdsRef.current)
+            const ids = Array.from(unfiledIdsRef.current)
             setActiveList({
                 id: 'saved-view',
                 name: 'Saved',
@@ -522,14 +526,14 @@ export default function MapScreen() {
         }
     }, [showToast, handleListClose])
 
-    // Unsaving from the saved-focus sheet prunes the pin/row in place
-    // (no refetch; new saves appear on the next open)
+    // Unsaving (or filing into a list) from the saved-focus sheet prunes
+    // the pin/row in place (no refetch; new saves appear on the next open)
     useEffect(() => {
         if (stickySaved) {
-            setVisiblePosts((prev) => prev.filter((p) => savedIds.has(p.id)))
-            setListPosts((prev) => prev.filter((p) => savedIds.has(p.id)))
+            setVisiblePosts((prev) => prev.filter((p) => unfiledIds.has(p.id)))
+            setListPosts((prev) => prev.filter((p) => unfiledIds.has(p.id)))
         }
-    }, [savedIds, stickySaved])
+    }, [unfiledIds, stickySaved])
 
     // Wrap fetchListDetails in useCallback
     const fetchListDetails = useCallback(
@@ -1055,7 +1059,12 @@ export default function MapScreen() {
         if (!hasLoadedOnceRef.current) setLoadingPosts(true)
 
         try {
-            const visibleBounds = await mapRef.current.getVisibleBounds()
+            // Debounced/throttle-deferred camera callbacks can fire after
+            // the map view has unmounted (tab switch or teardown mid-pan)
+            // — the ref is null then, not an error worth surfacing
+            const map = mapRef.current
+            if (!map) return
+            const visibleBounds = await map.getVisibleBounds()
             if (!visibleBounds || visibleBounds.length !== 2) {
                 return
             }
