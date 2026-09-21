@@ -20,7 +20,7 @@ import PassportCover, { passportPageSize } from '@/components/PassportCover'
 import { colors } from '@/theme/colors'
 import { spacing, typography } from '@/theme/tokens'
 import { CityStamp } from '@/utils/passportQueries'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
     StyleSheet,
     Text,
@@ -45,7 +45,7 @@ interface PassportBookletProps {
     cities: CityStamp[]
 }
 
-export default function PassportBooklet({ cities }: PassportBookletProps) {
+function PassportBooklet({ cities }: PassportBookletProps) {
     const { width: windowWidth } = useWindowDimensions()
     const { pageWidth, pageHeight } = passportPageSize(windowWidth)
     const spreadWidth = pageWidth * 2
@@ -85,8 +85,11 @@ export default function PassportBooklet({ cities }: PassportBookletProps) {
         )
     }
 
-    // Back-turn past the first spread: the cover swings closed
-    const closeBook = () => {
+    // Back-turn past the first spread: the cover swings closed.
+    // useCallback: this is the memoized book's onCloseBook prop — a
+    // fresh function every render would defeat the memo that keeps
+    // parent re-renders away from the book's active PanResponder.
+    const closeBook = useCallback(() => {
         if (closingRef.current || !openingRef.current) return
         if (openTimer.current) clearTimeout(openTimer.current)
         closingRef.current = true
@@ -101,7 +104,7 @@ export default function PassportBooklet({ cities }: PassportBookletProps) {
             openingRef.current = false
             setBookMounted(false)
         }, CLOSE_DURATION_MS + 50)
-    }
+    }, [coverAngle])
 
     // Closed, the cover sits centered; opening slides the whole booklet
     // left so the spread ends up centered instead. Plain 2D translate —
@@ -191,6 +194,11 @@ export default function PassportBooklet({ cities }: PassportBookletProps) {
         </View>
     )
 }
+
+// Memoized: PassportView re-renders when its async stat fetch resolves,
+// and that must not reach the book's PanResponder mid-gesture. `cities`
+// comes from usePassportData state, set once per load — stable.
+export default React.memo(PassportBooklet)
 
 const styles = StyleSheet.create({
     root: {

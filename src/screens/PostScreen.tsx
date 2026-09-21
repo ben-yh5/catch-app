@@ -12,6 +12,7 @@ import { db, storage } from '@/services/firebase'
 import { colors } from '@/theme/colors'
 import { Post } from '@/types'
 import { validateCatch } from '@/utils/catchValidation'
+import { getShutterFix } from '@/utils/deviceLocation'
 import { getPostsInRadius } from '@/utils/geospatialQueries'
 import { uploadTrainingPair } from '@/services/trainingData'
 import { cropToSquare } from '@/utils/imageProcessing'
@@ -212,30 +213,9 @@ export default function PostScreen() {
                 }
             }
 
-            // Fetch fresh location (Strict Mode for New Posts)
-            // We do NOT use lastKnownPosition here because new posts must be accurate
-            const locationPromise = Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Highest, // Highest accuracy for new posts
-            })
-
-            const timeoutPromise = new Promise<Location.LocationObject>(
-                (_, reject) => {
-                    setTimeout(
-                        () => reject(new Error('Location request timed out')),
-                        10000
-                    )
-                }
-            )
-
-            const location = await Promise.race([
-                locationPromise,
-                timeoutPromise,
-            ])
-            console.log('[PostScreen] Got fresh location')
-            return {
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-            }
+            // Strict shutter-time fix — no lastKnownPosition fallback,
+            // new posts must be accurate (shared with the catch flow)
+            return await getShutterFix()
         } catch (error) {
             console.error('Error getting device location:', error)
             return 'error'

@@ -34,7 +34,7 @@ import { colors } from '@/theme/colors'
 import { INK_OPACITY, paper } from '@/theme/document'
 import { radii, spacing } from '@/theme/tokens'
 import { CityStamp } from '@/utils/passportQueries'
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { PanResponder, StyleSheet, View } from 'react-native'
 import Animated, {
     Easing,
@@ -150,6 +150,10 @@ interface LeafProps {
     /** 0 = no turn, 1 = fwd turning, -1 = back turning */
     activeDir: SharedValue<number>
     progress: SharedValue<number>
+    /** Spread index the in-flight turn started from */
+    turnIndex: SharedValue<number>
+    /** Spread index this render's faces were derived from */
+    renderedIndex: number
     pageWidth: number
     pageHeight: number
     frontFace: CityStamp[] | undefined
@@ -165,14 +169,23 @@ function Leaf({
     dir,
     activeDir,
     progress,
+    turnIndex,
+    renderedIndex,
     pageWidth,
     pageHeight,
     frontFace,
     backFace,
 }: LeafProps) {
     const dirValue = dir === 'fwd' ? 1 : -1
+    // A leaf is only mid-turn if the turn started from the spread this
+    // render drew its faces from. After a committed turn re-renders the
+    // book at the new index, the still-set shared values belong to the
+    // OLD spread's leaves — treating this render's leaves as active
+    // would flash wrong content during the commit→reset gap.
     const containerStyle = useAnimatedStyle(() => {
-        const active = activeDir.value === dirValue
+        const active =
+            activeDir.value === dirValue &&
+            turnIndex.value === renderedIndex
         const p = active ? progress.value : 0
         // Lifted leaf must cover the resting one on the far side
         const zIndex = active ? 3 : 1
@@ -191,14 +204,18 @@ function Leaf({
             ],
         }
     })
-    const frontStyle = useAnimatedStyle(() => ({
-        opacity:
-            activeDir.value !== dirValue || progress.value < 0.5 ? 1 : 0,
-    }))
-    const backStyle = useAnimatedStyle(() => ({
-        opacity:
-            activeDir.value === dirValue && progress.value >= 0.5 ? 1 : 0,
-    }))
+    const frontStyle = useAnimatedStyle(() => {
+        const active =
+            activeDir.value === dirValue &&
+            turnIndex.value === renderedIndex
+        return { opacity: !active || progress.value < 0.5 ? 1 : 0 }
+    })
+    const backStyle = useAnimatedStyle(() => {
+        const active =
+            activeDir.value === dirValue &&
+            turnIndex.value === renderedIndex
+        return { opacity: active && progress.value >= 0.5 ? 1 : 0 }
+    })
     return (
         <Animated.View
             pointerEvents="none"
@@ -241,7 +258,7 @@ interface PassportBookProps {
     onCloseBook?: () => void
 }
 
-export default function PassportBook({
+function PassportBook({
     cities,
     pageWidth,
     pageHeight,
@@ -268,11 +285,13 @@ export default function PassportBook({
 
     const turnRef = useRef<TurnDir | null>(null)
     const settlingRef = useRef(false)
+    const pendingResetRef = useRef(false)
     const tapXRef = useRef(0)
     const spreadViewRef = useRef<View>(null)
     const spreadXRef = useRef(0)
     const activeDir = useSharedValue(0)
     const progress = useSharedValue(0)
+    const turnIndex = useSharedValue(0)
 
     // Gesture-time control writes ONLY refs and shared values — never
     // React state — so the responder survives the whole drag
@@ -282,23 +301,42 @@ export default function PassportBook({
         if (dir === 'back' && !canBack) return false
         progress.value = 0
         turnRef.current = dir
+        turnIndex.value = spreadIndex
         activeDir.value = dir === 'fwd' ? 1 : -1
         return true
     }
 
-    // React state changes only here — after the gesture is over. The
-    // post-commit spread at progress 0 is pixel-identical to the leaf at
-    // progress 1, so the swap is seamless.
-    const completeTurn = (commit: boolean) => {
-        const dir = turnRef.current
-        if (commit && dir) {
-            setSpreadIndex((i) => i + (dir === 'fwd' ? 1 : -1))
-        }
+    const resetTurn = () => {
         turnRef.current = null
         settlingRef.current = false
         activeDir.value = 0
         progress.value = 0
     }
+
+    // React state changes only here — after the gesture is over. On
+    // commit the shared values are NOT reset yet: setSpreadIndex is
+    // async, and flattening the leaf before React commits the new
+    // spread flashes the old one for a frame. The turn state holds
+    // (leaf at progress 1 == the landed spread) until the effect below
+    // sees the new index; the new render's leaves ignore the held
+    // values via the turnIndex guard.
+    const completeTurn = (commit: boolean) => {
+        const dir = turnRef.current
+        if (commit && dir) {
+            pendingResetRef.current = true
+            setSpreadIndex((i) => i + (dir === 'fwd' ? 1 : -1))
+            return
+        }
+        resetTurn()
+    }
+
+    // Runs after the committed spread has rendered — safe to flatten
+    useEffect(() => {
+        if (!pendingResetRef.current) return
+        pendingResetRef.current = false
+        resetTurn()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [spreadIndex])
 
     const settleTurn = (commit: boolean) => {
         if (!turnRef.current || settlingRef.current) return
@@ -347,7 +385,11 @@ export default function PassportBook({
                 const opposite: TurnDir = dir === 'fwd' ? 'back' : 'fwd'
                 if (beginTurn(opposite)) {
                     settleTurn(true)
-                } else if (opposite === 'back' && spreadIndex === 0) {
+                } else if (
+                    opposite === 'back' &&
+                    spreadIndex === 0 &&
+                    !settlingRef.current
+                ) {
                     onCloseBook?.()
                 }
                 return
@@ -363,7 +405,7 @@ export default function PassportBook({
         const isTap = Math.abs(dx) < TAP_SLOP && Math.abs(dy) < TAP_SLOP
         if (!isTap && Math.abs(dy) > Math.abs(dx)) return
         const dir: TurnDir = isTap
-            ? tapXRef.current > spreadWidth / 2
+            ? tapXRef.current - spreadXRef.current > spreadWidth / 2
                 ? 'fwd'
                 : 'back'
             : dx < 0
@@ -373,8 +415,11 @@ export default function PassportBook({
             settleTurn(true)
             return
         }
-        // A back intent on the first spread shuts the book
-        if (dir === 'back' && spreadIndex === 0) {
+        // A back intent on the first spread shuts the book. Never while
+        // a turn is settling — spreadIndex is stale until it commits, so
+        // a quick back-swipe during a 0→1 turn would read index 0 and
+        // shut the book out from under the in-flight turn.
+        if (dir === 'back' && spreadIndex === 0 && !settlingRef.current) {
             onCloseBook?.()
         }
     }
@@ -389,15 +434,27 @@ export default function PassportBook({
             onMoveShouldSetPanResponder: (_, g) =>
                 Math.abs(g.dx) > TAP_SLOP && Math.abs(g.dx) > Math.abs(g.dy),
             onPanResponderGrant: (evt) => {
-                // pageX minus the spread's window origin — locationX is
-                // relative to whichever deep child was touched, not the
-                // spread, so it can't determine the tapped side
-                tapXRef.current = evt.nativeEvent.pageX - spreadXRef.current
+                // pageX is window-absolute; the spread's own origin is
+                // subtracted at release (locationX is relative to
+                // whichever deep child was touched, so it can't
+                // determine the tapped side). Re-measure the origin at
+                // every touch: the first onLayout measure runs while the
+                // cover-open animation is still sliding the booklet, and
+                // the book can move afterwards (scroll, layout shifts) —
+                // a stale origin makes taps turn the wrong way.
+                spreadViewRef.current?.measureInWindow((x) => {
+                    spreadXRef.current = x
+                })
+                tapXRef.current = evt.nativeEvent.pageX
             },
             onPanResponderMove: (_, g) => moveRef.current(g.dx),
             onPanResponderRelease: (_, g) =>
                 releaseRef.current(g.dx, g.vx, g.dy),
             onPanResponderTerminate: () => cancelRef.current(),
+            // Never volunteer the gesture away mid-turn — the default
+            // (true) lets the profile pager or an enclosing list steal
+            // the drag, half-turning the page and snapping it back
+            onPanResponderTerminationRequest: () => false,
         })
     ).current
 
@@ -445,6 +502,8 @@ export default function PassportBook({
                         dir="back"
                         activeDir={activeDir}
                         progress={progress}
+                        turnIndex={turnIndex}
+                        renderedIndex={spreadIndex}
                         pageWidth={pageWidth}
                         pageHeight={pageHeight}
                         frontFace={curLeft}
@@ -456,6 +515,8 @@ export default function PassportBook({
                         dir="fwd"
                         activeDir={activeDir}
                         progress={progress}
+                        turnIndex={turnIndex}
+                        renderedIndex={spreadIndex}
                         pageWidth={pageWidth}
                         pageHeight={pageHeight}
                         frontFace={curRight}
@@ -480,6 +541,12 @@ export default function PassportBook({
         </View>
     )
 }
+
+// Memoized so parent re-renders (pager state, async stat loads) never
+// re-render the responder's subtree mid-gesture — on the new
+// architecture that kills the active PanResponder (rule 2 above).
+// Callers must pass referentially stable props.
+export default React.memo(PassportBook)
 
 const styles = StyleSheet.create({
     spread: {
@@ -509,7 +576,9 @@ const styles = StyleSheet.create({
         width: 1,
         marginLeft: -0.5,
         backgroundColor: paper.crease,
-        zIndex: 4,
+        // Above resting leaves (1), below the mid-turn leaf (3) — the
+        // crease must not paint over a page that has lifted off it
+        zIndex: 2,
     },
     dottedLine: {
         position: 'absolute',

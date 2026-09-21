@@ -8,6 +8,7 @@ import { logJudgeMetric } from '@/services/judgeMetrics'
 import { ImageMetadata, uploadTrainingPair } from '@/services/trainingData'
 import { Post } from '@/types'
 import { validateCatch } from '@/utils/catchValidation'
+import { getShutterFix } from '@/utils/deviceLocation'
 import { cropToSquare } from '@/utils/imageProcessing'
 import { checkBlur, checkBrightness } from '@/utils/imageValidation'
 import { addPostToList } from '@/utils/listUtils'
@@ -181,13 +182,10 @@ export function useCatchFlow({
                         await Location.requestForegroundPermissionsAsync()
                     if (status !== 'granted') return 'denied' as const
                     try {
-                        const location = await Location.getCurrentPositionAsync(
-                            {}
-                        )
-                        return {
-                            latitude: location.coords.latitude,
-                            longitude: location.coords.longitude,
-                        }
+                        // Same strict fix as originals — this coordinate
+                        // gates the proximity check, so Balanced (~100m)
+                        // accuracy is not good enough
+                        return await getShutterFix()
                     } catch {
                         return 'error' as const
                     }
