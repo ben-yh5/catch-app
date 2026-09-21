@@ -157,6 +157,20 @@ export default function UnifiedPreviewScreen({
                     onAddToListPress={() => setShowListSelection(true)}
                     selectedListCount={selectedListIds.size}
                 />
+
+                {/* Location is fixed at shutter press; denied/failed fixes
+                    surface through the issues panel. */}
+                {loadingLocation && (
+                    <View style={styles.locationStatus}>
+                        <ActivityIndicator
+                            size="small"
+                            color={colors.textTertiary}
+                        />
+                        <Text style={styles.locationStatusText}>
+                            Pinning your location…
+                        </Text>
+                    </View>
+                )}
             </ScrollView>
 
             {(issues.length > 0 ||
@@ -258,6 +272,19 @@ const styles = StyleSheet.create({
         position: 'absolute',
         left: 10,
         right: 10,
+    },
+    locationStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingHorizontal: 16,
+        paddingTop: 10,
+    },
+    locationStatusText: {
+        flexShrink: 1,
+        fontSize: 12,
+        color: colors.textTertiary,
     },
     nudgeGap: {
         marginTop: 10,

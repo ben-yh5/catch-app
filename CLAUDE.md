@@ -191,7 +191,7 @@ Notification types: `new_post`, `follow`, `caught`.
 - `read`: boolean, `createdAt`
 
 ### posts/{postId}
-- `authorId`, `authorUsername`, `caption`, `createdAt`
+- `authorId`, `authorUsername`, `caption`, `createdAt` (submit time), `capturedAt` (shutter time — matches the coordinates, which are also fixed at shutter press; absent on pre-Sept-2026 posts)
 - `photoURL`, `thumbnailURL`, `mediumURL`
 - `hasLocation`: boolean
 - `isOriginal`: boolean, `parentPostId`, `rootPostId`
@@ -253,6 +253,7 @@ Notification types: `new_post`, `follow`, `caught`.
 | `blockUser` / `unblockUser` | HTTPS Callable | Manages caller's `blockedUsers` array; blocking also severs follows both ways. Client filters blocked authors from feeds/map |
 | `markAllNotificationsRead` | HTTPS Callable | Bulk-marks all of the caller's notifications as read (batched server-side over the whole subcollection) |
 | `reconcileCounters` | HTTPS Callable | Admin-only: recomputes and overwrites `totalPosts`/`totalCatches` from surviving posts; pass `dryRun: true` to only report drift |
+| `migrateLegacySavedLists` | HTTPS Callable | Admin-only, one-time: moves legacy "Saved"/"My List" lists into `users/{uid}/saves` and deletes them (LISTS_REDESIGN §E). `dryRun` defaults **true** |
 | `onPostCreated` | Firestore Trigger | Pioneer attribution, counter/catchCount increments, caught + follower notifications. Idempotent via `context.eventId` dedup |
 | `onPostDeleted` | Firestore Trigger | Thread promotion, counter decrements (catchCount), list cleanup. Idempotent via `context.eventId` dedup |
 | `onUserFollowed` | Firestore Trigger | Follow notifications (in-app + push) |

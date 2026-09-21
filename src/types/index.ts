@@ -24,7 +24,8 @@ export interface Post {
     parentPostId: string | null
     rootPostId: string | null
     isOriginal: boolean
-    createdAt: any // Firestore Timestamp or Date
+    createdAt: any // Firestore Timestamp or Date — submit time
+    capturedAt?: any // Firestore Timestamp or Date — shutter time (absent on pre-Sept-2026 posts)
     // Optional location fields (only present in some contexts like MapScreen)
     latitude?: number
     longitude?: number
@@ -76,7 +77,10 @@ export interface RecommendedPost extends Post {
  * Lists can be:
  * - Private (isPublic=false) - only creator can see
  * - Public (isPublic=true) - visible to all users
- * - Special "Saved" list (isSavedList=true) - auto-created default list
+ *
+ * (One-tap bookmarks are NOT lists — they live in users/{uid}/saves;
+ * legacy "Saved" lists are migrated by the migrateLegacySavedLists
+ * admin callable.)
  */
 /**
  * SearchPost - Post data returned by the searchPosts Cloud Function
@@ -116,7 +120,6 @@ export interface List {
     creatorUsername?: string
     postIds: string[]
     isPublic: boolean
-    isSavedList?: boolean // Special flag for the default "My List"
     createdAt: any // Firestore Timestamp or Date
     updatedAt: any // Firestore Timestamp or Date
     thumbnails?: string[] // Cached thumbnail URLs for preview

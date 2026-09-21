@@ -47,6 +47,9 @@ export { markAllNotificationsRead } from './callable/notifications'
 // ─── Callable Functions: Admin Reconciliation ───────────────────────────────
 export { reconcileCounters } from './callable/reconcile'
 
+// ─── Callable Functions: Admin Migration (one-time, LISTS_REDESIGN §E) ──────
+export { migrateLegacySavedLists } from './callable/legacySavedLists'
+
 // ─── Callable Functions: Recommendations ────────────────────────────────────
 export {
     recordCityIntent,

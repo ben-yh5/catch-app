@@ -78,6 +78,8 @@ export function useCatchFlow({
     const [uploadProgress, setUploadProgress] = useState<number | null>(null)
     const catchPressGuard = useRef(false)
     const [fetchingLocation, setFetchingLocation] = useState(false)
+    // Shutter-press timestamp for the pending photo (capturedAt on the post)
+    const capturedAtRef = useRef<Date | null>(null)
 
     // Set after a successful catch to drive the CatchRevealModal (the
     // then/now payoff screen). Holds its own copy of the photo URI because
@@ -164,6 +166,9 @@ export function useCatchFlow({
 
     const handlePhotoTaken = async (photoUri: string) => {
         captureAndStop()
+        // Shutter time — persisted as capturedAt so the record isn't
+        // limited to createdAt (submit time), which can be much later
+        capturedAtRef.current = new Date()
         try {
             const processedUri = await cropToSquare(photoUri)
             setCatchImageUri(processedUri)
@@ -454,6 +459,7 @@ export function useCatchFlow({
                 rootPostId: rootPost.id,
                 isOriginal: false,
                 createdAt: new Date(),
+                capturedAt: capturedAtRef.current ?? new Date(),
             }
 
             const docRef = await addDoc(collection(db, 'posts'), postData)

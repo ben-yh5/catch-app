@@ -85,6 +85,8 @@ export default function PostScreen() {
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [location, setLocation] = useState<LocationData | null>(null)
     const [loadingLocation, setLoadingLocation] = useState(false)
+    // Shutter-press timestamp for the pending photo (capturedAt on the post)
+    const capturedAtRef = useRef<Date | null>(null)
     const [uploading, setUploading] = useState(false)
     const [uploadProgress, setUploadProgress] = useState<number | null>(null)
     const [similarPost, setSimilarPost] = useState<Post | null>(null)
@@ -249,6 +251,9 @@ export default function PostScreen() {
         // Snapshot sensor data at capture moment and stop sensors
         console.log('[PostScreen] Capturing photo. Heading:', heading)
         captureAndStop()
+        // Shutter time — persisted as capturedAt so the record isn't
+        // limited to createdAt (submit time), which can be much later
+        capturedAtRef.current = new Date()
 
         // Mark as processing
         processingRef.current = true
@@ -502,6 +507,7 @@ export default function PostScreen() {
                 rootPostId: catchTarget.id,
                 isOriginal: false,
                 createdAt: new Date(),
+                capturedAt: capturedAtRef.current ?? new Date(),
             }
             const docRef = await addDoc(collection(db, 'posts'), postData)
 
@@ -655,6 +661,7 @@ export default function PostScreen() {
                 rootPostId: null, // Original posts have no root (they ARE the root)
                 isOriginal: true,
                 createdAt: new Date(),
+                capturedAt: capturedAtRef.current ?? new Date(),
             }
 
             const docRef = await addDoc(collection(db, 'posts'), postData)
