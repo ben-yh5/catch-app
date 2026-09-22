@@ -1453,10 +1453,55 @@ export default function MapScreen() {
         user?.uid,
     ])
 
+    // One tap on a cluster must SEPARATE that cluster.
+    // getClusterExpansionZoom returns the zoom at which the cluster starts
+    // to split — landing exactly on it often still renders the cluster
+    // (fractional zoom/tile rounding: it only splits strictly above), and
+    // the call can fail or return garbage when the source's shape was
+    // swapped between render and tap (pins refetch per viewport, which
+    // regenerates cluster ids). So: land half a level PAST the expansion
+    // zoom when we have it, fall back to current+2 when we don't, and
+    // always move in by at least one full level so a tap never no-ops.
+    const zoomToSplitCluster = useCallback(
+        async (source: ShapeSource | null, feature: any) => {
+            if (!cameraRef.current) return
+
+            let expansionZoom: number | undefined
+            try {
+                expansionZoom =
+                    await source?.getClusterExpansionZoom(feature)
+            } catch (error) {
+                console.warn('[Map] Cluster expansion zoom failed:', error)
+            }
+
+            let currentZoom = 0
+            try {
+                currentZoom = (await mapRef.current?.getZoom()) ?? 0
+            } catch {
+                // Keep 0 — the expansion path still zooms somewhere sane
+            }
+
+            const base =
+                typeof expansionZoom === 'number' &&
+                Number.isFinite(expansionZoom) &&
+                expansionZoom > 0
+                    ? expansionZoom + 0.5
+                    : currentZoom + 2
+            const target = Math.max(base, currentZoom + 1)
+
+            cameraRef.current.setCamera({
+                centerCoordinate: (feature.geometry as any).coordinates,
+                zoomLevel: target,
+                animationDuration: 600,
+            })
+        },
+        []
+    )
+
     // Stable handler — an inline ShapeSource onPress is a new function each
     // render, which re-sends the prop across the bridge
     // Tap a bubble. Merged bubbles (Mapbox cluster of several cells) zoom
-    // to their expansion level so they split apart; a single cell bubble
+    // past their expansion level so they split apart; a single cell bubble
     // zooms straight to the cell's extent so its contents separate into
     // pins in one tap (AllTrails-style). A p5 cell (~4.9km) fits at
     // ~zoom 12, p6 (~1.2km) at ~zoom 14 — both above PIN_MIN_ZOOM, so
@@ -1466,17 +1511,7 @@ export default function MapScreen() {
         if (!feature || !cameraRef.current) return
 
         if (feature.properties?.cluster) {
-            const expansionZoom =
-                await bubblesSourceRef.current?.getClusterExpansionZoom(
-                    feature
-                )
-            if (expansionZoom) {
-                cameraRef.current.setCamera({
-                    centerCoordinate: (feature.geometry as any).coordinates,
-                    zoomLevel: expansionZoom,
-                    animationDuration: 600,
-                })
-            }
+            await zoomToSplitCluster(bubblesSourceRef.current, feature)
             return
         }
 
@@ -1491,7 +1526,7 @@ export default function MapScreen() {
                 600
             )
         }
-    }, [])
+    }, [zoomToSplitCluster])
 
     const handleShapeSourcePress = useCallback(
         async (event: any) => {
@@ -1500,24 +1535,12 @@ export default function MapScreen() {
 
             const isCluster = feature.properties?.cluster
             if (isCluster) {
-                const expansionZoom =
-                    await shapeSourceRef.current?.getClusterExpansionZoom(
-                        feature
-                    )
-
-                if (expansionZoom && cameraRef.current) {
-                    cameraRef.current.setCamera({
-                        centerCoordinate: (feature.geometry as any)
-                            .coordinates,
-                        zoomLevel: expansionZoom,
-                        animationDuration: 500,
-                    })
-                }
+                await zoomToSplitCluster(shapeSourceRef.current, feature)
             } else {
                 handleMarkerPress(event)
             }
         },
-        [handleMarkerPress]
+        [handleMarkerPress, zoomToSplitCluster]
     )
 
     const handleThreadModalClose = () => {
