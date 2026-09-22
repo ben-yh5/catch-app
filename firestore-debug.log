@@ -1,4 +1,4 @@
-Sep 14, 2026 12:28:45 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
+Sep 21, 2026 7:54:40 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
 INFO: Started WebSocket server on ws://127.0.0.1:9150
 API endpoint: http://127.0.0.1:8080
 If you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:
@@ -12,15 +12,15 @@ If you are running a Firestore in Datastore Mode project, run:
 Note: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.
 Dev App Server is now running.
 
-Sep 14, 2026 12:28:46 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Sep 21, 2026 7:54:41 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected non-HTTP/2 connection.
-Sep 14, 2026 12:28:47 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Sep 21, 2026 7:54:41 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected HTTP/2 connection.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:48 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Sep 21, 2026 7:54:43 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected HTTP/2 connection.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:48 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+Sep 21, 2026 7:54:43 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
 INFO: Detected HTTP/2 connection.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
@@ -33,7 +33,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:49 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:43 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L10, false for 'update' @ L17
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -79,7 +79,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:49 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:44 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L17:24 for 'update' @ L17, false for 'update' @ L17
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -113,7 +113,7 @@ evaluation error at L17:24 for 'update' @ L17, false for 'update' @ L17
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:49 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:44 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L17:24 for 'update' @ L17, false for 'update' @ L17
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -147,7 +147,7 @@ evaluation error at L17:24 for 'update' @ L17, false for 'update' @ L17
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:49 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:44 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L17:24 for 'update' @ L17, false for 'update' @ L17
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -181,7 +181,7 @@ evaluation error at L17:24 for 'update' @ L17, false for 'update' @ L17
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:49 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:44 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'update' @ L17
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -215,7 +215,7 @@ false for 'update' @ L17
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:49 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:44 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'update' @ L17
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -249,7 +249,7 @@ false for 'update' @ L17
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:49 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:44 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'update' @ L17
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -292,7 +292,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:44 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L30:26 for 'update' @ L30, false for 'update' @ L30
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -332,7 +332,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'delete' @ L28
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -366,7 +366,7 @@ false for 'delete' @ L28
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L30:26 for 'update' @ L30
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -401,7 +401,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L61, false for 'update' @ L81
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -434,7 +434,7 @@ false for 'create' @ L61, false for 'update' @ L81
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L61, false for 'update' @ L81
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -467,7 +467,7 @@ false for 'create' @ L61, false for 'update' @ L81
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L61, false for 'update' @ L81
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -502,7 +502,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L61, false for 'update' @ L81
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -535,78 +535,7 @@ false for 'create' @ L61, false for 'update' @ L81
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
-WARNING: Operation failed: 
-evaluation error at L61:24 for 'create' @ L61, false for 'update' @ L81, false for 'create' @ L61
-com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L61:24 for 'create' @ L61, false for 'update' @ L81, false for 'create' @ L61
-	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:121)
-	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:318)
-	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:295)
-	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.checkCommit(DefaultEmulatorRulesAuthorizer.java:114)
-	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.commitHelper(FirestoreEmulatorHelper.java:360)
-	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.internalCommit(FirestoreEmulatorHelper.java:314)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.internalCommit(CloudFirestoreV1.java:1077)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.write(CloudFirestoreV1.java:1065)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.handleRequest(CloudFirestoreV1WriteStream.java:218)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.write(CloudFirestoreV1WriteStream.java:140)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:95)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:27)
-	at io.grpc.stub.ServerCalls$StreamingServerCallHandler$StreamingServerCallListener.onMessage(ServerCalls.java:262)
-	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
-	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
-	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
-	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
-	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailableInternal(ServerCallImpl.java:334)
-	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailable(ServerCallImpl.java:319)
-	at io.grpc.internal.ServerImpl$JumpToApplicationThreadServerStreamListener$1MessagesAvailable.runInContext(ServerImpl.java:834)
-	at io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37)
-	at io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133)
-	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
-	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
-	at java.base/java.lang.Thread.run(Thread.java:840)
-
-Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
-WARNING: Operation failed: 
-evaluation error at L61:24 for 'create' @ L61, false for 'update' @ L81, false for 'create' @ L61
-com.google.cloud.datastore.core.exception.DatastoreException: 
-evaluation error at L61:24 for 'create' @ L61, false for 'update' @ L81, false for 'create' @ L61
-	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:121)
-	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:318)
-	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:295)
-	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.checkCommit(DefaultEmulatorRulesAuthorizer.java:114)
-	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.commitHelper(FirestoreEmulatorHelper.java:360)
-	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.internalCommit(FirestoreEmulatorHelper.java:314)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.internalCommit(CloudFirestoreV1.java:1077)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.write(CloudFirestoreV1.java:1065)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.handleRequest(CloudFirestoreV1WriteStream.java:218)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.write(CloudFirestoreV1WriteStream.java:140)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:95)
-	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:27)
-	at io.grpc.stub.ServerCalls$StreamingServerCallHandler$StreamingServerCallListener.onMessage(ServerCalls.java:262)
-	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
-	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
-	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
-	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
-	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailableInternal(ServerCallImpl.java:334)
-	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailable(ServerCallImpl.java:319)
-	at io.grpc.internal.ServerImpl$JumpToApplicationThreadServerStreamListener$1MessagesAvailable.runInContext(ServerImpl.java:834)
-	at io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37)
-	at io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133)
-	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
-	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
-	at java.base/java.lang.Thread.run(Thread.java:840)
-
-Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L61:24 for 'create' @ L61, false for 'update' @ L81, false for 'create' @ L61
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -643,10 +572,81 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+WARNING: Operation failed: 
+evaluation error at L61:24 for 'create' @ L61, false for 'update' @ L81, false for 'create' @ L61
+com.google.cloud.datastore.core.exception.DatastoreException: 
+evaluation error at L61:24 for 'create' @ L61, false for 'update' @ L81, false for 'create' @ L61
+	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:121)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:318)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:295)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.checkCommit(DefaultEmulatorRulesAuthorizer.java:114)
+	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.commitHelper(FirestoreEmulatorHelper.java:360)
+	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.internalCommit(FirestoreEmulatorHelper.java:314)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.internalCommit(CloudFirestoreV1.java:1077)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.write(CloudFirestoreV1.java:1065)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.handleRequest(CloudFirestoreV1WriteStream.java:218)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.write(CloudFirestoreV1WriteStream.java:140)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:95)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:27)
+	at io.grpc.stub.ServerCalls$StreamingServerCallHandler$StreamingServerCallListener.onMessage(ServerCalls.java:262)
+	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
+	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
+	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
+	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
+	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailableInternal(ServerCallImpl.java:334)
+	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailable(ServerCallImpl.java:319)
+	at io.grpc.internal.ServerImpl$JumpToApplicationThreadServerStreamListener$1MessagesAvailable.runInContext(ServerImpl.java:834)
+	at io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37)
+	at io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+WARNING: Operation failed: 
+evaluation error at L61:24 for 'create' @ L61, false for 'update' @ L81, false for 'create' @ L61
+com.google.cloud.datastore.core.exception.DatastoreException: 
+evaluation error at L61:24 for 'create' @ L61, false for 'update' @ L81, false for 'create' @ L61
+	at com.google.cloud.datastore.core.exception.DatastoreException$Builder.build(DatastoreException.java:121)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.verboseError(DefaultEmulatorRulesAuthorizer.java:318)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.withVerboseErrors(DefaultEmulatorRulesAuthorizer.java:295)
+	at com.google.cloud.datastore.emulator.impl.rules.DefaultEmulatorRulesAuthorizer.checkCommit(DefaultEmulatorRulesAuthorizer.java:114)
+	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.commitHelper(FirestoreEmulatorHelper.java:360)
+	at com.google.cloud.datastore.emulator.impl.firestore.FirestoreEmulatorHelper.internalCommit(FirestoreEmulatorHelper.java:314)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.internalCommit(CloudFirestoreV1.java:1077)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1.write(CloudFirestoreV1.java:1065)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.handleRequest(CloudFirestoreV1WriteStream.java:218)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.write(CloudFirestoreV1WriteStream.java:140)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:95)
+	at com.google.cloud.datastore.emulator.impl.firestore.CloudFirestoreV1WriteStream.onNext(CloudFirestoreV1WriteStream.java:27)
+	at io.grpc.stub.ServerCalls$StreamingServerCallHandler$StreamingServerCallListener.onMessage(ServerCalls.java:262)
+	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
+	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
+	at io.grpc.ForwardingServerCallListener.onMessage(ForwardingServerCallListener.java:33)
+	at io.grpc.Contexts$ContextualizedServerCallListener.onMessage(Contexts.java:76)
+	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailableInternal(ServerCallImpl.java:334)
+	at io.grpc.internal.ServerCallImpl$ServerStreamListenerImpl.messagesAvailable(ServerCallImpl.java:319)
+	at io.grpc.internal.ServerImpl$JumpToApplicationThreadServerStreamListener$1MessagesAvailable.runInContext(ServerImpl.java:834)
+	at io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37)
+	at io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+
+Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L77:24 for 'delete' @ L77, false for 'delete' @ L77
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -680,7 +680,7 @@ evaluation error at L77:24 for 'delete' @ L77, false for 'delete' @ L77
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:50 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'update' @ L81
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -714,7 +714,7 @@ false for 'update' @ L81
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:45 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'update' @ L81
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -749,7 +749,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L90, false for 'update' @ L98
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -782,7 +782,7 @@ false for 'create' @ L90, false for 'update' @ L98
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L90, false for 'update' @ L98
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -815,7 +815,7 @@ false for 'create' @ L90, false for 'update' @ L98
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L90, false for 'update' @ L98
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -848,7 +848,7 @@ false for 'create' @ L90, false for 'update' @ L98
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L90, false for 'update' @ L98
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -881,7 +881,7 @@ false for 'create' @ L90, false for 'update' @ L98
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L90, false for 'update' @ L98
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -914,7 +914,7 @@ false for 'create' @ L90, false for 'update' @ L98
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L90, false for 'update' @ L98
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -951,7 +951,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'update' @ L98
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -985,7 +985,7 @@ false for 'update' @ L98
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'delete' @ L98
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1018,7 +1018,7 @@ false for 'delete' @ L98
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L90, false for 'update' @ L98
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1053,7 +1053,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L39, false for 'update' @ L43
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1086,7 +1086,7 @@ false for 'create' @ L39, false for 'update' @ L43
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L39, evaluation error at L43:26 for 'update' @ L43, false for 'create' @ L39
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1119,7 +1119,7 @@ false for 'create' @ L39, evaluation error at L43:26 for 'update' @ L43, false f
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L39, evaluation error at L43:26 for 'update' @ L43, false for 'create' @ L39
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1152,7 +1152,7 @@ false for 'create' @ L39, evaluation error at L43:26 for 'update' @ L43, false f
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L39, false for 'update' @ L43
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1198,7 +1198,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'delete' @ L38
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1235,7 +1235,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L128, false for 'update' @ L143
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1268,7 +1268,7 @@ false for 'create' @ L128, false for 'update' @ L143
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L128, false for 'update' @ L143
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1301,7 +1301,7 @@ false for 'create' @ L128, false for 'update' @ L143
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L128, false for 'update' @ L143
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1334,7 +1334,7 @@ false for 'create' @ L128, false for 'update' @ L143
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 Property originalMeta is undefined on object. for 'create' @ L128, false for 'update' @ L143, Property originalMeta is undefined on object. for 'create' @ L128
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1394,7 +1394,7 @@ Caused by: com.google.firebase.rules.runtime.common.EvaluationException: Error: 
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:51 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L128, false for 'update' @ L143
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1431,7 +1431,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:52 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:46 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'update' @ L143
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1463,7 +1463,7 @@ false for 'update' @ L143
 	at java.base/java.lang.Thread.run(Thread.java:840)
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:52 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:47 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'delete' @ L143
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1500,7 +1500,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:52 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:47 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L149, false for 'update' @ L158
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1533,7 +1533,7 @@ false for 'create' @ L149, false for 'update' @ L158
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:52 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:47 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L149, false for 'update' @ L158
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1566,7 +1566,7 @@ false for 'create' @ L149, false for 'update' @ L158
 
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:52 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:47 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L149, false for 'update' @ L158
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1613,7 +1613,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:52 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:47 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 false for 'create' @ L109, evaluation error at L113:24 for 'update' @ L113, false for 'create' @ L109
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1650,7 +1650,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:52 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:47 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L113:24 for 'update' @ L113, false for 'update' @ L113
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1684,7 +1684,7 @@ evaluation error at L113:24 for 'update' @ L113, false for 'update' @ L113
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:52 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:47 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L113:24 for 'update' @ L113, false for 'update' @ L113
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1718,7 +1718,7 @@ evaluation error at L113:24 for 'update' @ L113, false for 'update' @ L113
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:52 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:47 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L113:24 for 'update' @ L113, false for 'update' @ L113
 com.google.cloud.datastore.core.exception.DatastoreException: 
@@ -1755,7 +1755,7 @@ Multiple projectIds are not recommended in single project mode. Requested projec
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
 Multiple projectIds are not recommended in single project mode. Requested project ID catch-rules-test, but the emulator is configured for catch-72b09. To opt-out of single project mode add/set the '"singleProjectMode": false' property in the firebase.json emulators config.
-Sep 14, 2026 12:28:52 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
+Sep 21, 2026 7:54:47 PM com.google.cloud.datastore.emulator.impl.util.WrappedStreamObserver onError
 WARNING: Operation failed: 
 evaluation error at L119:24 for 'delete' @ L119, false for 'delete' @ L119
 com.google.cloud.datastore.core.exception.DatastoreException: 

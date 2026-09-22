@@ -1,4 +1,4 @@
-import CatchBadge from '@/components/ui/CatchBadge'
+import CatchRecencyLine from '@/components/ui/CatchRecencyLine'
 import CaughtBadge from '@/components/ui/CaughtBadge'
 import SaveBookmark from '@/components/ui/SaveBookmark'
 import { colors } from '@/theme/colors'
@@ -21,6 +21,8 @@ interface FeaturedPostCardProps {
         caption?: string
         catchCount: number
         mediumURL?: string
+        isOriginal: boolean
+        lastCaughtAt?: any // Firestore Timestamp
     }
     onPress: () => void
     size: number
@@ -62,6 +64,19 @@ export default function FeaturedPostCard({
                 containerStyle={styles.saveCorner}
             />
 
+            {/* Catching is an event, not a tally (batch 5 minimal cut):
+                scrim chip on the photo, only when a catch happened */}
+            <CatchRecencyLine
+                post={post}
+                variant="chip"
+                containerStyle={{
+                    position: 'absolute',
+                    left: 8,
+                    top: size - 34, // 8px above the square image's bottom
+                    zIndex: 1,
+                }}
+            />
+
             <View style={styles.cardInfo}>
                 <View style={styles.textContainer}>
                     {post.caption && (
@@ -77,8 +92,6 @@ export default function FeaturedPostCard({
                         @{post.authorUsername}
                     </Text>
                 </View>
-
-                <CatchBadge count={post.catchCount} variant="dark" />
             </View>
         </TouchableOpacity>
     )

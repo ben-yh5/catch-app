@@ -240,6 +240,8 @@ export const getRecommendedFeed = functions
                             mediumURL: postData.mediumURL || null,
                             catchCount: postData.catchCount || 0,
                             createdAt: postData.createdAt?.toMillis?.() ?? null,
+                            lastCaughtAt:
+                                postData.lastCaughtAt?.toMillis?.() ?? null,
                             isOriginal,
                             isPioneer: postData.isPioneer || false,
                             hasLocation: postData.hasLocation ?? false,
@@ -333,6 +335,8 @@ export const getRecommendedFeed = functions
                             mediumURL: postData.mediumURL || null,
                             catchCount,
                             createdAt: postData.createdAt?.toMillis?.() ?? null,
+                            lastCaughtAt:
+                                postData.lastCaughtAt?.toMillis?.() ?? null,
                             isOriginal: true,
                             isPioneer: postData.isPioneer || false,
                             hasLocation: postData.hasLocation ?? false,

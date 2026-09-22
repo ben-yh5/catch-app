@@ -14,7 +14,6 @@
  * - UnifiedPreviewScreen: Post/catch preview
  */
 
-import CatchBadge from '@/components/ui/CatchBadge'
 import { colors } from '@/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
@@ -47,8 +46,6 @@ interface PostCardProps {
     onUsernamePress?: () => void
     onBackPress?: () => void
     showBackButton?: boolean
-    catchCount?: number
-    showCatchBadge?: boolean
     bookmarked?: boolean
     onBookmarkPress?: () => void
     showBookmark?: boolean
@@ -99,8 +96,6 @@ export default function PostCard({
     onUsernamePress,
     onBackPress,
     showBackButton = false,
-    catchCount = 0,
-    showCatchBadge = false,
     bookmarked = false,
     onBookmarkPress,
     showBookmark = false,
@@ -227,12 +222,6 @@ export default function PostCard({
                                 {headerBadgeText}
                             </Text>
                         </View>
-                    )}
-                    {showCatchBadge && (
-                        <CatchBadge
-                            count={catchCount}
-                            containerStyle={styles.catchBadge}
-                        />
                     )}
                     {showBookmark && (
                         <TouchableOpacity
@@ -586,9 +575,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         color: colors.primary,
-    },
-    catchBadge: {
-        // Just positioning if needed, internal styles handled by component
     },
     headerIconButton: {
         padding: 4,

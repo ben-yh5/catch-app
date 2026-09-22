@@ -1,4 +1,4 @@
-import CatchBadge from '@/components/ui/CatchBadge'
+import CatchRecencyLine from '@/components/ui/CatchRecencyLine'
 import CaughtBadge from '@/components/ui/CaughtBadge'
 import SaveBookmark from '@/components/ui/SaveBookmark'
 import { colors } from '@/theme/colors'
@@ -60,6 +60,14 @@ export default function RecommendedPostCard({
                 containerStyle={styles.saveCorner}
             />
 
+            {/* Catching is an event, not a tally (batch 5 minimal cut):
+                scrim chip on the photo, only when a catch happened */}
+            <CatchRecencyLine
+                post={post}
+                variant="chip"
+                containerStyle={styles.recencyChip}
+            />
+
             <View style={styles.content}>
                 <View
                     style={[
@@ -89,8 +97,6 @@ export default function RecommendedPostCard({
                             @{post.authorUsername}
                         </Text>
                     </View>
-
-                    <CatchBadge count={post.catchCount} variant="dark" />
                 </View>
             </View>
         </TouchableOpacity>
@@ -156,5 +162,11 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         color: colors.textSecondary,
+    },
+    recencyChip: {
+        position: 'absolute',
+        left: 8,
+        top: IMAGE_HEIGHT - 34, // 8px above the image's bottom edge
+        zIndex: 1,
     },
 })

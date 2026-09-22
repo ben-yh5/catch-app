@@ -1,4 +1,3 @@
-import CatchBadge from '@/components/ui/CatchBadge'
 import CaughtBadge from '@/components/ui/CaughtBadge'
 import SaveBookmark from '@/components/ui/SaveBookmark'
 import { colors } from '@/theme/colors'
@@ -67,11 +66,13 @@ export default function CompactPostCard({
             </View>
 
             <View style={styles.content}>
+                {/* No count chip, and no recency line either — compact
+                    cards have no room; the caption gets it back
+                    (batch 5 minimal cut) */}
                 <View style={styles.header}>
                     <Text style={styles.username} numberOfLines={1}>
                         @{post.authorUsername}
                     </Text>
-                    <CatchBadge count={post.catchCount} />
                 </View>
 
                 {post.caption ? (
