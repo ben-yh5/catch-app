@@ -34,7 +34,6 @@ import { HAIRLINE } from '@/theme/document'
 import { formatPostDate, monthYear } from '@/utils/dateUtils'
 import { Post } from '@/types'
 import { useSaves } from '@/context/SavesContext'
-import { LOST_PLACE_INACTIVITY_DAYS } from '@/utils/postClassification'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import * as Linking from 'expo-linking'
@@ -713,21 +712,6 @@ export default function ThreadModal({
         [trackWidth, threadLength, scrubTo, scrubIndexSV]
     )
 
-    // A place whose photographic record has gone quiet — shown as one
-    // quiet line on the thread's last frame. Deliberately not raw
-    // isLostPlace(): a day-old post with 0 catches isn't a gap, it's new.
-    const lastShot = threadPosts[threadLength - 1]
-    const lastShotMs = React.useMemo(() => {
-        const ts: any = lastShot?.createdAt
-        if (!ts) return null
-        const d = ts.toDate ? ts.toDate() : new Date(ts)
-        const ms = d.getTime()
-        return isNaN(ms) ? null : ms
-    }, [lastShot?.createdAt])
-    const threadIsStale =
-        lastShotMs !== null &&
-        Date.now() - lastShotMs > LOST_PLACE_INACTIVITY_DAYS * 86400000
-
     const renderGalleryItem = React.useCallback(
         ({ item }: { item: Post }) => (
             <View
@@ -1082,21 +1066,6 @@ export default function ThreadModal({
                                         </Text>
                                     </View>
                                 )}
-
-                                {/* The record here has gone quiet — shown
-                                    on the last frame only, no badge, no
-                                    urgency (a stale single-photo thread
-                                    gets it too) */}
-                                {threadIsStale &&
-                                    currentIndex === threadPosts.length - 1 && (
-                                        <Animated.Text
-                                            entering={FadeIn.duration(400)}
-                                            style={styles.gapNote}
-                                        >
-                                            No one has stood here since{' '}
-                                            {monthYear(lastShot?.createdAt)}.
-                                        </Animated.Text>
-                                    )}
 
                                 {/* Card Footer */}
                                 <View style={styles.cardFooter}>
@@ -1584,15 +1553,6 @@ const styles = StyleSheet.create({
     progressText: {
         fontSize: 12,
         color: colors.textTertiary,
-    },
-    gapNote: {
-        fontSize: 12,
-        fontStyle: 'italic',
-        color: colors.textTertiary,
-        textAlign: 'center',
-        paddingHorizontal: 12,
-        paddingTop: 2,
-        paddingBottom: 10,
     },
     catchButton: {
         flex: 1,
