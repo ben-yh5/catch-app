@@ -58,8 +58,10 @@ service cloud.firestore {
       // catches require a live permit issued by the validateCatch Cloud
       // Function (proximity passed), so a scripted client can't mint catches
       // without being there.
+      // hotScore is server-computed ranking (onPostCreated) — clients can't seed it.
       allow create: if request.auth != null &&
                        request.auth.uid == request.resource.data.authorId &&
+                       !request.resource.data.keys().hasAny(['hotScore']) &&
                        (request.auth.token.firebase.sign_in_provider != 'password' ||
                         request.auth.token.email_verified == true) &&
                        (

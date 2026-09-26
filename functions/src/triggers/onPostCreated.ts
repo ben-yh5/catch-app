@@ -6,6 +6,7 @@ import { GEMINI_FLASH_MODEL, getGenAI } from '../lib/gemini'
 import { recordPassportCity, updateCoverageCells } from '../lib/coverage'
 import { NEARBY_THRESHOLD_METERS, MAX_INSTANCES } from '../lib/constants'
 import { sendPushNotification } from '../lib/notifications'
+import { computeHotScore } from '../lib/hotScore'
 
 /**
  * Firestore Trigger: Handles post creation events
@@ -111,6 +112,10 @@ export const onPostCreated = functions
                             catchCount: admin.firestore.FieldValue.increment(1),
                             lastCaughtAt:
                                 admin.firestore.FieldValue.serverTimestamp(),
+                            hotScore: computeHotScore(
+                                (rootDoc.data()!.catchCount ?? 0) + 1,
+                                Date.now()
+                            ),
                         })
                     }
 
@@ -376,7 +381,13 @@ export const onPostCreated = functions
                         return { postDeleted: true } as const
                     }
 
-                    t.update(postRef, { isPioneer })
+                    t.update(postRef, {
+                        isPioneer,
+                        hotScore: computeHotScore(
+                            0,
+                            postDoc.createTime!.toMillis()
+                        ),
+                    })
 
                     if (userDoc.exists) {
                         t.update(userRef, {

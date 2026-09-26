@@ -7,7 +7,7 @@ import {
 } from 'geofire-common'
 import { GEOHASH_QUERY_LIMIT, MAX_INSTANCES } from '../lib/constants'
 
-// ─── Recommendation System (Phase 1) ────────────────────────────────────────
+// ─── Recommendation System ──────────────────────────────────────────────────
 
 /** Maximum active cities per user */
 const MAX_ACTIVE_CITIES = 10
@@ -18,11 +18,29 @@ const CITY_DEDUP_RADIUS_KM = 50
 /** How long a searched city stays active (days) */
 const CITY_EXPIRY_DAYS = 30
 
-/** Radius for city trending queries (meters) */
-const CITY_TRENDING_RADIUS = 25000
+/** Radius for the "Near you" source (meters) */
+const NEARBY_RADIUS_METERS = 25000
 
 /** Max following IDs per Firestore 'in' query */
 const FOLLOWING_BATCH_SIZE = 30
+
+/** Length of the For You list — finite on purpose, no pagination */
+const FEED_SIZE = 50
+
+/** Recent posts read per followed-users batch */
+const SOCIAL_FETCH_LIMIT = 50
+
+/** Recent saves scanned for the cities a user is planning */
+const SAVES_SCAN_LIMIT = 50
+
+/** Saved cities sourced per request (most recently saved first) */
+const MAX_SAVED_CITIES = 3
+
+/** Top places per saved city */
+const CITY_FETCH_LIMIT = 20
+
+/** Longest run of consecutive cards from one author */
+const MAX_AUTHOR_RUN = 2
 
 /**
  * HTTPS Callable Function: Records a city search intent for recommendations
@@ -153,18 +171,32 @@ export const recordCityIntent = functions
         }
     })
 
+type ReasonType = 'social' | 'nearby' | 'saved_city'
+
+interface Reason {
+    reasonType: ReasonType
+    reasonLabel: string
+}
+
 /**
- * HTTPS Callable Function: Returns a paginated personalized feed
+ * HTTPS Callable Function: Returns the For You list
  *
- * Combines two candidate sources:
- * 1. Social feed — posts/catches from followed users
- * 2. City trending — popular posts in cities the user has searched for
+ * Deliberately simple: gather candidate places from three sources, drop what
+ * the user shouldn't see, sort everything by the root post's hotScore, and
+ * return one finite list (no cursor — the list ends).
  *
- * Each post includes a reason label explaining why it was recommended.
+ * Sources (a place found by several keeps the first reason, in this order):
+ * 1. Social — recent posts by followed users. A friend's catch surfaces its
+ *    thread root with "@jane caught this"; catches are never separate cards.
+ * 2. Near you — roots within NEARBY_RADIUS_METERS of the optional location.
+ * 3. Saved cities — top places in the cities of the user's recent saves.
  *
- * @param data.cursor - Opaque pagination cursor from previous response
- * @param data.pageSize - Number of posts to return (default 20, max 50)
- * @returns { posts, nextCursor, hasMore }
+ * Excluded: the user's own posts, places they've already caught, and
+ * authors they've blocked.
+ *
+ * @param data.latitude - Optional coarse user latitude (enables "Near you")
+ * @param data.longitude - Optional coarse user longitude
+ * @returns { posts } — up to FEED_SIZE root posts with reason labels
  */
 export const getRecommendedFeed = functions
     .runWith({ maxInstances: MAX_INSTANCES.EXPENSIVE })
@@ -177,13 +209,29 @@ export const getRecommendedFeed = functions
         }
 
         const userId = context.auth.uid
-        const pageSize = Math.min(Math.max(data?.pageSize || 20, 1), 50)
-        const cursor = data?.cursor ? JSON.parse(data.cursor) : null // { lastScore, lastPostId }
+        const hasLocation =
+            data?.latitude !== undefined || data?.longitude !== undefined
+        if (hasLocation) {
+            const { latitude, longitude } = data
+            if (
+                typeof latitude !== 'number' ||
+                latitude < -90 ||
+                latitude > 90 ||
+                typeof longitude !== 'number' ||
+                longitude < -180 ||
+                longitude > 180
+            ) {
+                throw new functions.https.HttpsError(
+                    'invalid-argument',
+                    'latitude/longitude must both be valid coordinates'
+                )
+            }
+        }
 
         const db = admin.firestore()
+        const postsCol = db.collection('posts')
 
         try {
-            // ── Step 1: Get user's following list ──
             const userDoc = await db.collection('users').doc(userId).get()
             if (!userDoc.exists) {
                 throw new functions.https.HttpsError(
@@ -192,225 +240,235 @@ export const getRecommendedFeed = functions
                 )
             }
             const following: string[] = userDoc.data()?.following || []
+            const blocked = new Set<string>(
+                userDoc.data()?.blockedUsers || []
+            )
 
-            // ── Step 2: Social feed — posts from followed users ──
-            const socialPosts: any[] = []
+            // ── Candidate sources (run in parallel) ──
 
-            if (following.length > 0) {
-                const socialLimit = pageSize * 2 // Fetch extra for merging
+            const caughtRootsP = postsCol
+                .where('authorId', '==', userId)
+                .where('isOriginal', '==', false)
+                .get()
+                .then(
+                    (snap) =>
+                        new Set<string>(
+                            snap.docs
+                                .map((d) => d.data().rootPostId)
+                                .filter(Boolean)
+                        )
+                )
 
-                for (
-                    let i = 0;
-                    i < following.length;
-                    i += FOLLOWING_BATCH_SIZE
-                ) {
-                    const batch = following.slice(i, i + FOLLOWING_BATCH_SIZE)
-                    const q = db
-                        .collection('posts')
-                        .where('authorId', 'in', batch)
-                        .orderBy('createdAt', 'desc')
-                        .limit(socialLimit)
-                    const snap = await q.get()
-
-                    snap.docs.forEach((doc) => {
-                        const postData = doc.data()
-                        // Skip user's own posts
-                        if (postData.authorId === userId) return
-
-                        const isOriginal = postData.isOriginal ?? true
-                        const reasonLabel = isOriginal
-                            ? `Posted by @${postData.authorUsername}`
-                            : `@${postData.authorUsername} caught this`
-
-                        // Recency bonus: posts < 7 days get up to 50 extra score
-                        const ageHours =
-                            (Date.now() -
-                                (postData.createdAt?.toMillis?.() || 0)) /
-                            (1000 * 60 * 60)
-                        const recencyBonus =
-                            50 * Math.max(0, 1 - ageHours / 168)
-
-                        socialPosts.push({
-                            id: doc.id,
-                            authorId: postData.authorId,
-                            authorUsername: postData.authorUsername,
-                            caption: postData.caption || '',
-                            photoURL: postData.photoURL,
-                            thumbnailURL: postData.thumbnailURL || null,
-                            mediumURL: postData.mediumURL || null,
-                            catchCount: postData.catchCount || 0,
-                            createdAt: postData.createdAt?.toMillis?.() ?? null,
-                            lastCaughtAt:
-                                postData.lastCaughtAt?.toMillis?.() ?? null,
-                            isOriginal,
-                            isPioneer: postData.isPioneer || false,
-                            hasLocation: postData.hasLocation ?? false,
-                            parentPostId: postData.parentPostId || null,
-                            rootPostId: postData.rootPostId || null,
-                            reasonLabel,
-                            reasonType: 'social',
-                            score: 100 + recencyBonus,
-                        })
+            const socialP = (async () => {
+                const reasons = new Map<string, Reason>()
+                const batches: string[][] = []
+                for (let i = 0; i < following.length; i += FOLLOWING_BATCH_SIZE) {
+                    batches.push(following.slice(i, i + FOLLOWING_BATCH_SIZE))
+                }
+                const snaps = await Promise.all(
+                    batches.map((batch) =>
+                        postsCol
+                            .where('authorId', 'in', batch)
+                            .orderBy('createdAt', 'desc')
+                            .limit(SOCIAL_FETCH_LIMIT)
+                            .get()
+                    )
+                )
+                const docs = snaps
+                    .flatMap((snap) => snap.docs)
+                    .sort(
+                        (a, b) =>
+                            b.createTime.toMillis() - a.createTime.toMillis()
+                    )
+                // Newest first, so a root keeps its most recent social reason
+                for (const doc of docs) {
+                    const post = doc.data()
+                    const rootId = post.isOriginal ? doc.id : post.rootPostId
+                    if (!rootId || reasons.has(rootId)) continue
+                    reasons.set(rootId, {
+                        reasonType: 'social',
+                        reasonLabel: post.isOriginal
+                            ? `Posted by @${post.authorUsername}`
+                            : `@${post.authorUsername} caught this`,
                     })
                 }
-            }
+                return reasons
+            })()
 
-            // ── Step 3: City trending — popular posts in active cities ──
-            const cityPosts: any[] = []
-
-            const recDoc = await db
-                .collection('user_recommendations')
-                .doc(userId)
-                .get()
-            let activeCities: any[] = recDoc.exists
-                ? recDoc.data()?.activeCities || []
-                : []
-
-            // Filter expired, sort by weight, take top 5
-            const now = Date.now()
-            activeCities = activeCities
-                .filter((c: any) => c.expiresAt > now)
-                .sort((a: any, b: any) => b.weight - a.weight)
-                .slice(0, 5)
-
-            for (const city of activeCities) {
-                const center: [number, number] = [city.latitude, city.longitude]
-                const bounds = geohashQueryBounds(center, CITY_TRENDING_RADIUS)
-
-                const locationPromises = bounds.map(([start, end]) =>
-                    db
-                        .collection('post_locations')
-                        .where('geohash', '>=', start)
-                        .where('geohash', '<=', end)
-                        .limit(GEOHASH_QUERY_LIMIT)
-                        .get()
+            const nearbyP = (async () => {
+                const ids: string[] = []
+                if (!hasLocation) return ids
+                const center: [number, number] = [data.latitude, data.longitude]
+                const snaps = await Promise.all(
+                    geohashQueryBounds(center, NEARBY_RADIUS_METERS).map(
+                        ([start, end]) =>
+                            db
+                                .collection('post_locations')
+                                .where('geohash', '>=', start)
+                                .where('geohash', '<=', end)
+                                .limit(GEOHASH_QUERY_LIMIT)
+                                .get()
+                    )
                 )
-                const locationSnapshots = await Promise.all(locationPromises)
-
-                // Collect post IDs within actual radius
-                const cityPostIds: string[] = []
-                locationSnapshots.forEach((snapshot) => {
-                    snapshot.docs.forEach((doc) => {
+                for (const snap of snaps) {
+                    for (const doc of snap.docs) {
                         const loc = doc.data()
-                        const dist = distanceBetween(center, [
+                        // distanceBetween returns km
+                        const km = distanceBetween(center, [
                             loc.latitude,
                             loc.longitude,
                         ])
-                        if (dist <= CITY_TRENDING_RADIUS / 1000) {
-                            // distanceBetween returns km
-                            cityPostIds.push(loc.postId)
-                        }
-                    })
+                        if (km <= NEARBY_RADIUS_METERS / 1000) ids.push(loc.postId)
+                    }
+                }
+                return ids
+            })()
+
+            const savedCityP = (async () => {
+                const reasons = new Map<string, Reason>()
+                const savesSnap = await db
+                    .collection('users')
+                    .doc(userId)
+                    .collection('saves')
+                    .orderBy('savedAt', 'desc')
+                    .limit(SAVES_SCAN_LIMIT)
+                    .get()
+                if (savesSnap.empty) return reasons
+
+                const savedPosts = await db.getAll(
+                    ...savesSnap.docs.map((d) => postsCol.doc(d.id))
+                )
+                // Distinct cities in most-recently-saved order
+                const cities: { country: string; city: string }[] = []
+                const seen = new Set<string>()
+                for (const snap of savedPosts) {
+                    const post = snap.data()
+                    if (!post?.city || !post?.country) continue
+                    const key = `${post.country}|${post.city}`
+                    if (seen.has(key)) continue
+                    seen.add(key)
+                    cities.push({ country: post.country, city: post.city })
+                    if (cities.length >= MAX_SAVED_CITIES) break
+                }
+
+                const citySnaps = await Promise.all(
+                    cities.map(({ country, city }) =>
+                        postsCol
+                            .where('isOriginal', '==', true)
+                            .where('country', '==', country)
+                            .where('city', '==', city)
+                            .orderBy('hotScore', 'desc')
+                            .limit(CITY_FETCH_LIMIT)
+                            .get()
+                    )
+                )
+                citySnaps.forEach((snap, i) => {
+                    for (const doc of snap.docs) {
+                        if (reasons.has(doc.id)) continue
+                        reasons.set(doc.id, {
+                            reasonType: 'saved_city',
+                            reasonLabel: `Popular in ${cities[i].city}`,
+                        })
+                    }
                 })
+                return reasons
+            })()
 
-                if (cityPostIds.length === 0) continue
+            const [caughtRoots, social, nearbyIds, savedCity] =
+                await Promise.all([caughtRootsP, socialP, nearbyP, savedCityP])
 
-                // Fetch post data in batches of 100
-                const uniquePostIds = [...new Set(cityPostIds)].slice(0, 100)
-                const postRefs = uniquePostIds.map((id) =>
-                    db.collection('posts').doc(id)
+            // ── Merge reasons (social > nearby > saved city) ──
+            const reasons = new Map<string, Reason>(social)
+            for (const id of nearbyIds) {
+                if (!reasons.has(id)) {
+                    reasons.set(id, {
+                        reasonType: 'nearby',
+                        reasonLabel: 'Near you',
+                    })
+                }
+            }
+            for (const [id, reason] of savedCity) {
+                if (!reasons.has(id)) reasons.set(id, reason)
+            }
+
+            // ── Hydrate, filter, rank ──
+            const ids = [...reasons.keys()].filter((id) => !caughtRoots.has(id))
+            const snaps: admin.firestore.DocumentSnapshot[] = []
+            for (let i = 0; i < ids.length; i += 100) {
+                const chunk = ids.slice(i, i + 100).map((id) => postsCol.doc(id))
+                snaps.push(...(await db.getAll(...chunk)))
+            }
+
+            const ranked = snaps
+                .filter((snap) => {
+                    const post = snap.data()
+                    return (
+                        post &&
+                        post.isOriginal === true &&
+                        post.authorId !== userId &&
+                        !blocked.has(post.authorId)
+                    )
+                })
+                .sort(
+                    (a, b) => (b.get('hotScore') ?? 0) - (a.get('hotScore') ?? 0)
                 )
 
-                for (let i = 0; i < postRefs.length; i += 100) {
-                    const chunk = postRefs.slice(i, i + 100)
-                    const postSnaps = await db.getAll(...chunk)
-
-                    postSnaps.forEach((snap) => {
-                        if (!snap.exists) return
-                        const postData = snap.data()!
-                        // Skip user's own posts and non-originals
-                        if (postData.authorId === userId) return
-                        if (!postData.isOriginal) return
-
-                        const catchCount = postData.catchCount || 0
-                        const score = 50 + catchCount * 2 + city.weight * 20
-
-                        cityPosts.push({
-                            id: snap.id,
-                            authorId: postData.authorId,
-                            authorUsername: postData.authorUsername,
-                            caption: postData.caption || '',
-                            photoURL: postData.photoURL,
-                            thumbnailURL: postData.thumbnailURL || null,
-                            mediumURL: postData.mediumURL || null,
-                            catchCount,
-                            createdAt: postData.createdAt?.toMillis?.() ?? null,
-                            lastCaughtAt:
-                                postData.lastCaughtAt?.toMillis?.() ?? null,
-                            isOriginal: true,
-                            isPioneer: postData.isPioneer || false,
-                            hasLocation: postData.hasLocation ?? false,
-                            parentPostId: postData.parentPostId || null,
-                            rootPostId: postData.rootPostId || null,
-                            reasonLabel: `Trending in ${city.name}`,
-                            reasonType: 'city_trending',
-                            score,
-                        })
-                    })
+            // Variety: no more than MAX_AUTHOR_RUN consecutive cards from one
+            // author — overflow is deferred, not dropped
+            const ordered: admin.firestore.DocumentSnapshot[] = []
+            let deferred: admin.firestore.DocumentSnapshot[] = []
+            const runLength = (authorId: string) => {
+                let n = 0
+                for (let i = ordered.length - 1; i >= 0; i--) {
+                    if (ordered[i].get('authorId') !== authorId) break
+                    n++
                 }
+                return n
             }
-
-            // ── Step 4: Merge, deduplicate, sort, paginate ──
-            const seenIds = new Set<string>()
-            const allPosts: any[] = []
-
-            // Social posts first (preferred reason when duplicated)
-            for (const post of socialPosts) {
-                if (!seenIds.has(post.id)) {
-                    seenIds.add(post.id)
-                    allPosts.push(post)
+            for (const snap of ranked) {
+                if (runLength(snap.get('authorId')) >= MAX_AUTHOR_RUN) {
+                    deferred.push(snap)
+                    continue
                 }
+                ordered.push(snap)
+                // Give deferred cards the first slot their author is allowed
+                deferred = deferred.filter((d) => {
+                    if (runLength(d.get('authorId')) >= MAX_AUTHOR_RUN) return true
+                    ordered.push(d)
+                    return false
+                })
             }
-            for (const post of cityPosts) {
-                if (!seenIds.has(post.id)) {
-                    seenIds.add(post.id)
-                    allPosts.push(post)
-                }
-            }
+            ordered.push(...deferred)
 
-            // Sort by score descending, then by createdAt descending for ties
-            allPosts.sort((a, b) => {
-                if (b.score !== a.score) return b.score - a.score
-                return (b.createdAt || 0) - (a.createdAt || 0)
+            const posts = ordered.slice(0, FEED_SIZE).map((snap) => {
+                const post = snap.data()!
+                return {
+                    id: snap.id,
+                    authorId: post.authorId,
+                    authorUsername: post.authorUsername,
+                    caption: post.caption || '',
+                    photoURL: post.photoURL,
+                    thumbnailURL: post.thumbnailURL || null,
+                    mediumURL: post.mediumURL || null,
+                    catchCount: post.catchCount || 0,
+                    createdAt: post.createdAt?.toMillis?.() ?? null,
+                    lastCaughtAt: post.lastCaughtAt?.toMillis?.() ?? null,
+                    isOriginal: true,
+                    isPioneer: post.isPioneer || false,
+                    hasLocation: post.hasLocation ?? false,
+                    parentPostId: null,
+                    rootPostId: null,
+                    ...reasons.get(snap.id)!,
+                }
             })
 
-            // Apply cursor-based pagination
-            let startIndex = 0
-            if (cursor) {
-                startIndex = allPosts.findIndex(
-                    (p) =>
-                        p.score < cursor.lastScore ||
-                        (p.score === cursor.lastScore &&
-                            p.id === cursor.lastPostId)
-                )
-                if (startIndex === -1) startIndex = allPosts.length
-                // Skip past the cursor post itself
-                if (
-                    startIndex < allPosts.length &&
-                    allPosts[startIndex].id === cursor.lastPostId
-                ) {
-                    startIndex++
-                }
-            }
-
-            const pagePosts = allPosts.slice(startIndex, startIndex + pageSize)
-            const hasMore = startIndex + pageSize < allPosts.length
-
-            let nextCursor: string | null = null
-            if (hasMore && pagePosts.length > 0) {
-                const lastPost = pagePosts[pagePosts.length - 1]
-                nextCursor = JSON.stringify({
-                    lastScore: lastPost.score,
-                    lastPostId: lastPost.id,
-                })
-            }
-
             functions.logger.info(
-                `[getRecommendedFeed] User ${userId}: ${socialPosts.length} social, ` +
-                    `${cityPosts.length} city trending, ${pagePosts.length} returned (page ${startIndex / pageSize})`
+                `[getRecommendedFeed] User ${userId}: ${social.size} social, ` +
+                    `${nearbyIds.length} nearby, ${savedCity.size} saved-city, ` +
+                    `${posts.length} returned`
             )
 
-            return { posts: pagePosts, nextCursor, hasMore }
+            return { posts }
         } catch (error: any) {
             if (error instanceof functions.https.HttpsError) throw error
             functions.logger.error('Error getting recommended feed:', error)

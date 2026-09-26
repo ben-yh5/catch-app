@@ -2,6 +2,7 @@ import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { decrementCoverageCells } from '../lib/coverage'
 import { MAX_INSTANCES } from '../lib/constants'
+import { computeHotScore, lastActivityMs } from '../lib/hotScore'
 
 /**
  * Firestore Trigger: Handles post deletion events
@@ -83,6 +84,10 @@ export const onPostDeleted = functions
                 if (isCatch && !wasRejected && rootDoc?.exists && rootRef) {
                     t.update(rootRef, {
                         catchCount: admin.firestore.FieldValue.increment(-1),
+                        hotScore: computeHotScore(
+                            (rootDoc.data()!.catchCount ?? 0) - 1,
+                            lastActivityMs(rootDoc)
+                        ),
                     })
                 }
 
@@ -185,13 +190,26 @@ export const onPostDeleted = functions
                     // author. If the deleted root never had the field, default
                     // to false: missing data must not fabricate the more
                     // privileged classification.
-                    batch.update(newRootDoc.ref, {
+                    // lastCaughtAt/hotScore are derived the same way: the
+                    // newest surviving catch is the thread's last activity.
+                    const remainingCatches = catchesQuery.docs.length - 1
+                    const newestDoc =
+                        catchesQuery.docs[catchesQuery.docs.length - 1]
+                    const promotedFields: Record<string, any> = {
                         isOriginal: true,
                         parentPostId: null,
                         rootPostId: null,
-                        catchCount: catchesQuery.docs.length - 1,
+                        catchCount: remainingCatches,
                         isPioneer: postData.isPioneer ?? false,
-                    })
+                        hotScore: computeHotScore(
+                            remainingCatches,
+                            newestDoc.createTime.toMillis()
+                        ),
+                    }
+                    if (remainingCatches > 0) {
+                        promotedFields.lastCaughtAt = newestDoc.createTime
+                    }
+                    batch.update(newRootDoc.ref, promotedFields)
 
                     // Update remaining catches to point to new root
                     for (let i = 1; i < catchesQuery.docs.length; i++) {

@@ -33,6 +33,7 @@ export interface Post {
     mediumURL?: string
     isPioneer?: boolean
     lastCaughtAt?: any // Firestore Timestamp — set when post is caught, used for lost-place classification
+    hotScore?: number // server-computed place rank (root posts only) — sort key for Trending/pins/For You
     // Denormalized place identity, written server-side by onPostCreated after
     // geocoding (catches inherit the root's). Display-safe: coordinates stay
     // server-only. Absent until enrichment runs or when geocoding failed.
@@ -57,6 +58,7 @@ export interface PostSummary {
     isOriginal: boolean
     isPioneer?: boolean
     lastCaughtAt?: number // epoch millis
+    hotScore: number // 0 until backfillHotScores has run
 }
 
 /**
@@ -66,9 +68,8 @@ export interface PostSummary {
  * Extends Post with a reason label explaining why this post was recommended.
  */
 export interface RecommendedPost extends Post {
-    reasonLabel: string // "Posted by @jane", "Trending in Tokyo"
-    reasonType: 'social' | 'city_trending'
-    score: number
+    reasonLabel: string // "Posted by @jane", "Near you", "Popular in Tokyo"
+    reasonType: 'social' | 'nearby' | 'saved_city'
 }
 
 /**

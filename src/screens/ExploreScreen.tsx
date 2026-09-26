@@ -174,7 +174,7 @@ export default function ExploreScreen() {
             const q = query(
                 collection(db, 'posts'),
                 where('isOriginal', '==', true),
-                orderBy('catchCount', 'desc'),
+                orderBy('hotScore', 'desc'),
                 limit(POSTS_LIMIT)
             )
             const snap = await getDocs(q)
@@ -462,7 +462,7 @@ export default function ExploreScreen() {
                             For You
                         </Text>
                         <Text style={styles.forYouSubtitle}>
-                            Based on who you follow and places you explore
+                            From people you follow, places near you, and cities you&apos;ve saved
                         </Text>
                     </View>
                 ) : (
@@ -596,25 +596,6 @@ export default function ExploreScreen() {
                 contentInsetAdjustmentBehavior="automatic"
                 contentContainerStyle={{ paddingBottom: tabBarInset }}
                 ListHeaderComponent={listHeaderComponent}
-                ListFooterComponent={
-                    recommendedFeed.loadingMore ? (
-                        <View style={styles.footerLoader}>
-                            <ActivityIndicator
-                                size="small"
-                                color={colors.primary}
-                            />
-                        </View>
-                    ) : null
-                }
-                onEndReached={() => {
-                    if (
-                        recommendedFeed.hasMore &&
-                        !recommendedFeed.loadingMore
-                    ) {
-                        recommendedFeed.loadMore()
-                    }
-                }}
-                onEndReachedThreshold={0.3}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -809,5 +790,4 @@ const styles = StyleSheet.create({
         marginHorizontal: 16,
         marginTop: 16,
     },
-    footerLoader: { paddingVertical: 20, alignItems: 'center' },
 })

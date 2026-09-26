@@ -46,6 +46,7 @@ export { markAllNotificationsRead } from './callable/notifications'
 
 // ─── Callable Functions: Admin Reconciliation ───────────────────────────────
 export { reconcileCounters } from './callable/reconcile'
+export { backfillHotScores } from './callable/hotScore'
 
 // ─── Callable Functions: Admin Migration (one-time, LISTS_REDESIGN §E) ──────
 export { migrateLegacySavedLists } from './callable/legacySavedLists'

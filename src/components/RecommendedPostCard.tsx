@@ -23,17 +23,13 @@ interface RecommendedPostCardProps {
     isOwnPost?: boolean
 }
 
-const REASON_COLORS: Record<string, { bg: string; text: string }> = {
-    social: { bg: 'rgba(255, 255, 255, 0.10)', text: '#c9c9ce' },
-    city_trending: { bg: 'rgba(255, 255, 255, 0.10)', text: '#c9c9ce' },
-}
+const REASON_STYLE = { bg: 'rgba(255, 255, 255, 0.10)', text: '#c9c9ce' }
 
 export default function RecommendedPostCard({
     post,
     onPress,
     isOwnPost,
 }: RecommendedPostCardProps) {
-    const reasonStyle = REASON_COLORS[post.reasonType] || REASON_COLORS.social
 
     return (
         <TouchableOpacity
@@ -72,11 +68,11 @@ export default function RecommendedPostCard({
                 <View
                     style={[
                         styles.reasonChip,
-                        { backgroundColor: reasonStyle.bg },
+                        { backgroundColor: REASON_STYLE.bg },
                     ]}
                 >
                     <Text
-                        style={[styles.reasonText, { color: reasonStyle.text }]}
+                        style={[styles.reasonText, { color: REASON_STYLE.text }]}
                     >
                         {post.reasonLabel}
                     </Text>

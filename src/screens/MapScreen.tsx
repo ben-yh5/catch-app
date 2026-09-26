@@ -998,7 +998,7 @@ export default function MapScreen() {
             switch (filter) {
                 case 'trending':
                     return [...posts].sort(
-                        (a, b) => b.catchCount - a.catchCount
+                        (a, b) => (b.hotScore ?? 0) - (a.hotScore ?? 0)
                     )
                 case 'new':
                     return [...posts].sort((a, b) => {

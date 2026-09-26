@@ -418,6 +418,16 @@ describe('posts collection', () => {
         )
     })
 
+    test('CANNOT create post with a client-seeded hotScore', async () => {
+        const authed = testEnv.authenticatedContext(USER_ID)
+        await assertFails(
+            setDoc(doc(authed.firestore(), 'posts', 'post1'), {
+                ...validPost,
+                hotScore: 1e9,
+            })
+        )
+    })
+
     test('unauthenticated user CANNOT create post', async () => {
         const unauthed = testEnv.unauthenticatedContext()
         await assertFails(

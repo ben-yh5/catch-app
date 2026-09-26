@@ -41,3 +41,10 @@ export const MAX_INSTANCES = {
     /** Rare, heavy, admin-only batch jobs */
     ADMIN: 2,
 }
+
+/**
+ * hotScore recency scale: one period of recency is worth 10× the catches.
+ * A week, because catches are rare and slow (someone has to travel there) —
+ * a place with 10 catches last active a week ago ties a brand-new post.
+ */
+export const HOT_SCORE_PERIOD_SECONDS = 7 * 24 * 60 * 60

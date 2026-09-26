@@ -286,13 +286,8 @@ export const getPostsInArea = functions
                     return distance <= radiusInM
                 })
 
-                // Cap total results
-                if (postLocations.length > MAX_AREA_RESULTS) {
-                    postLocations = postLocations.slice(0, MAX_AREA_RESULTS)
-                }
-
                 functions.logger.info(
-                    `Found ${allResults.length} posts in geohash bounds, ${postLocations.length} returned (max ${MAX_AREA_RESULTS})`
+                    `Found ${allResults.length} posts in geohash bounds, ${postLocations.length} in area`
                 )
             }
 
@@ -382,13 +377,8 @@ export const getPostsInArea = functions
                     )
                 })
 
-                // Cap total results
-                if (postLocations.length > MAX_AREA_RESULTS) {
-                    postLocations = postLocations.slice(0, MAX_AREA_RESULTS)
-                }
-
                 functions.logger.info(
-                    `Found ${allResults.length} posts in geohash bounds, ${postLocations.length} returned (max ${MAX_AREA_RESULTS})`
+                    `Found ${allResults.length} posts in geohash bounds, ${postLocations.length} in area`
                 )
             } else {
                 throw new functions.https.HttpsError(
@@ -400,6 +390,11 @@ export const getPostsInArea = functions
             // Optional: enrich locations with post summary data
             // filterOriginal implies includeSummary (need post data to filter)
             const shouldEnrich = data.includeSummary || data.filterOriginal
+
+            // Without post data there's nothing to rank by — cap as-is
+            if (!shouldEnrich && postLocations.length > MAX_AREA_RESULTS) {
+                postLocations = postLocations.slice(0, MAX_AREA_RESULTS)
+            }
 
             if (shouldEnrich && postLocations.length > 0) {
                 const postIds = postLocations.map((loc: any) => loc.postId)
@@ -448,16 +443,29 @@ export const getPostsInArea = functions
                                 isPioneer: postData.isPioneer || false,
                                 lastCaughtAt:
                                     postData.lastCaughtAt?.toMillis?.() ?? null,
+                                hotScore: postData.hotScore ?? 0,
                             },
                         }
                     })
                     .filter((loc: any) => loc !== null)
 
-                // Server-side isOriginal filter
+                // Server-side isOriginal filter — before the cap, so catches
+                // don't use up pin slots
                 if (data.filterOriginal) {
                     postLocations = postLocations.filter(
                         (loc: any) => loc.summary?.isOriginal === true
                     )
+                }
+
+                // Over the cap, keep the best places (hotScore), not whatever
+                // order the geohash ranges happened to return
+                if (postLocations.length > MAX_AREA_RESULTS) {
+                    postLocations = postLocations
+                        .sort(
+                            (a: any, b: any) =>
+                                b.summary.hotScore - a.summary.hotScore
+                        )
+                        .slice(0, MAX_AREA_RESULTS)
                 }
 
                 functions.logger.info(
