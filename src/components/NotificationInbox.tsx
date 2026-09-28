@@ -35,8 +35,6 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
         notifications,
         markAllNotificationsAsRead,
         clearAllNotifications,
-        totalPosts,
-        totalCatches,
     } = useAuth()
     const router = useRouter()
     const insets = useSafeAreaInsets()
@@ -359,29 +357,6 @@ export default function ActivityFeed({ visible, onClose }: ActivityFeedProps) {
                     </View>
                 ) : (
                     <ScrollView contentContainerStyle={styles.content}>
-                        {/* Passport Summary */}
-                        <View style={styles.summaryContainer}>
-                            <View style={styles.summaryStats}>
-                                <View style={styles.summaryStatItem}>
-                                    <Text style={styles.summaryStatNumber}>
-                                        {totalPosts}
-                                    </Text>
-                                    <Text style={styles.summaryStatLabel}>
-                                        Posts
-                                    </Text>
-                                </View>
-                                <View style={styles.summaryDivider} />
-                                <View style={styles.summaryStatItem}>
-                                    <Text style={styles.summaryStatNumber}>
-                                        {totalCatches}
-                                    </Text>
-                                    <Text style={styles.summaryStatLabel}>
-                                        Catches
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
-
                         {/* Filter Tabs */}
                         <View style={styles.filterRow}>
                             {filters.map((f) => (
@@ -535,50 +510,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
 
-    // Passport Summary
-    summaryContainer: {
-        alignItems: 'center',
-        paddingVertical: 24,
-        paddingHorizontal: 24,
-    },
-    summaryStats: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.cardElevated,
-        borderRadius: 12,
-        paddingVertical: 14,
-        width: '100%',
-        maxWidth: 280,
-    },
-    summaryStatItem: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    summaryStatNumber: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: colors.textPrimary,
-    },
-    summaryStatLabel: {
-        fontSize: 12,
-        color: colors.textTertiary,
-        marginTop: 2,
-    },
-    summaryDivider: {
-        width: 1,
-        height: 28,
-        backgroundColor: colors.border,
-    },
-
     // Filter Tabs
     filterRow: {
         flexDirection: 'row',
         paddingHorizontal: 16,
         paddingVertical: 12,
         gap: 8,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
     },
     filterTab: {
         paddingHorizontal: 16,
